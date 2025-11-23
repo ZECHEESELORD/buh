@@ -17,3 +17,5 @@ commands:
     description: Move as much of your stash into your inventory as will fit.
   quickmaths:
     description: Start or cancel a Quick Maths round.
+  kaboom:
+    description: Strike and launch the selected players.
