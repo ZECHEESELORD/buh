@@ -19,3 +19,5 @@ commands:
     description: Start or cancel a Quick Maths round.
   kaboom:
     description: Strike and launch the selected players.
+  loop:
+    description: Repeat a command several times with a delay.
