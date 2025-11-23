@@ -10,6 +10,7 @@ import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 import sh.harold.fulcrum.plugin.staff.command.LoopCommand;
+import sh.harold.fulcrum.plugin.staff.command.SudoCommand;
 
 import java.util.Objects;
 import java.util.Set;
@@ -42,5 +43,6 @@ public final class StaffCommandsModule implements FulcrumModule {
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
         Commands registrar = event.registrar();
         registrar.register(new LoopCommand(plugin, staffGuard).build(), "loop", java.util.List.of());
+        registrar.register(new SudoCommand(staffGuard).build(), "sudo", java.util.List.of());
     }
 }
