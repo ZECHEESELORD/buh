@@ -81,6 +81,22 @@ public final class StatInstance {
         return new StatSnapshot(definition.id(), effectiveBase(), getFinalValue(), Map.copyOf(grouped));
     }
 
+    public boolean hasCustomizations() {
+        if (baseOverride != null && Double.compare(baseOverride, definition.baseValue()) != 0) {
+            return true;
+        }
+        for (ModifierOp op : ModifierOp.values()) {
+            if (!modifiers.get(op).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    double effectiveBase() {
+        return baseOverride != null ? baseOverride : definition.baseValue();
+    }
+
     private void markDirty() {
         dirty = true;
     }
@@ -112,10 +128,6 @@ public final class StatInstance {
         double result = intermediate * multFactor;
 
         return clamp(result, definition.minValue(), definition.maxValue());
-    }
-
-    private double effectiveBase() {
-        return baseOverride != null ? baseOverride : definition.baseValue();
     }
 
     private double clamp(double value, double min, double max) {

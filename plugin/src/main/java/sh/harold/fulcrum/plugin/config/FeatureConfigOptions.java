@@ -22,6 +22,10 @@ public final class FeatureConfigOptions {
         return new FeatureConfigOption<>(path, defaultValue, YamlConfiguration::getInt);
     }
 
+    public static FeatureConfigOption<Double> doubleOption(String path, double defaultValue) {
+        return new FeatureConfigOption<>(path, defaultValue, YamlConfiguration::getDouble);
+    }
+
     public static FeatureConfigOption<List<String>> stringListOption(String path, List<String> defaultValue) {
         Objects.requireNonNull(defaultValue, "defaultValue");
         List<String> safeDefault = List.copyOf(defaultValue);

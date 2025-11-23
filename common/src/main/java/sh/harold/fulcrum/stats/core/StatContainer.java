@@ -77,6 +77,20 @@ public final class StatContainer {
             .toList();
     }
 
+    public boolean isCustomized(StatId id) {
+        StatInstance instance = stats.get(id);
+        return instance != null && instance.hasCustomizations();
+    }
+
+    public boolean setBaseIfUncustomized(StatId id, double baseValue) {
+        StatInstance instance = stats.get(id);
+        if (instance != null && instance.hasCustomizations()) {
+            return false;
+        }
+        setBase(id, baseValue);
+        return true;
+    }
+
     private StatInstance ensureInstance(StatId id) {
         return stats.computeIfAbsent(id, statId -> new StatInstance(registry.get(statId)));
     }
