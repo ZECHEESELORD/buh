@@ -1,0 +1,8 @@
+name: buh
+version: '${version}'
+main: sh.harold.fulcrum.plugin.FulcrumPlugin
+api-version: '1.21'
+prefix: buh
+load: STARTUP
+authors: [ Harold, ZECHEESELORD ]
+website: https://harold.sh
