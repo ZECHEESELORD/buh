@@ -17,6 +17,8 @@ import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
+import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
+import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -33,6 +35,7 @@ public final class BuhPlugin extends JavaPlugin {
     private ChatModule chatModule;
     private MessageModule messageModule;
     private StashModule stashModule;
+    private PlayerMenuModule playerMenuModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private SimpleScoreboardService scoreboardService;
@@ -86,6 +89,10 @@ public final class BuhPlugin extends JavaPlugin {
         return stashModule == null ? Optional.empty() : stashModule.stashService();
     }
 
+    public Optional<PlayerMenuService> playerMenuService() {
+        return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.menuService());
+    }
+
     private void createModules() {
         dataModule = new DataModule(dataPath());
         playerDataModule = new PlayerDataModule(this, dataModule);
@@ -95,7 +102,8 @@ public final class BuhPlugin extends JavaPlugin {
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
-        moduleLoader = new ModuleLoader(List.of(dataModule, playerDataModule, luckPermsModule, chatModule, messageModule, stashModule));
+        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule);
+        moduleLoader = new ModuleLoader(List.of(dataModule, playerDataModule, luckPermsModule, chatModule, messageModule, stashModule, playerMenuModule));
     }
 
     private Path dataPath() {
