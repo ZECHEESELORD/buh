@@ -8,6 +8,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
+import sh.harold.fulcrum.plugin.fun.command.KaboomCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsListener;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsManager;
@@ -58,5 +59,6 @@ public final class FunModule implements FulcrumModule {
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
         Commands registrar = event.registrar();
         registrar.register(new QuickMathsCommand(quickMathsManager, staffGuard).build(), "quickmaths", java.util.List.of());
+        registrar.register(new KaboomCommand(staffGuard).build(), "kaboom", java.util.List.of());
     }
 }
