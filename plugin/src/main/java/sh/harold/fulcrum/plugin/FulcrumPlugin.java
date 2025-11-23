@@ -3,11 +3,14 @@ package sh.harold.fulcrum.plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.ModuleLoader;
+import sh.harold.fulcrum.common.permissions.StaffService;
 import sh.harold.fulcrum.plugin.data.DataModule;
+import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Level;
 
@@ -16,6 +19,7 @@ public final class FulcrumPlugin extends JavaPlugin {
     private ModuleLoader moduleLoader;
     private DataModule dataModule;
     private PlayerDataModule playerDataModule;
+    private LuckPermsModule luckPermsModule;
 
     @Override
     public void onLoad() {
@@ -44,10 +48,15 @@ public final class FulcrumPlugin extends JavaPlugin {
         return dataModule == null ? null : dataModule.dataApi().orElse(null);
     }
 
+    public Optional<StaffService> staffService() {
+        return luckPermsModule == null ? Optional.empty() : luckPermsModule.staffService();
+    }
+
     private void createModules() {
         dataModule = new DataModule(dataPath());
         playerDataModule = new PlayerDataModule(this, dataModule);
-        moduleLoader = new ModuleLoader(List.of(dataModule, playerDataModule));
+        luckPermsModule = new LuckPermsModule(this);
+        moduleLoader = new ModuleLoader(List.of(dataModule, playerDataModule, luckPermsModule));
     }
 
     private Path dataPath() {
