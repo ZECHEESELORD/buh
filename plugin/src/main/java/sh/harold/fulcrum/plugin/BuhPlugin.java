@@ -14,6 +14,7 @@ import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.message.MessageModule;
 import sh.harold.fulcrum.plugin.message.MessageService;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
+import sh.harold.fulcrum.plugin.fun.FunModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
@@ -36,6 +37,7 @@ public final class BuhPlugin extends JavaPlugin {
     private MessageModule messageModule;
     private StashModule stashModule;
     private PlayerMenuModule playerMenuModule;
+    private FunModule funModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private SimpleScoreboardService scoreboardService;
@@ -90,7 +92,7 @@ public final class BuhPlugin extends JavaPlugin {
     }
 
     public Optional<PlayerMenuService> playerMenuService() {
-        return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.menuService());
+        return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.playerMenuService());
     }
 
     private void createModules() {
@@ -103,7 +105,17 @@ public final class BuhPlugin extends JavaPlugin {
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule);
-        moduleLoader = new ModuleLoader(List.of(dataModule, playerDataModule, luckPermsModule, chatModule, messageModule, stashModule, playerMenuModule));
+        funModule = new FunModule(this, luckPermsModule);
+        moduleLoader = new ModuleLoader(List.of(
+            dataModule,
+            playerDataModule,
+            luckPermsModule,
+            chatModule,
+            messageModule,
+            stashModule,
+            playerMenuModule,
+            funModule
+        ));
     }
 
     private Path dataPath() {

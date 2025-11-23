@@ -15,3 +15,5 @@ commands:
     description: Inspect the items resting in your stash.
   pickupstash:
     description: Move as much of your stash into your inventory as will fit.
+  quickmaths:
+    description: Start or cancel a Quick Maths round.
