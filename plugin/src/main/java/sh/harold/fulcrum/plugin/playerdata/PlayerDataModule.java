@@ -30,7 +30,7 @@ public final class PlayerDataModule implements FulcrumModule {
     @Override
     public CompletionStage<Void> enable() {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
-        PlayerJoinListener listener = new PlayerJoinListener(plugin.getLogger(), dataApi);
+        PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi);
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(listener, plugin);
         return CompletableFuture.completedFuture(null);
