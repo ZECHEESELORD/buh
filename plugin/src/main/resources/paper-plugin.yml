@@ -4,5 +4,6 @@ main: sh.harold.fulcrum.plugin.FulcrumPlugin
 api-version: '1.21'
 prefix: buh
 load: STARTUP
+softdepend: [LuckPerms]
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
