@@ -1,9 +1,17 @@
 name: buh
 version: '${version}'
-main: sh.harold.fulcrum.plugin.FulcrumPlugin
+main: sh.harold.fulcrum.plugin.BuhPlugin
 api-version: '1.21'
 prefix: buh
 load: STARTUP
 softdepend: [LuckPerms]
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
+commands:
+  msg:
+    description: Send a private message to a player.
+    aliases: [ message, tell, whisper, w, m ]
+  viewstash:
+    description: Inspect the items resting in your stash.
+  pickupstash:
+    description: Move as much of your stash into your inventory as will fit.
