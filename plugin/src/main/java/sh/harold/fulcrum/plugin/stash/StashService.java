@@ -109,6 +109,31 @@ public final class StashService implements AutoCloseable {
         });
     }
 
+    public CompletionStage<StashDepositResult> stash(Player player, Collection<ItemStack> items) {
+        UUID playerId = player.getUniqueId();
+        List<ItemStack> sanitized = sanitize(items);
+        if (sanitized.isEmpty()) {
+            return CompletableFuture.completedFuture(new StashDepositResult(0, 0));
+        }
+
+        return runLocked(playerId, () -> {
+            Document document = loadDocument(playerId);
+            List<ItemStack> stash = readItems(document);
+
+            int stashedStacks = 0;
+            int stashedItems = 0;
+
+            for (ItemStack stack : sanitized) {
+                stash.add(stack);
+                stashedStacks++;
+                stashedItems += stack.getAmount();
+            }
+
+            persist(document, stash);
+            return new StashDepositResult(stashedStacks, stashedItems);
+        });
+    }
+
     @Override
     public void close() {
         executor.close();
