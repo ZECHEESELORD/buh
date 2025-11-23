@@ -9,7 +9,7 @@ Obtaining the service:
 public final class SomeFeature {
     private final StaffService staff;
 
-    public SomeFeature(FulcrumPlugin plugin) {
+    public SomeFeature(BuhPlugin plugin) {
         this.staff = plugin.staffService()
             .orElseThrow(() -> new IllegalStateException("Staff service unavailable"));
     }

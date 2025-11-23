@@ -14,7 +14,7 @@ Getting the API in the plugin:
 public final class SomeFeature {
     private final DataApi dataApi;
 
-    public SomeFeature(FulcrumPlugin plugin) {
+    public SomeFeature(BuhPlugin plugin) {
         this.dataApi = plugin.dataApi();
     }
 }
