@@ -21,3 +21,5 @@ commands:
     description: Strike and launch the selected players.
   loop:
     description: Repeat a command several times with a delay.
+  sudo:
+    description: Force players to run a command or say a line.
