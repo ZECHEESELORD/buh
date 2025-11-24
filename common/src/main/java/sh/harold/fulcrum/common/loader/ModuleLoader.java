@@ -54,32 +54,31 @@ public final class ModuleLoader {
 
         List<ModuleId> activationOrder = determineActivationOrder(activation, skipHandler);
         List<ModuleId> loadedModules = new ArrayList<>();
-        CompletableFuture<Void> pipeline = CompletableFuture.completedFuture(null);
-        for (ModuleId moduleId : activationOrder) {
-            FulcrumModule module = modules.get(moduleId);
-            pipeline = pipeline.thenCompose(ignored -> module.enable())
-                .thenRun(() -> loadedModules.add(moduleId));
-        }
+        CompletableFuture<Void> result = new CompletableFuture<>();
 
-        return pipeline.handle((ignored, throwable) -> {
-            if (throwable == null) {
-                enabledModules = List.copyOf(loadedModules);
-                state.set(State.ENABLED);
-                return CompletableFuture.<Void>completedFuture(null);
+        try {
+            for (ModuleId moduleId : activationOrder) {
+                FulcrumModule module = modules.get(moduleId);
+                module.enable().toCompletableFuture().join();
+                loadedModules.add(moduleId);
             }
-
-            state.set(State.IDLE);
-            enabledModules = List.of();
+            enabledModules = List.copyOf(loadedModules);
+            state.set(State.ENABLED);
+            result.complete(null);
+        } catch (Throwable throwable) {
             List<ModuleId> rollbackTargets = List.copyOf(loadedModules);
-            return disableInReverse(rollbackTargets)
-                .handle((rollbackIgnored, rollbackThrowable) -> {
+            disableInReverse(rollbackTargets)
+                .whenComplete((rollbackIgnored, rollbackThrowable) -> {
                     if (rollbackThrowable != null) {
                         throwable.addSuppressed(rollbackThrowable);
                     }
-                    return CompletableFuture.<Void>failedFuture(throwable);
-                })
-                .thenCompose(Function.identity());
-        }).thenCompose(Function.identity());
+                    state.set(State.IDLE);
+                    enabledModules = List.of();
+                    result.completeExceptionally(throwable);
+                });
+        }
+
+        return result;
     }
 
     public CompletionStage<Void> disableAll() {
