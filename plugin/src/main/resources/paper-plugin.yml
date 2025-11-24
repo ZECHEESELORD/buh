@@ -4,6 +4,6 @@ main: sh.harold.fulcrum.plugin.BuhPlugin
 api-version: '1.21'
 prefix: buh
 load: POSTWORLD
-softdepend: [LuckPerms]
+depend: [LuckPerms]
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
