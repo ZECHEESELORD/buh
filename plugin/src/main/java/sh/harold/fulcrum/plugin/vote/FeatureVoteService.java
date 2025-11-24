@@ -218,9 +218,9 @@ public final class FeatureVoteService {
         List<Component> lore = new ArrayList<>();
         lore.add(Component.text("Gameplay Feature", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
-        lore.add(Component.text(voteCountLabel(votes), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        lore.add(voteCountLine(votes));
         lore.add(Component.empty());
-        lore.add(Component.text(option.displayName(), option.color()).decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text(option.displayName() + ":", option.color()).decoration(TextDecoration.ITALIC, false));
         lore.addAll(wrapText(option.description(), NamedTextColor.GRAY));
         lore.add(Component.empty());
         lore.addAll(wrapText("You may change your vote at any time until the votes end!", NamedTextColor.DARK_GRAY));
@@ -229,8 +229,14 @@ public final class FeatureVoteService {
         return lore;
     }
 
-    private String voteCountLabel(int votes) {
-        return votes == 1 ? "1 Vote" : votes + " Votes";
+    private Component voteCountLine(int votes) {
+        boolean singular = votes == 1;
+        Component number = Component.text(String.valueOf(votes), NamedTextColor.GRAY)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false);
+        Component label = Component.text(singular ? " Vote" : " Votes", NamedTextColor.GRAY)
+            .decoration(TextDecoration.ITALIC, false);
+        return number.append(label);
     }
 
     private List<Component> wrapText(String text, NamedTextColor color) {
