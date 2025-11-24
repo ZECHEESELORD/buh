@@ -81,7 +81,9 @@ final class PlayerSessionListener implements Listener {
                 ),
                 "inventory", Map.of(
                     "menuItem", Map.of(
-                        "material", PlayerMenuItemConfig.DEFAULT.material().name()
+                        "material", PlayerMenuItemConfig.DEFAULT.material().name(),
+                        "slot", PlayerMenuItemConfig.DEFAULT.slot(),
+                        "enabled", true
                     )
                 )
             )).toCompletableFuture();
@@ -121,12 +123,14 @@ final class PlayerSessionListener implements Listener {
     private CompletableFuture<Void> ensureMenuItemConfig(Document document) {
         Optional<String> materialName = document.get(PlayerMenuItemConfig.MATERIAL_PATH, String.class);
         Optional<Integer> slotValue = document.get(PlayerMenuItemConfig.SLOT_PATH, Integer.class);
+        Optional<Boolean> enabledValue = document.get(PlayerMenuItemConfig.ENABLED_PATH, Boolean.class);
 
         Material material = materialName
             .map(this::parseMaterial)
             .filter(candidate -> candidate != null && !candidate.isAir())
             .orElse(PlayerMenuItemConfig.DEFAULT.material());
         int slot = slotValue.orElse(PlayerMenuItemConfig.DEFAULT.slot());
+        boolean enabled = enabledValue.orElse(true);
 
         CompletionStage<Void> materialStage = materialName.isPresent()
             ? CompletableFuture.completedFuture(null)
@@ -134,8 +138,11 @@ final class PlayerSessionListener implements Listener {
         CompletionStage<Void> slotStage = slotValue.isPresent()
             ? CompletableFuture.completedFuture(null)
             : document.set(PlayerMenuItemConfig.SLOT_PATH, slot).toCompletableFuture();
+        CompletionStage<Void> enabledStage = enabledValue.isPresent()
+            ? CompletableFuture.completedFuture(null)
+            : document.set(PlayerMenuItemConfig.ENABLED_PATH, enabled).toCompletableFuture();
 
-        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture());
+        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture(), enabledStage.toCompletableFuture());
     }
 
     private CompletableFuture<Void> updatePlaytime(Document document, Instant sessionStart, Instant logoutTime, String username) {
@@ -163,7 +170,8 @@ final class PlayerSessionListener implements Listener {
                 "inventory", Map.of(
                     "menuItem", Map.of(
                         "material", PlayerMenuItemConfig.DEFAULT.material().name(),
-                        "slot", PlayerMenuItemConfig.DEFAULT.slot()
+                        "slot", PlayerMenuItemConfig.DEFAULT.slot(),
+                        "enabled", true
                     )
                 )
             )).toCompletableFuture();

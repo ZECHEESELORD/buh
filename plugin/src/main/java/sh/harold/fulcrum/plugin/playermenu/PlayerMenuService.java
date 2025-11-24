@@ -227,6 +227,8 @@ public final class PlayerMenuService {
 
                 int closeSlot = MenuButton.getCloseSlot(MENU_ROWS);
                 int backSlot = closeSlot - 1;
+                boolean enabled = config.enabled();
+                boolean hasMenuItem = findMenuItemSlot(player.getInventory()) >= 0;
 
                 MenuButton backButton = MenuButton.builder(Material.ARROW)
                     .name("&7Back")
@@ -241,13 +243,26 @@ public final class PlayerMenuService {
                 var builder = menuService.createMenuBuilder()
                     .title("Relocate Menu Item")
                     .rows(MENU_ROWS)
+                    .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
                     .addButton(MenuButton.createPositionedClose(MENU_ROWS))
                     .addButton(backButton);
+
+                if (hasMenuItem) {
+                    MenuButton visibilityToggle = MenuButton.builder(Material.ORANGE_DYE)
+                        .name(enabled ? "&aMenu Item Visible" : "&cMenu Item Hidden")
+                        .secondary("Inventory Toggle")
+                        .description(enabled ? "Hide the player menu item from your inventory." : "Show the player menu item in your inventory.")
+                        .slot(closeSlot + 1)
+                        .cooldown(SETTINGS_COOLDOWN)
+                        .sound(Sound.UI_BUTTON_CLICK)
+                        .onClick(viewer -> updateMenuItemVisibility(viewer, config, !enabled))
+                        .build();
+                    builder.addButton(visibilityToggle);
+                }
 
                 placements.forEach(placement -> builder.addButton(placement.button(), placement.menuSlot()));
 
                 fillDividerRow(builder);
-                fillControlRow(builder, closeSlot, backSlot);
 
                 builder.buildAsync(player)
                     .exceptionally(openError -> {
@@ -265,6 +280,19 @@ public final class PlayerMenuService {
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to move player menu item for " + playerId, throwable);
                 player.sendMessage("§cCould not move your menu item.");
+                return null;
+            });
+    }
+
+    private void updateMenuItemVisibility(Player player, PlayerMenuItemConfig config, boolean enable) {
+        UUID playerId = player.getUniqueId();
+        PlayerMenuItemConfig updated = config.withEnabled(enable);
+        persistConfig(playerId, updated)
+            .thenCompose(ignored -> placeMenuItem(player, updated))
+            .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> openRelocateMenu(player)))
+            .exceptionally(throwable -> {
+                logger.log(Level.SEVERE, "Failed to update player menu item visibility for " + playerId, throwable);
+                player.sendMessage("§cCould not update your player menu item.");
                 return null;
             });
     }
@@ -307,7 +335,7 @@ public final class PlayerMenuService {
                 if (!free) {
                     return;
                 }
-                updateMenuItemSlot(viewer, config.withSlot(playerSlot));
+                updateMenuItemSlot(viewer, config.withSlot(playerSlot).withEnabled(true));
             });
 
         if (free) {
@@ -349,17 +377,6 @@ public final class PlayerMenuService {
         }
     }
 
-    private void fillControlRow(sh.harold.fulcrum.api.menu.CustomMenuBuilder builder, int closeSlot, int backSlot) {
-        int controlRow = 5;
-        for (int col = 0; col < 9; col++) {
-            int slot = controlRow * 9 + col;
-            if (slot == closeSlot || slot == backSlot) {
-                continue;
-            }
-            builder.addItem(MenuDisplayItem.builder(Material.BLACK_STAINED_GLASS_PANE).name("").slot(slot).build(), slot);
-        }
-    }
-
     private CompletionStage<PlayerMenuItemConfig> loadConfig(UUID playerId) {
         return players.load(playerId.toString())
             .thenCompose(this::resolveConfig);
@@ -369,20 +386,23 @@ public final class PlayerMenuService {
         return players.load(playerId.toString())
             .thenCompose(document -> document.set(PlayerMenuItemConfig.MATERIAL_PATH, config.material().name()).toCompletableFuture()
                 .thenCompose(ignored -> document.set(PlayerMenuItemConfig.SLOT_PATH, config.slot()).toCompletableFuture())
+                .thenCompose(ignored -> document.set(PlayerMenuItemConfig.ENABLED_PATH, config.enabled()).toCompletableFuture())
                 .thenApply(ignored -> null));
     }
 
     private CompletionStage<PlayerMenuItemConfig> resolveConfig(Document document) {
         Optional<String> rawMaterial = document.get(PlayerMenuItemConfig.MATERIAL_PATH, String.class);
         Optional<Integer> rawSlot = document.get(PlayerMenuItemConfig.SLOT_PATH, Integer.class);
+        Optional<Boolean> rawEnabled = document.get(PlayerMenuItemConfig.ENABLED_PATH, Boolean.class);
         Material material = rawMaterial
             .map(this::materialFrom)
             .filter(candidate -> candidate != null && !candidate.isAir())
             .orElse(PlayerMenuItemConfig.DEFAULT.material());
         int slot = rawSlot.orElse(PlayerMenuItemConfig.DEFAULT.slot());
+        boolean enabled = rawEnabled.orElse(true);
 
-        PlayerMenuItemConfig resolved = new PlayerMenuItemConfig(material, slot);
-        if (rawMaterial.isPresent() && rawSlot.isPresent()) {
+        PlayerMenuItemConfig resolved = new PlayerMenuItemConfig(material, slot, enabled);
+        if (rawMaterial.isPresent() && rawSlot.isPresent() && rawEnabled.isPresent()) {
             return CompletableFuture.completedFuture(resolved);
         }
 
@@ -392,8 +412,11 @@ public final class PlayerMenuService {
         CompletionStage<Void> slotStage = rawSlot.isPresent()
             ? CompletableFuture.completedFuture(null)
             : document.set(PlayerMenuItemConfig.SLOT_PATH, resolved.slot()).toCompletableFuture();
+        CompletionStage<Void> enabledStage = rawEnabled.isPresent()
+            ? CompletableFuture.completedFuture(null)
+            : document.set(PlayerMenuItemConfig.ENABLED_PATH, resolved.enabled()).toCompletableFuture();
 
-        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture())
+        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture(), enabledStage.toCompletableFuture())
             .thenApply(ignored -> resolved)
             .exceptionally(throwable -> {
                 throw new CompletionException("Failed to store menu item config", throwable);
@@ -411,6 +434,12 @@ public final class PlayerMenuService {
 
         PlayerInventory inventory = player.getInventory();
         int existingMenuSlot = findMenuItemSlot(inventory);
+        if (!config.enabled()) {
+            if (existingMenuSlot >= 0) {
+                inventory.setItem(existingMenuSlot, null);
+            }
+            return;
+        }
         int targetSlot = config.slot();
         ItemStack current = inventory.getItem(targetSlot);
         ItemStack menuItem = buildMenuItem(config.material());
