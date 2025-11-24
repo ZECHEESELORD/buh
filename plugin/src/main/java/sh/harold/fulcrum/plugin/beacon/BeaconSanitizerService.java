@@ -64,6 +64,14 @@ final class BeaconSanitizerService {
         scanTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::drainQueue, 20L, 20L);
     }
 
+    void enqueueLoadedChunks() {
+        plugin.getServer().getWorlds().forEach(world -> {
+            for (Chunk chunk : world.getLoadedChunks()) {
+                enqueueChunk(chunk);
+            }
+        });
+    }
+
     void stop() {
         if (scanTask != null) {
             scanTask.cancel();
@@ -114,6 +122,10 @@ final class BeaconSanitizerService {
         if (queuedChunks.add(coordinate)) {
             chunkQueue.offer(coordinate);
         }
+    }
+
+    void enqueueChunk(Chunk chunk) {
+        enqueueChunk(new ChunkCoordinate(chunk.getWorld().getKey().asString(), chunk.getX(), chunk.getZ()));
     }
 
     private void drainQueue() {

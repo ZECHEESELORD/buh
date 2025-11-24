@@ -35,6 +35,7 @@ public final class BeaconSanitizerModule implements FulcrumModule {
             .orElseThrow(() -> new IllegalStateException("StashService not available")));
         pluginManager.registerEvents(new BeaconSanitizerListener(sanitizerService), plugin);
         sanitizerService.start();
+        plugin.getServer().getScheduler().runTask(plugin, sanitizerService::enqueueLoadedChunks);
         return CompletableFuture.completedFuture(null);
     }
 
