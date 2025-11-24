@@ -191,7 +191,7 @@ public final class FeatureVoteService {
         int votes = state.tallies().getOrDefault(option, 0);
 
         MenuButton button = MenuButton.builder(option.material())
-            .name(optionTitle(option))
+            .name(optionTitle(option, selected))
             .lore(buildVoteLore(option, votes, selected).toArray(Component[]::new))
             .onClick(player -> handleVote(player, option))
             .slot(slot)
@@ -214,12 +214,9 @@ public final class FeatureVoteService {
 
     private List<Component> buildVoteLore(FeatureVoteOption option, int votes, boolean selected) {
         List<Component> lore = new ArrayList<>();
-        lore.add(voteStatusLine(option, selected));
         lore.add(Component.text("Gameplay Feature", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
-        lore.add(Component.empty());
         lore.add(Component.text(voteCountLabel(votes), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.empty());
         lore.add(Component.empty());
         lore.add(Component.text(option.displayName(), option.color()).decoration(TextDecoration.ITALIC, false));
         lore.addAll(wrapText(option.description(), NamedTextColor.GRAY));
@@ -228,18 +225,6 @@ public final class FeatureVoteService {
         lore.add(Component.empty());
         lore.add(Component.text("Click to vote!", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         return lore;
-    }
-
-    private Component voteStatusLine(FeatureVoteOption option, boolean selected) {
-        Component name = Component.text(option.displayName(), option.color())
-            .decoration(TextDecoration.ITALIC, false);
-        if (!selected) {
-            return name;
-        }
-        Component voted = Component.text("VOTED", NamedTextColor.GREEN)
-            .decoration(TextDecoration.BOLD, true)
-            .decoration(TextDecoration.ITALIC, false);
-        return name.append(Component.space()).append(voted);
     }
 
     private String voteCountLabel(int votes) {
@@ -280,9 +265,16 @@ public final class FeatureVoteService {
         return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
-    private Component optionTitle(FeatureVoteOption option) {
-        return Component.text(option.displayName(), option.color())
+    private Component optionTitle(FeatureVoteOption option, boolean selected) {
+        Component base = Component.text(option.displayName(), option.color())
             .decoration(TextDecoration.ITALIC, false);
+        if (!selected) {
+            return base;
+        }
+        Component voted = Component.text(" VOTED", NamedTextColor.GREEN)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false);
+        return base.append(voted);
     }
 
     private String percentLabel(double percent) {
