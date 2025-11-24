@@ -18,6 +18,7 @@ tasks.named("jar") {
 }
 
 tasks.register("shadowJar", Jar) {
+    dependsOn(":common:jar")
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.output)
