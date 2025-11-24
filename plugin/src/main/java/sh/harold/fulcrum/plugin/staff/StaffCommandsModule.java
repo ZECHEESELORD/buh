@@ -7,6 +7,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
+import sh.harold.fulcrum.common.data.DataApi;
+import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 import sh.harold.fulcrum.plugin.staff.VanishService;
@@ -23,23 +25,26 @@ public final class StaffCommandsModule implements FulcrumModule {
 
     private final JavaPlugin plugin;
     private final LuckPermsModule luckPermsModule;
+    private final DataModule dataModule;
     private StaffGuard staffGuard;
     private VanishService vanishService;
 
-    public StaffCommandsModule(JavaPlugin plugin, LuckPermsModule luckPermsModule) {
+    public StaffCommandsModule(JavaPlugin plugin, LuckPermsModule luckPermsModule, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.luckPermsModule = Objects.requireNonNull(luckPermsModule, "luckPermsModule");
+        this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("staff"), Set.of(ModuleId.of("luckperms")));
+        return new ModuleDescriptor(ModuleId.of("staff"), Set.of(ModuleId.of("luckperms"), ModuleId.of("data")));
     }
 
     @Override
     public CompletionStage<Void> enable() {
         staffGuard = new StaffGuard(luckPermsModule);
-        vanishService = new VanishService(plugin, staffGuard);
+        DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
+        vanishService = new VanishService(plugin, staffGuard, dataApi);
         plugin.getServer().getPluginManager().registerEvents(vanishService, plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
