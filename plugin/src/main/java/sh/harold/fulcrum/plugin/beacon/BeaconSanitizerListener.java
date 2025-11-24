@@ -5,6 +5,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -70,6 +71,17 @@ final class BeaconSanitizerListener implements Listener {
     public void onEntityDeath(EntityDeathEvent event) {
         if (event.getEntityType() == org.bukkit.entity.EntityType.WITHER) {
             event.getDrops().forEach(sanitizerService::markLegitimate);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        var inventory = event.getInventory();
+        if (inventory.getHolder() instanceof org.bukkit.block.Container container) {
+            int removed = sanitizerService.stripContainer(container);
+            if (removed > 0) {
+                event.getPlayer().sendMessage(sanitizerService.containerNotice());
+            }
         }
     }
 
