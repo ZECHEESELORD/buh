@@ -89,7 +89,7 @@ public final class BeaconStripper {
     }
 
     private static boolean isWhitelisted(ItemStack item, NamespacedKey whitelistKey) {
-        if (whitelistKey == null || item.getType() != Material.BEACON) {
+        if (whitelistKey == null) {
             return false;
         }
         ItemMeta meta = item.getItemMeta();
@@ -100,7 +100,7 @@ public final class BeaconStripper {
         return container.has(whitelistKey, PersistentDataType.BYTE);
     }
 
-    private static boolean isIllegal(ItemStack item) {
+    public static boolean isIllegal(ItemStack item) {
         return ILLEGAL_ITEMS.contains(item.getType());
     }
 

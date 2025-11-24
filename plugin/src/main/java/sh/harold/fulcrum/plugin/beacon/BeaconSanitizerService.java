@@ -46,7 +46,7 @@ final class BeaconSanitizerService {
         NamedTextColor.RED
     );
     private final Component inventoryNotice = Component.text(
-        "You had an illegal item in your inventory/enderchest! They have been removed",
+        "You had an illegal item in your inventory/enderchest! They have been removed!",
         NamedTextColor.RED
     );
     private final Queue<ChunkCoordinate> chunkQueue = new ConcurrentLinkedQueue<>();
@@ -212,7 +212,7 @@ final class BeaconSanitizerService {
     }
 
     void markLegitimate(ItemStack item) {
-        if (item == null || item.getType() != Material.BEACON) {
+        if (item == null || !BeaconStripper.isIllegal(item)) {
             return;
         }
         ItemMeta meta = item.getItemMeta();
