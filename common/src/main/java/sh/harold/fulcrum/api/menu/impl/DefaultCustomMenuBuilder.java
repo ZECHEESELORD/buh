@@ -328,136 +328,136 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     public CompletableFuture<Menu> buildAsync(Player player) {
         Objects.requireNonNull(player, "Player cannot be null");
 
-        return buildAsync(player, false).thenCompose(menu -> {
-            // Simple menu opening - no complex NavigationMode logic
-            return menuService.openMenu(menu, player).thenApply(v -> menu);
-        });
+        return CompletableFuture.supplyAsync(() -> buildMenu(player, false))
+                .thenCompose(menu -> menuService.openMenu(menu, player).thenApply(ignored -> menu));
     }
 
     @Override
     public CompletableFuture<Menu> buildAsync() {
-        return buildAsync(null, true);
+        return CompletableFuture.supplyAsync(() -> buildMenu(null, true));
     }
 
-    private CompletableFuture<Menu> buildAsync(Player player, boolean allowNullPlayer) {
-        return CompletableFuture.supplyAsync(() -> {
-            // Generate unique menu ID
-            String menuId = "custom-menu-" + UUID.randomUUID();
+    private Menu buildMenu(Player player, boolean allowNullPlayer) {
+        if (!allowNullPlayer) {
+            Objects.requireNonNull(player, "player");
+        }
 
-            // Use original title - breadcrumb generation is handled by openChildMenu()
-            Component finalTitle = title;
+        // Generate unique menu ID
+        String menuId = "custom-menu-" + UUID.randomUUID();
 
-            // Create the menu instance
-            int effectiveViewportRows = getEffectiveViewportRows();
-            DefaultCustomMenu menu = new DefaultCustomMenu(
-                    menuId,
-                    finalTitle,
-                    effectiveViewportRows,
-                    rows,
-                    columns,
-                    owner,
-                    player, // Now properly passes the player parameter
-                    fillEmptyItem // Pass fillEmpty reference for post-rendering pipeline
-            );
+        // Use original title - breadcrumb generation is handled by openChildMenu()
+        Component finalTitle = title;
 
-            // Configure menu properties
-            menu.getContext().setProperty("closeOnOutsideClick", closeOnOutsideClick);
-            menu.getContext().setProperty("autoCloseButton", autoCloseButton);
+        // Create the menu instance
+        int effectiveViewportRows = getEffectiveViewportRows();
+        DefaultCustomMenu menu = new DefaultCustomMenu(
+                menuId,
+                finalTitle,
+                effectiveViewportRows,
+                rows,
+                columns,
+                owner,
+                player, // Now properly passes the player parameter
+                fillEmptyItem // Pass fillEmpty reference for post-rendering pipeline
+        );
 
-            // Parent menu configuration for post-rendering pipeline
-            if (parentMenuId != null) {
-                menu.getContext().setProperty("parentMenuId", parentMenuId);
-            }
+        // Configure menu properties
+        menu.getContext().setProperty("closeOnOutsideClick", closeOnOutsideClick);
+        menu.getContext().setProperty("autoCloseButton", autoCloseButton);
 
-            // Set anchor point
-            menu.setAnchorPoint(anchor);
+        // Parent menu configuration for post-rendering pipeline
+        if (parentMenuId != null) {
+            menu.getContext().setProperty("parentMenuId", parentMenuId);
+        }
 
-            // Add border if specified
-            if (borderItem != null) {
-                menu.addBorder(borderItem);
-            }
+        // Set anchor point
+        menu.setAnchorPoint(anchor);
 
-            // **FIX**: Add virtual items AFTER menu is fully constructed
-            virtualItems.forEach((row, columnMap) -> {
-                columnMap.forEach((column, item) -> {
-                    menu.setVirtualItem(item, row, column);
-                });
+        // Add border if specified
+        if (borderItem != null) {
+            menu.addBorder(borderItem);
+        }
+
+        // **FIX**: Add virtual items AFTER menu is fully constructed
+        virtualItems.forEach((row, columnMap) -> {
+            columnMap.forEach((column, item) -> {
+                menu.setVirtualItem(item, row, column);
             });
-
-            // Add viewport buttons
-            buttons.forEach((slot, button) -> menu.setButton(button, slot));
-
-            // Automatically detect which dimension is oversized
-            boolean verticallyOversized = rows > effectiveViewportRows;
-            boolean horizontallyOversized = columns > 9; // Viewport columns is always 9 for Minecraft inventories
-            boolean isOversized = verticallyOversized || horizontallyOversized;
-
-            // Set up scroll buttons if explicitly requested OR if grid is oversized
-            if (addScrollButtons || isOversized) {
-                // Use default positioning if not explicitly set
-                if (!addScrollButtons) {
-                    // Smart positioning for oversized grids - only add buttons for oversized dimensions
-                    int bottomRow = (effectiveViewportRows - 1) * 9;
-                    if (verticallyOversized) {
-                        scrollUpSlot = 0; // Column 0, top row
-                        scrollDownSlot = bottomRow; // Column 0, bottom row
-                    } else {
-                        scrollUpSlot = -1; // Disable vertical navigation
-                        scrollDownSlot = -1;
-                    }
-
-                    if (horizontallyOversized) {
-                        scrollLeftSlot = bottomRow; // Bottom-left corner
-                        scrollRightSlot = bottomRow + 8; // Bottom-right corner
-                    } else {
-                        scrollLeftSlot = -1; // Disable horizontal navigation
-                        scrollRightSlot = -1;
-                    }
-                }
-                menu.setScrollButtons(scrollUpSlot, scrollDownSlot, scrollLeftSlot, scrollRightSlot);
-
-                // Store dimension info for navigation button logic
-                menu.getContext().setProperty("verticallyOversized", verticallyOversized);
-                menu.getContext().setProperty("horizontallyOversized", horizontallyOversized);
-                menu.getContext().setProperty("isOversized", isOversized);
-                menu.getContext().setProperty("hasExplicitViewport", hasExplicitViewport); // Store for parent detection
-            }
-
-            // Configure options (simplified - wrapAround and viewport indicator removed)
-
-            // Set scroll handler
-            if (scrollHandler != null) {
-                menu.getContext().setProperty("scrollHandler", scrollHandler);
-            }
-
-            // Set dynamic content provider
-            if (dynamicContentProvider != null) {
-                menu.setDynamicContentProvider(dynamicContentProvider);
-            }
-
-            // Enable auto-refresh
-            if (autoRefreshInterval > 0) {
-                menu.enableAutoRefresh(autoRefreshInterval);
-            }
-
-            // Set initial offset
-            menu.setViewportOffset(initialRowOffset, initialColumnOffset);
-
-            // Add parent menu back button if specified
-            addParentMenuButton(menu);
-
-            // Fill navigation row slots before rendering
-            fillNavigationRow(menu);
-
-            // Note: fillEmpty functionality is now handled by the post-rendering pipeline
-            // in DefaultCustomMenu.applyPostRenderingItems() for better conflict resolution
-
-            // Now that all configuration is complete, render the items
-            // The new renderItems() method with post-rendering pipeline will handle fillEmpty properly
-            menu.renderItems();
-
-            return menu;
         });
+
+        // Add viewport buttons
+        buttons.forEach((slot, button) -> menu.setButton(button, slot));
+
+        // Automatically detect which dimension is oversized
+        boolean verticallyOversized = rows > effectiveViewportRows;
+        boolean horizontallyOversized = columns > 9; // Viewport columns is always 9 for Minecraft inventories
+        boolean isOversized = verticallyOversized || horizontallyOversized;
+
+        // Set up scroll buttons if explicitly requested OR if grid is oversized
+        if (addScrollButtons || isOversized) {
+            // Use default positioning if not explicitly set
+            if (!addScrollButtons) {
+                // Smart positioning for oversized grids - only add buttons for oversized dimensions
+                int bottomRow = (effectiveViewportRows - 1) * 9;
+                if (verticallyOversized) {
+                    scrollUpSlot = 0; // Column 0, top row
+                    scrollDownSlot = bottomRow; // Column 0, bottom row
+                } else {
+                    scrollUpSlot = -1; // Disable vertical navigation
+                    scrollDownSlot = -1;
+                }
+
+                if (horizontallyOversized) {
+                    scrollLeftSlot = bottomRow; // Bottom-left corner
+                    scrollRightSlot = bottomRow + 8; // Bottom-right corner
+                } else {
+                    scrollLeftSlot = -1; // Disable horizontal navigation
+                    scrollRightSlot = -1;
+                }
+            }
+            menu.setScrollButtons(scrollUpSlot, scrollDownSlot, scrollLeftSlot, scrollRightSlot);
+
+            // Store dimension info for navigation button logic
+            menu.getContext().setProperty("verticallyOversized", verticallyOversized);
+            menu.getContext().setProperty("horizontallyOversized", horizontallyOversized);
+            menu.getContext().setProperty("isOversized", isOversized);
+            menu.getContext().setProperty("hasExplicitViewport", hasExplicitViewport); // Store for parent detection
+        }
+
+        // Configure options (simplified - wrapAround and viewport indicator removed)
+
+        // Set scroll handler
+        if (scrollHandler != null) {
+            menu.getContext().setProperty("scrollHandler", scrollHandler);
+        }
+
+        // Set dynamic content provider
+        if (dynamicContentProvider != null) {
+            menu.setDynamicContentProvider(dynamicContentProvider);
+        }
+
+        // Enable auto-refresh
+        if (autoRefreshInterval > 0) {
+            menu.enableAutoRefresh(autoRefreshInterval);
+        }
+
+        // Set initial offset
+        menu.setViewportOffset(initialRowOffset, initialColumnOffset);
+
+        // Add parent menu back button if specified
+        addParentMenuButton(menu);
+
+        // Fill navigation row slots before rendering
+        fillNavigationRow(menu);
+
+        // Note: fillEmpty functionality is now handled by the post-rendering pipeline
+        // in DefaultCustomMenu.applyPostRenderingItems() for better conflict resolution
+
+        // Now that all configuration is complete, render the items
+        // The new renderItems() method with post-rendering pipeline will handle fillEmpty properly
+        menu.renderItems();
+
+        return menu;
     }
 
     /**
