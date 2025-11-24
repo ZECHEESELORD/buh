@@ -10,6 +10,7 @@ import org.bukkit.scheduler.BukkitTask;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardBuilder;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardDefinition;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
+import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
@@ -23,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Level;
 
-public final class ScoreboardFeature implements FulcrumModule, Listener {
+public final class ScoreboardFeature implements FulcrumModule, ConfigurableModule, Listener {
 
     private static final String SCOREBOARD_ID = "default";
     private static final String DEFAULT_DATE_FORMAT = "MM/dd/yy";
@@ -53,8 +54,7 @@ public final class ScoreboardFeature implements FulcrumModule, Listener {
         configService = new FeatureConfigService(plugin);
         config = ScoreboardConfig.from(configService.load(ScoreboardConfig.CONFIG_DEFINITION));
 
-        ScoreboardDefinition definition = buildDefinition();
-        scoreboardService.registerScoreboard(SCOREBOARD_ID, definition);
+        registerScoreboardDefinition();
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         plugin.getServer().getOnlinePlayers()
@@ -80,6 +80,22 @@ public final class ScoreboardFeature implements FulcrumModule, Listener {
         return CompletableFuture.completedFuture(null);
     }
 
+    @Override
+    public CompletionStage<Void> reloadConfig() {
+        if (configService == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Scoreboard config service not initialized."));
+        }
+
+        config = ScoreboardConfig.from(configService.load(ScoreboardConfig.CONFIG_DEFINITION));
+        registerScoreboardDefinition();
+        plugin.getServer().getOnlinePlayers().forEach(player -> {
+            if (scoreboardService.hasScoreboardDisplayed(player.getUniqueId())) {
+                scoreboardService.showScoreboard(player.getUniqueId(), SCOREBOARD_ID);
+            }
+        });
+        return CompletableFuture.completedFuture(null);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         scoreboardService.showScoreboard(event.getPlayer().getUniqueId(), SCOREBOARD_ID);
@@ -94,13 +110,22 @@ public final class ScoreboardFeature implements FulcrumModule, Listener {
         ScoreboardBuilder builder = new ScoreboardBuilder(SCOREBOARD_ID)
             .title(config.title())
             .headerSupplier(this::headerLine)
-            .module(new FeatureVoteScoreboardModule());
+            .module(new FeatureVoteScoreboardModule())
+            .module(new VoteCommandScoreboardModule());
 
         if (config.footer() != null && !config.footer().isBlank()) {
             builder.footerSupplier(config::footer);
         }
 
         return builder.build();
+    }
+
+    private void registerScoreboardDefinition() {
+        if (scoreboardService.isScoreboardRegistered(SCOREBOARD_ID)) {
+            scoreboardService.unregisterScoreboard(SCOREBOARD_ID);
+        }
+        ScoreboardDefinition definition = buildDefinition();
+        scoreboardService.registerScoreboard(SCOREBOARD_ID, definition);
     }
 
     private void startRefreshTask() {
