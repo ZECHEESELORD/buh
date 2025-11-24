@@ -7,19 +7,3 @@ load: STARTUP
 softdepend: [LuckPerms]
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
-commands:
-  msg:
-    description: Send a private message to a player.
-    aliases: [ message, tell, whisper, w, m ]
-  viewstash:
-    description: Inspect the items resting in your stash.
-  pickupstash:
-    description: Move as much of your stash into your inventory as will fit.
-  quickmaths:
-    description: Start or cancel a Quick Maths round.
-  kaboom:
-    description: Strike and launch the selected players.
-  loop:
-    description: Repeat a command several times with a delay.
-  sudo:
-    description: Force players to run a command or say a line.

@@ -6,11 +6,24 @@ plugins {
 dependencies {
     implementation project(":common")
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
-    compileOnly("net.luckperms:api:5.4")
+    implementation("net.luckperms:api:5.4")
 }
 
 tasks.named("runServer") {
-    minecraftVersion("1.21")
+    minecraftVersion("1.21.10")
+}
+
+tasks.named("jar") {
+    enabled = false
+}
+
+tasks.register("shadowJar", Jar) {
+    archiveClassifier.set("")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(sourceSets.main.output)
+    from({
+        configurations.runtimeClasspath.filter { it.name.endsWith("jar") }.collect { zipTree(it) }
+    })
 }
 
 tasks.named("processResources", Copy) {
@@ -20,4 +33,8 @@ tasks.named("processResources", Copy) {
     filesMatching('paper-plugin.yml') {
         expand(props)
     }
+}
+
+tasks.named("build") {
+    dependsOn(tasks.named("shadowJar"))
 }
