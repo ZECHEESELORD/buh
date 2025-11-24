@@ -38,6 +38,7 @@ import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteService;
 import sh.harold.fulcrum.plugin.tab.TabFeature;
 import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
+import sh.harold.fulcrum.plugin.beacon.BeaconSanitizerModule;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -64,6 +65,7 @@ public final class BuhPlugin extends JavaPlugin {
     private StaffCommandsModule staffCommandsModule;
     private StatsModule statsModule;
     private ShutdownModule shutdownModule;
+    private BeaconSanitizerModule beaconSanitizerModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -148,6 +150,7 @@ public final class BuhPlugin extends JavaPlugin {
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
+        beaconSanitizerModule = new BeaconSanitizerModule(this, stashModule);
         menuModule = new MenuModule(this);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
@@ -172,6 +175,7 @@ public final class BuhPlugin extends JavaPlugin {
             chatModule,
             messageModule,
             stashModule,
+            beaconSanitizerModule,
             menuModule,
             playerMenuModule,
             featureVoteModule,
