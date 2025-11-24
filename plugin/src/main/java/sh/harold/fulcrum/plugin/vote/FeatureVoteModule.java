@@ -31,7 +31,7 @@ public final class FeatureVoteModule implements FulcrumModule {
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("feature-vote"),
-            Set.of(ModuleId.of("data"), ModuleId.of("player-menu"))
+             Set.of(ModuleId.of("data"), ModuleId.of("menu"))
         );
     }
 

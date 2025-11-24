@@ -25,6 +25,7 @@ import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.fun.FunModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
+import sh.harold.fulcrum.plugin.menu.MenuModule;
 import sh.harold.fulcrum.plugin.staff.StaffCommandsModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
@@ -55,6 +56,7 @@ public final class BuhPlugin extends JavaPlugin {
     private ChatModule chatModule;
     private MessageModule messageModule;
     private StashModule stashModule;
+    private MenuModule menuModule;
     private PlayerMenuModule playerMenuModule;
     private FeatureVoteModule featureVoteModule;
     private FunModule funModule;
@@ -144,7 +146,8 @@ public final class BuhPlugin extends JavaPlugin {
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
-        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule);
+        menuModule = new MenuModule(this);
+        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
@@ -158,6 +161,7 @@ public final class BuhPlugin extends JavaPlugin {
             chatModule,
             messageModule,
             stashModule,
+            menuModule,
             playerMenuModule,
             featureVoteModule,
             funModule,
