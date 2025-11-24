@@ -287,20 +287,9 @@ public class DefaultListMenu extends AbstractMenu {
     }
 
     private void updateNavigationButtons() {
-        // DEBUG LOG: Critical navigation button diagnosis
-        System.out.println("[NAVIGATION DEBUG] updateNavigationButtons() called:");
-        System.out.println("  - previousButton: " + (previousButton != null ? "NOT NULL" : "NULL"));
-        System.out.println("  - previousButtonSlot: " + previousButtonSlot);
-        System.out.println("  - nextButton: " + (nextButton != null ? "NOT NULL" : "NULL"));
-        System.out.println("  - nextButtonSlot: " + nextButtonSlot);
-        System.out.println("  - currentPage: " + currentPage);
-        System.out.println("  - totalPages: " + getTotalPages());
-
         // Previous button - show if slot is reserved (regardless of button object existence)
         if (previousButtonSlot >= 0) {
-            System.out.println("  - Processing previous button slot: " + previousButtonSlot);
             if (currentPage > 1) {
-                System.out.println("  - Creating previous button (currentPage=" + currentPage + " > 1)");
                 MenuButton prevButton = MenuButton.builder(Material.ARROW)
                         .name("&7Previous Page")
                         .sound(Sound.UI_LOOM_SELECT_PATTERN, 1.0f, 0.8f)
@@ -308,7 +297,6 @@ public class DefaultListMenu extends AbstractMenu {
                         .build();
                 super.setButton(prevButton, previousButtonSlot);
             } else {
-                System.out.println("  - Hiding previous button (currentPage=" + currentPage + " <= 1)");
                 // FIXED: When navigation is hidden, replace with border material instead of air
                 items.remove(previousButtonSlot);
                 if (inventory.getItem(previousButtonSlot) != null) {
@@ -316,15 +304,11 @@ public class DefaultListMenu extends AbstractMenu {
                     fillNavigationSlotWithBorder(previousButtonSlot);
                 }
             }
-        } else {
-            System.out.println("  - No previous button slot reserved (previousButtonSlot=" + previousButtonSlot + ")");
         }
 
         // Next button - show if slot is reserved (regardless of button object existence)
         if (nextButtonSlot >= 0) {
-            System.out.println("  - Processing next button slot: " + nextButtonSlot);
             if (currentPage < getTotalPages()) {
-                System.out.println("  - Creating next button (currentPage=" + currentPage + " < totalPages=" + getTotalPages() + ")");
                 // FIXED: Use ARROW material for navigation instead of dyes
                 MenuButton nextBtn = MenuButton.builder(Material.ARROW)
                         .name("&7Next Page")
@@ -333,7 +317,6 @@ public class DefaultListMenu extends AbstractMenu {
                         .build();
                 super.setButton(nextBtn, nextButtonSlot);
             } else {
-                System.out.println("  - Hiding next button (currentPage=" + currentPage + " >= totalPages=" + getTotalPages() + ")");
                 // FIXED: When navigation is hidden, replace with border material instead of air
                 items.remove(nextButtonSlot);
                 if (inventory.getItem(nextButtonSlot) != null) {
@@ -341,8 +324,6 @@ public class DefaultListMenu extends AbstractMenu {
                     fillNavigationSlotWithBorder(nextButtonSlot);
                 }
             }
-        } else {
-            System.out.println("  - No next button slot reserved (nextButtonSlot=" + nextButtonSlot + ")");
         }
 
         // Add bottom row black glass for list menus with pagination

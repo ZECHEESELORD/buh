@@ -296,20 +296,10 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
 
             // Automatically add navigation buttons if needed
             if (needsNavigation) {
-                // DEBUG LOG: Critical navigation setup diagnosis
-                System.out.println("[NAVIGATION DEBUG] Builder detected needsNavigation=true:");
-                System.out.println("  - totalSlots: " + totalSlots);
-                System.out.println("  - reservedSlots: " + reservedSlots);
-                System.out.println("  - availableContentSlots: " + availableContentSlots);
-                System.out.println("  - items.size(): " + items.size());
-
                 // Use bottom corners for previous/next navigation (anchored)
                 int lastRow = (rows - 1) * 9;
                 int prevSlot = lastRow; // Bottom-left corner
                 int nextSlot = lastRow + 8; // Bottom-right corner
-
-                System.out.println("  - prevSlot: " + prevSlot + " (occupied: " + buttons.containsKey(prevSlot) + ")");
-                System.out.println("  - nextSlot: " + nextSlot + " (occupied: " + buttons.containsKey(nextSlot) + ")");
 
                 // Only reserve slots if they aren't already occupied by manual buttons
                 // No need to create dummy buttons - DefaultListMenu.updateNavigationButtons() will handle the actual creation
@@ -324,19 +314,11 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
                     reservedNextSlot = true;
                 }
 
-                System.out.println("  - reservedPrevSlot: " + reservedPrevSlot);
-                System.out.println("  - reservedNextSlot: " + reservedNextSlot);
-
                 // Reserve navigation button slots on the menu (no actual buttons created here)
                 if (reservedPrevSlot || reservedNextSlot) {
-                    System.out.println("  - Calling setNavigationButtons with slots: prev=" + (reservedPrevSlot ? prevSlot : -1) + ", next=" + (reservedNextSlot ? nextSlot : -1));
                     menu.setNavigationButtons(null, reservedPrevSlot ? prevSlot : -1, null, reservedNextSlot ? nextSlot : -1);
-                } else {
-                    System.out.println("  - No slots reserved, not calling setNavigationButtons");
                 }
             } else {
-                System.out.println("[NAVIGATION DEBUG] Builder determined needsNavigation=false");
-
                 // Add page indicator in top row, slot 4 (5th slot in first row)
                 int pageIndicatorSlot = 4; // Top row, index 4
                 if (!buttons.containsKey(pageIndicatorSlot)) {
@@ -417,16 +399,10 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
         // Add back button if parent menu is specified
         if (parentMenuId != null) {
             int backSlot = MenuButton.getBackSlot(rows);
-            System.out.println("[DEBUG BUTTON POSITIONING] ListMenu back button calculation:");
-            System.out.println("  - rows: " + rows);
-            System.out.println("  - getBackNavigationSlot(" + rows + ") = " + backSlot);
-            System.out.println("  - getBackSlot(" + rows + ") = " + MenuButton.getBackSlot(rows));
-            System.out.println("  - getCloseSlot(" + rows + ") = " + MenuButton.getCloseSlot(rows));
 
             if (!buttons.containsKey(backSlot)) {
                 MenuButton backButton = MenuButton.createBackButtonForParentMenu(parentMenuId, menuService);
                 menu.setPersistentButton(backButton, backSlot);
-                System.out.println("  - Back button added at slot: " + backSlot);
             }
         }
 
@@ -451,18 +427,10 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
             closeSlot = MenuButton.getCloseSlot(rows);
         }
 
-        System.out.println("[DEBUG BUTTON POSITIONING] ListMenu close button calculation:");
-        System.out.println("  - rows: " + rows);
-        System.out.println("  - parentMenuId exists: " + (parentMenuId != null));
-        System.out.println("  - closeSlot: " + closeSlot);
-
         // Add close button if slot is not already occupied
         if (!buttons.containsKey(closeSlot)) {
             MenuButton closeButton = MenuButton.createCloseButton();
             menu.setPersistentButton(closeButton, closeSlot);
-            System.out.println("  - Close button added at slot: " + closeSlot);
-        } else {
-            System.out.println("  - Close button slot " + closeSlot + " is already occupied, skipping");
         }
     }
 }

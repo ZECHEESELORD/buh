@@ -530,16 +530,10 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
         if (parentMenuId != null) {
             int effectiveViewportRows = getEffectiveViewportRows();
             int backSlot = MenuButton.getBackSlot(effectiveViewportRows);
-            System.out.println("[DEBUG BUTTON POSITIONING] CustomMenu back button calculation:");
-            System.out.println("  - effectiveViewportRows: " + effectiveViewportRows);
-            System.out.println("  - getBackNavigationSlot(" + effectiveViewportRows + ") = " + backSlot);
-            System.out.println("  - getBackSlot(" + effectiveViewportRows + ") = " + MenuButton.getBackSlot(effectiveViewportRows));
-            System.out.println("  - getCloseSlot(" + effectiveViewportRows + ") = " + MenuButton.getCloseSlot(effectiveViewportRows));
 
             if (menu.getItem(backSlot) == null && !buttons.containsKey(backSlot)) {
                 MenuButton backButton = MenuButton.createBackButtonForParentMenu(parentMenuId, menuService);
                 menu.setButton(backButton, backSlot);
-                System.out.println("  - Back button added at slot: " + backSlot);
             }
         }
     }

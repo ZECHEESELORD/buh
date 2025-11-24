@@ -27,8 +27,6 @@ public class DefaultMenuService implements MenuService {
     public DefaultMenuService(Plugin plugin, MenuRegistry menuRegistry) {
         this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
         this.menuRegistry = Objects.requireNonNull(menuRegistry, "MenuRegistry cannot be null");
-
-        System.out.println("[MENU SERVICE] DefaultMenuService initialized (simplified version)");
     }
 
     @Override
@@ -52,25 +50,13 @@ public class DefaultMenuService implements MenuService {
         Objects.requireNonNull(player, "Player cannot be null");
 
         return CompletableFuture.runAsync(() -> {
-            try {
-                System.out.println("[MENU SERVICE] Opening menu: " + menu.getTitle() + " for " + player.getName());
+            openMenus.put(player.getUniqueId(), menu);
+            trackMenuForPlugin(menu);
 
-                // Track the menu
-                openMenus.put(player.getUniqueId(), menu);
-                trackMenuForPlugin(menu);
-
-                // Open the menu on the main thread
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.openInventory(menu.getInventory());
-                    menu.update();
-                });
-
-                System.out.println("[MENU SERVICE] Successfully opened menu: " + menu.getTitle());
-
-            } catch (Exception e) {
-                System.err.println("[MENU SERVICE] Error opening menu: " + e.getMessage());
-                e.printStackTrace();
-            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                player.openInventory(menu.getInventory());
+                menu.update();
+            });
         });
     }
 
@@ -81,7 +67,6 @@ public class DefaultMenuService implements MenuService {
         Menu menu = openMenus.remove(player.getUniqueId());
         if (menu != null) {
             Bukkit.getScheduler().runTask(plugin, () -> player.closeInventory());
-            System.out.println("[MENU SERVICE] Closed menu for " + player.getName());
             return true;
         }
         return false;
@@ -184,7 +169,6 @@ public class DefaultMenuService implements MenuService {
         Objects.requireNonNull(menu, "Menu cannot be null");
 
         menuInstances.put(menuId, menu);
-        System.out.println("[MENU SERVICE] Registered menu instance: " + menuId);
     }
 
     /**
@@ -248,8 +232,6 @@ public class DefaultMenuService implements MenuService {
 
         // Clear registry
         menuRegistry.clearRegistry();
-
-        System.out.println("[MENU SERVICE] MenuService shutdown complete");
     }
 
     /**
@@ -260,7 +242,6 @@ public class DefaultMenuService implements MenuService {
      */
     public void handleMenuClosed(Player player) {
         openMenus.remove(player.getUniqueId());
-        System.out.println("[MENU SERVICE] External menu close handled for " + player.getName());
     }
 
     /**
