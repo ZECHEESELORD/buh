@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -30,6 +31,8 @@ public final class ChatModule implements FulcrumModule {
     private final LuckPermsModule luckPermsModule;
     private final ChatChannelService channelService;
     private final MessageService messageService;
+    private StaffChatFormatter staffChatFormatter;
+    private StaffChatBossBarService staffChatBossBarService;
 
     public ChatModule(JavaPlugin plugin, LuckPermsModule luckPermsModule, ChatChannelService channelService, MessageService messageService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -49,11 +52,16 @@ public final class ChatModule implements FulcrumModule {
         if (luckPerms == null) {
             plugin.getLogger().warning("LuckPerms not available; chat will use fallback formatting.");
         }
+        ChatFormatService chatFormatService = luckPerms == null ? null : new ChatFormatService(luckPerms);
+        staffChatFormatter = new StaffChatFormatter(plugin, chatFormatService);
+        staffChatBossBarService = new StaffChatBossBarService(plugin, channelService);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         Supplier<FormattedUsernameService> usernameServiceSupplier = () -> luckPermsModule.formattedUsernameService().orElse(null);
         pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier), plugin);
-        pluginManager.registerEvents(new ChatListener(plugin, luckPerms, channelService, messageService), plugin);
+        pluginManager.registerEvents(new ChatListener(plugin, chatFormatService, channelService, messageService, staffChatFormatter), plugin);
+        pluginManager.registerEvents(staffChatBossBarService, plugin);
+        channelService.addListener(staffChatBossBarService);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
     }
@@ -80,5 +88,22 @@ public final class ChatModule implements FulcrumModule {
             }))
             .build();
         registrar.register(root, "chat", java.util.List.of());
+
+        LiteralCommandNode<CommandSourceStack> staffChat = Commands.literal("sc")
+            .requires(stack -> stack.getSender() instanceof org.bukkit.entity.Player player && channelService.isStaff(player.getUniqueId()))
+            .then(Commands.argument("message", StringArgumentType.greedyString())
+                .executes(context -> {
+                    var sender = (org.bukkit.entity.Player) context.getSource().getSender();
+                    String raw = context.getArgument("message", String.class);
+                    Component formatted = staffChatFormatter.format(sender, Component.text(raw));
+                    plugin.getServer().getOnlinePlayers().forEach(player -> {
+                        if (channelService.isStaff(player.getUniqueId())) {
+                            player.sendMessage(formatted);
+                        }
+                    });
+                    return Command.SINGLE_SUCCESS;
+                }))
+            .build();
+        registrar.register(staffChat, "sc", java.util.List.of("staffchat"));
     }
 }

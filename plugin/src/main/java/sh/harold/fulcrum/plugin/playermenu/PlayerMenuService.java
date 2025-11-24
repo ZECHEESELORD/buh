@@ -293,11 +293,21 @@ public final class PlayerMenuService {
         MenuButton button = builder.build();
 
         if (!free) {
-            ItemStack clone = occupant.clone();
-            button.setDisplayItem(clone);
+            // Use a sanitized copy so menu-item markers do not trigger other listeners
+            button.setDisplayItem(stripMenuMarker(occupant));
         }
 
         return new MenuItemPlacement(menuSlot, button);
+    }
+
+    private ItemStack stripMenuMarker(ItemStack source) {
+        ItemStack clone = source.clone();
+        ItemMeta meta = clone.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer().remove(markerKey);
+            clone.setItemMeta(meta);
+        }
+        return clone;
     }
 
     private void fillDividerRow(sh.harold.fulcrum.api.menu.CustomMenuBuilder builder) {

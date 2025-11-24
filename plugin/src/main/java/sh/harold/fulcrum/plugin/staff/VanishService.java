@@ -1,9 +1,8 @@
 package sh.harold.fulcrum.plugin.staff;
 
+import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import net.kyori.adventure.bossbar.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -30,7 +29,8 @@ public final class VanishService implements Listener {
 
     private static final String VANISH_PATH = "staff.vanish";
     private static final Duration VANISH_STATE_TIMEOUT = Duration.ofSeconds(2);
-    private static final Component VANISH_TITLE = LegacyComponentSerializer.legacyAmpersand().deserialize("&8Vanish: &a&lENABLED");
+    private static final Component STAFF_PREFIX = Component.text("[STAFF] ", NamedTextColor.AQUA);
+    private static final Component VANISH_LABEL = Component.text("Vanish: ", NamedTextColor.GRAY);
 
     private final JavaPlugin plugin;
     private final StaffGuard staffGuard;
@@ -177,7 +177,8 @@ public final class VanishService implements Listener {
             return;
         }
         BossBar bar = vanishBars.computeIfAbsent(player.getUniqueId(),
-            ignored -> BossBar.bossBar(VANISH_TITLE, 1.0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS));
+            ignored -> BossBar.bossBar(vanishTitle(true), 1.0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS));
+        bar.name(vanishTitle(true));
         player.showBossBar(bar);
     }
 
@@ -192,5 +193,11 @@ public final class VanishService implements Listener {
     }
 
     public record VanishState(boolean vanished, boolean changed) {
+    }
+
+    private Component vanishTitle(boolean vanished) {
+        NamedTextColor stateColor = vanished ? NamedTextColor.GREEN : NamedTextColor.RED;
+        return STAFF_PREFIX.append(VANISH_LABEL)
+            .append(Component.text(Boolean.toString(vanished), stateColor));
     }
 }
