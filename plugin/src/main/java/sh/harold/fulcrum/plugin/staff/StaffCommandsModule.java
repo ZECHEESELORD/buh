@@ -11,6 +11,7 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
+import sh.harold.fulcrum.plugin.staff.command.OpenInventoryCommand;
 import sh.harold.fulcrum.plugin.staff.VanishService;
 import sh.harold.fulcrum.plugin.staff.command.LoopCommand;
 import sh.harold.fulcrum.plugin.staff.command.SudoCommand;
@@ -28,6 +29,7 @@ public final class StaffCommandsModule implements FulcrumModule {
     private final DataModule dataModule;
     private StaffGuard staffGuard;
     private VanishService vanishService;
+    private OpenInventoryService openInventoryService;
 
     public StaffCommandsModule(JavaPlugin plugin, LuckPermsModule luckPermsModule, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -45,7 +47,9 @@ public final class StaffCommandsModule implements FulcrumModule {
         staffGuard = new StaffGuard(luckPermsModule);
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         vanishService = new VanishService(plugin, staffGuard, dataApi);
+        openInventoryService = new OpenInventoryService(plugin, dataApi);
         plugin.getServer().getPluginManager().registerEvents(vanishService, plugin);
+        openInventoryService.registerListeners();
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
     }
@@ -63,5 +67,6 @@ public final class StaffCommandsModule implements FulcrumModule {
         registrar.register(new LoopCommand(plugin, staffGuard).build(), "loop", java.util.List.of());
         registrar.register(new SudoCommand(staffGuard).build(), "sudo", java.util.List.of());
         registrar.register(new VanishCommand(plugin, staffGuard, vanishService).build(), "vanish", java.util.List.of());
+        registrar.register(new OpenInventoryCommand(staffGuard, openInventoryService).build(), "openinv", java.util.List.of("openinventory"));
     }
 }
