@@ -9,7 +9,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import sh.harold.fulcrum.fundamentals.slot.presence.SlotPresenceService;
 import sh.harold.fulcrum.message.Message;
 import sh.harold.fulcrum.message.MessageTag;
 
@@ -19,7 +18,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Supplier;
 
 /**
  * Coordinates Quick Maths rounds and routes chat answers to the appropriate scope.
@@ -43,14 +41,11 @@ public final class QuickMathsManager {
     });
 
     private final JavaPlugin plugin;
-    private final Supplier<SlotPresenceService> presenceSupplier;
     private final Map<QuickMathsScope, QuickMathsSession> activeSessions = new ConcurrentHashMap<>();
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public QuickMathsManager(JavaPlugin plugin,
-                             Supplier<SlotPresenceService> presenceSupplier) {
+    public QuickMathsManager(JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.presenceSupplier = presenceSupplier != null ? presenceSupplier : () -> null;
     }
 
     public int maxWinnersPerRound() {
@@ -67,19 +62,10 @@ public final class QuickMathsManager {
             return false;
         }
 
-        ScopeResolution resolution = resolveScope(initiator);
-        if (!resolution.allowed()) {
-            Message.error(resolution.reason())
-                .builder()
-                .send(initiator);
-            return false;
-        }
-
-        QuickMathsScope scope = resolution.scope();
-        QuickMathsSession session = new QuickMathsSession(scope, winners, generateEquation(difficulty));
-        QuickMathsSession existing = activeSessions.putIfAbsent(scope, session);
+        QuickMathsSession session = new QuickMathsSession(GLOBAL_SCOPE, winners, generateEquation(difficulty));
+        QuickMathsSession existing = activeSessions.putIfAbsent(GLOBAL_SCOPE, session);
         if (existing != null) {
-            Message.error("A Quick Maths round is already active for " + scope.displayName() + ".")
+            Message.error("A Quick Maths round is already active for " + session.scope.displayName() + ".")
                 .builder()
                 .send(initiator);
             return false;
@@ -123,59 +109,18 @@ public final class QuickMathsManager {
         return DECIMAL_FORMAT.get().format(value);
     }
 
-    private ScopeResolution resolveScope(CommandSender initiator) {
-        SlotPresenceService presence = presence();
-        if (presence == null) {
-            return ScopeResolution.allowed(GLOBAL_SCOPE);
-        }
-
-        if (initiator instanceof Player player) {
-            Optional<String> slot = presence.resolveSlotId(player.getUniqueId());
-            if (slot.isPresent() && !slot.get().isBlank()) {
-                return ScopeResolution.allowed(QuickMathsScope.slot(slot.get()));
-            }
-        }
-
-        if (hasActiveMinigamePlayers(presence)) {
-            return ScopeResolution.denied("Quick Maths must target a specific match on this server.");
-        }
-        return ScopeResolution.allowed(GLOBAL_SCOPE);
-    }
-
-    private boolean hasActiveMinigamePlayers(SlotPresenceService presence) {
-        return presence != null && presence.hasAnyMemberships();
-    }
-
     private QuickMathsSession findSessionForPlayer(Player player) {
-        SlotPresenceService presence = presence();
-        if (presence != null) {
-            Optional<String> slot = presence.resolveSlotId(player.getUniqueId());
-            if (slot.isPresent()) {
-                QuickMathsScope scope = QuickMathsScope.slot(slot.get());
-                QuickMathsSession scoped = activeSessions.get(scope);
-                if (scoped != null) {
-                    return scoped;
-                }
-            }
+        QuickMathsSession global = activeSessions.get(GLOBAL_SCOPE);
+        if (global != null) {
+            return global;
         }
-        return activeSessions.get(GLOBAL_SCOPE);
+        for (QuickMathsSession session : activeSessions.values()) {
+            return session;
+        }
+        return null;
     }
 
     private QuickMathsSession findSessionForCancellation(CommandSender sender) {
-        if (sender instanceof Player player) {
-            SlotPresenceService presence = presence();
-            if (presence != null) {
-                Optional<String> slot = presence.resolveSlotId(player.getUniqueId());
-                if (slot.isPresent()) {
-                    QuickMathsScope scope = QuickMathsScope.slot(slot.get());
-                    QuickMathsSession scoped = activeSessions.get(scope);
-                    if (scoped != null) {
-                        return scoped;
-                    }
-                }
-            }
-        }
-
         QuickMathsSession global = activeSessions.get(GLOBAL_SCOPE);
         if (global != null) {
             return global;
@@ -218,11 +163,7 @@ public final class QuickMathsManager {
         if (scope.type == ScopeType.GLOBAL) {
             return new ArrayList<>(plugin.getServer().getOnlinePlayers());
         }
-        SlotPresenceService presence = presence();
-        if (presence == null) {
-            return List.of();
-        }
-        return new ArrayList<>(presence.getOnlinePlayersInSlot(scope.slotId));
+        return List.of();
     }
 
     private Component withPrefix(Component body, PrefixStyle style) {
@@ -277,16 +218,6 @@ public final class QuickMathsManager {
             timeoutSession(session);
             return;
         }
-        if (session.scope.type == ScopeType.SLOT) {
-            SlotPresenceService presence = presence();
-            Optional<String> slotId = presence != null
-                    ? presence.resolveSlotId(player.getUniqueId())
-                    : Optional.empty();
-            if (slotId.isEmpty() || !slotId.get().equalsIgnoreCase(session.scope.slotId)) {
-                return;
-            }
-        }
-
         double guess;
         try {
             guess = Double.parseDouble(trimmed.replace(",", ""));
@@ -302,10 +233,6 @@ public final class QuickMathsManager {
             return;
         }
         plugin.getServer().getScheduler().runTask(plugin, () -> announceWinner(session, player, placement));
-    }
-
-    private SlotPresenceService presence() {
-        return presenceSupplier.get();
     }
 
     private void announceWinner(QuickMathsSession session, Player player, WinnerPlacement placement) {
@@ -763,16 +690,6 @@ public final class QuickMathsManager {
             synchronized (winners) {
                 return winners.size() >= maxWinners;
             }
-        }
-    }
-
-    private record ScopeResolution(boolean allowed, QuickMathsScope scope, String reason) {
-        static ScopeResolution allowed(QuickMathsScope scope) {
-            return new ScopeResolution(true, scope, null);
-        }
-
-        static ScopeResolution denied(String reason) {
-            return new ScopeResolution(false, null, reason);
         }
     }
 
