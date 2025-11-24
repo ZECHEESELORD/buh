@@ -5,26 +5,25 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
-import sh.harold.fulcrum.common.permissions.StaffService;
+import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
 
 public final class BeaconSanitizerModule implements FulcrumModule {
 
     private final JavaPlugin plugin;
     private final StashModule stashModule;
-    private final Supplier<StaffService> staffService;
+    private final StaffGuard staffGuard;
     private BeaconSanitizerService sanitizerService;
 
-    public BeaconSanitizerModule(JavaPlugin plugin, StashModule stashModule, Supplier<StaffService> staffService) {
+    public BeaconSanitizerModule(JavaPlugin plugin, StashModule stashModule, StaffGuard staffGuard) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.stashModule = Objects.requireNonNull(stashModule, "stashModule");
-        this.staffService = Objects.requireNonNull(staffService, "staffService");
+        this.staffGuard = Objects.requireNonNull(staffGuard, "staffGuard");
     }
 
     @Override
@@ -42,7 +41,7 @@ public final class BeaconSanitizerModule implements FulcrumModule {
         plugin.getLifecycleManager().registerEventHandler(
             io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents.COMMANDS,
             event -> event.registrar().register(
-                new BeaconDebugCommand(sanitizerService, () -> resolveAdminId()).build(),
+                new BeaconDebugCommand(sanitizerService, staffGuard).build(),
                 "getlegitnetherstar",
                 java.util.List.of()
             )
@@ -56,9 +55,5 @@ public final class BeaconSanitizerModule implements FulcrumModule {
             sanitizerService.stop();
         }
         return CompletableFuture.completedFuture(null);
-    }
-
-    private java.util.UUID resolveAdminId() {
-        return java.util.UUID.randomUUID(); // fallback: caller check handles actual sender via requires
     }
 }

@@ -9,23 +9,23 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 
 import java.util.Objects;
-import java.util.function.Supplier;
 
 final class BeaconDebugCommand {
 
     private final BeaconSanitizerService sanitizerService;
-    private final Supplier<java.util.UUID> adminIdSupplier;
+    private final StaffGuard staffGuard;
 
-    BeaconDebugCommand(BeaconSanitizerService sanitizerService, Supplier<java.util.UUID> adminIdSupplier) {
+    BeaconDebugCommand(BeaconSanitizerService sanitizerService, StaffGuard staffGuard) {
         this.sanitizerService = Objects.requireNonNull(sanitizerService, "sanitizerService");
-        this.adminIdSupplier = Objects.requireNonNull(adminIdSupplier, "adminIdSupplier");
+        this.staffGuard = Objects.requireNonNull(staffGuard, "staffGuard");
     }
 
     LiteralCommandNode<CommandSourceStack> build() {
         LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal("getlegitnetherstar")
-            .requires(stack -> stack.getSender() instanceof org.bukkit.entity.Player player && isAdmin(player.getUniqueId()))
+            .requires(staffGuard::isStaff)
             .executes(context -> giveLegit(context.getSource(), "Legitimate Nether Star"))
             .then(Commands.argument("name", StringArgumentType.greedyString())
                 .executes(context -> giveLegit(context.getSource(), context.getArgument("name", String.class))));
@@ -48,10 +48,5 @@ final class BeaconDebugCommand {
         player.getInventory().addItem(star);
         player.sendMessage(Component.text("Granted legitimate nether star.", NamedTextColor.GREEN));
         return com.mojang.brigadier.Command.SINGLE_SUCCESS;
-    }
-
-    private boolean isAdmin(java.util.UUID playerId) {
-        java.util.UUID adminId = adminIdSupplier.get();
-        return adminId != null && adminId.equals(playerId);
     }
 }

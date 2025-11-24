@@ -150,7 +150,7 @@ public final class BuhPlugin extends JavaPlugin {
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
-        beaconSanitizerModule = new BeaconSanitizerModule(this, stashModule);
+        beaconSanitizerModule = new BeaconSanitizerModule(this, stashModule, new sh.harold.fulcrum.plugin.permissions.StaffGuard(luckPermsModule));
         menuModule = new MenuModule(this);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
