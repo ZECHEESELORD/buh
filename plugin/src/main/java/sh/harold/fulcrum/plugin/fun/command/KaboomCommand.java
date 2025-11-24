@@ -28,7 +28,7 @@ import static io.papermc.paper.command.brigadier.argument.ArgumentTypes.entities
  */
 public final class KaboomCommand {
 
-    private static final double LAUNCH_VERTICAL_VELOCITY = 1.2D;
+    private static final double LAUNCH_VERTICAL_VELOCITY = 3.5D;
     private static final double PARTICLE_HORIZONTAL_OFFSET = 0.6D;
     private static final double PARTICLE_VERTICAL_OFFSET = 1.0D;
     private static final double PARTICLE_SPEED = 0.01D;
