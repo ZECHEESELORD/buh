@@ -10,12 +10,10 @@ import org.bukkit.scheduler.BukkitTask;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardBuilder;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardDefinition;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
-import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
-import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
@@ -41,28 +39,25 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private final JavaPlugin plugin;
     private final ScoreboardService scoreboardService;
     private final VersionService versionService;
-    private final DataModule dataModule;
     private final PlayerDataModule playerDataModule;
     private final ShutdownModule shutdownModule;
 
     private FeatureConfigService configService;
     private ScoreboardConfig config;
     private BukkitTask refreshTask;
-    private FeatureVoteScoreboardModule voteScoreboardModule;
+    private final FeatureVoteResultScoreboardModule voteResultModule = new FeatureVoteResultScoreboardModule();
     private PlayerSettingsService playerSettingsService;
 
     public ScoreboardFeature(
         JavaPlugin plugin,
         ScoreboardService scoreboardService,
         VersionService versionService,
-        DataModule dataModule,
         PlayerDataModule playerDataModule,
         ShutdownModule shutdownModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.versionService = Objects.requireNonNull(versionService, "versionService");
-        this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
         this.shutdownModule = Objects.requireNonNull(shutdownModule, "shutdownModule");
     }
@@ -71,7 +66,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("scoreboard"),
-            Set.of(ModuleId.of("data"), ModuleId.of("player-data"), ModuleId.of("shutdown"))
+            Set.of(ModuleId.of("player-data"), ModuleId.of("shutdown"))
         );
     }
 
@@ -80,11 +75,8 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         configService = new FeatureConfigService(plugin);
         config = ScoreboardConfig.from(configService.load(ScoreboardConfig.CONFIG_DEFINITION));
 
-        DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available for scoreboard"));
         playerSettingsService = playerDataModule.playerSettingsService()
             .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available for scoreboard"));
-        voteScoreboardModule = new FeatureVoteScoreboardModule(plugin.getLogger(), dataApi.collection("feature_votes"));
-        voteScoreboardModule.refreshTallies();
 
         registerScoreboardDefinition();
 
@@ -142,8 +134,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         ScoreboardBuilder builder = new ScoreboardBuilder(SCOREBOARD_ID)
             .title(config.title())
             .headerSupplier(this::headerLine)
-            .module(voteScoreboardModule)
-            .module(new VoteCommandScoreboardModule());
+            .module(voteResultModule);
 
         if (config.footer() != null && !config.footer().isBlank()) {
             builder.footerSupplier(config::footer);
@@ -163,11 +154,8 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private void startRefreshTask() {
         refreshTask = plugin.getServer().getScheduler().runTaskTimer(
             plugin,
-            () -> {
-                voteScoreboardModule.refreshTallies();
-                plugin.getServer().getOnlinePlayers()
-                    .forEach(player -> scoreboardService.refreshPlayerScoreboard(player.getUniqueId()));
-            },
+            () -> plugin.getServer().getOnlinePlayers()
+                .forEach(player -> scoreboardService.refreshPlayerScoreboard(player.getUniqueId())),
             REFRESH_PERIOD_TICKS,
             REFRESH_PERIOD_TICKS
         );
