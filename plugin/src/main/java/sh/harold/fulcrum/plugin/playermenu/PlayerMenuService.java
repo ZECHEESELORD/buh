@@ -11,6 +11,9 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import sh.harold.fulcrum.api.menu.MenuService;
+import sh.harold.fulcrum.api.menu.component.MenuButton;
+import sh.harold.fulcrum.api.menu.component.MenuDisplayItem;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
@@ -36,14 +39,16 @@ public final class PlayerMenuService {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final DocumentCollection players;
+    private final MenuService menuService;
     private final StashService stashService;
     private final NamespacedKey markerKey;
 
-    public PlayerMenuService(JavaPlugin plugin, DataApi dataApi, StashService stashService) {
+    public PlayerMenuService(JavaPlugin plugin, DataApi dataApi, StashService stashService, MenuService menuService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = plugin.getLogger();
         this.players = Objects.requireNonNull(dataApi, "dataApi").collection("players");
         this.stashService = Objects.requireNonNull(stashService, "stashService");
+        this.menuService = Objects.requireNonNull(menuService, "menuService");
         this.markerKey = new NamespacedKey(plugin, "player_menu");
     }
 
@@ -52,11 +57,35 @@ public final class PlayerMenuService {
         UUID playerId = player.getUniqueId();
         return players.load(playerId.toString())
             .thenCompose(document -> resolveConfig(document)
-                .thenCompose(config -> placeMenuItem(player, config)))
+            .thenCompose(config -> placeMenuItem(player, config)))
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to prepare player menu for " + playerId, throwable);
                 return null;
             });
+    }
+
+    public CompletionStage<Void> openMenu(Player player) {
+        Objects.requireNonNull(player, "player");
+        return CompletableFuture.runAsync(() -> {
+            int rows = 3;
+            MenuDisplayItem headline = MenuDisplayItem.builder(PlayerMenuItemConfig.DEFAULT.material())
+                .name("&aPlayer Menu")
+                .description("&7Features unlock soon; stay tuned.")
+                .slot(13)
+                .build();
+
+            menuService.createMenuBuilder()
+                .title("&aPlayer Menu")
+                .rows(rows)
+                .fillEmpty(Material.GRAY_STAINED_GLASS_PANE)
+                .addButton(MenuButton.createPositionedClose(rows))
+                .addItem(headline, 13)
+                .buildAsync(player)
+                .exceptionally(throwable -> {
+                    logger.log(Level.SEVERE, "Failed to open player menu for " + player.getUniqueId(), throwable);
+                    return null;
+                });
+        }, plugin.getServer().getScheduler().getMainThreadExecutor(plugin));
     }
 
     private CompletionStage<PlayerMenuItemConfig> resolveConfig(Document document) {
@@ -110,7 +139,7 @@ public final class PlayerMenuService {
         inventory.setItem(HOTBAR_SLOT, menuItem);
     }
 
-    private boolean isMenuItem(ItemStack item) {
+    public boolean isMenuItem(ItemStack item) {
         if (item == null || item.getType().isAir()) {
             return false;
         }
