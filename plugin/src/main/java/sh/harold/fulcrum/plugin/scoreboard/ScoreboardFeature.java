@@ -94,13 +94,10 @@ public final class ScoreboardFeature implements FulcrumModule, Listener {
         ScoreboardBuilder builder = new ScoreboardBuilder(SCOREBOARD_ID)
             .title(config.title())
             .headerSupplier(this::headerLine)
-            .module(new FeatureVoteScoreboardModule())
-            .module(new FeedbackChannelScoreboardModule())
-            .module(new PlayerInfoScoreboardModule())
-            .module(new OnlineCountScoreboardModule(plugin.getServer()));
+            .module(new FeatureVoteScoreboardModule());
 
-        if (config.footer() != null && !config.footer().isBlank()) {
-            builder.footerLabel(config.footer());
+        if (config.bottomLine() != null && !config.bottomLine().isBlank()) {
+            builder.footerLabel(config.bottomLine());
         }
 
         return builder.build();
