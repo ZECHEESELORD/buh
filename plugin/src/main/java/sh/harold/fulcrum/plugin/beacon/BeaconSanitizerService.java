@@ -1,6 +1,8 @@
 package sh.harold.fulcrum.plugin.beacon;
 
 import org.bukkit.Chunk;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
@@ -26,6 +28,18 @@ final class BeaconSanitizerService {
     private final JavaPlugin plugin;
     private final StashService stashService;
     private final Logger logger;
+    private final Component containerNotice = Component.text(
+        "A container in your area has been detected to contain illegal items! They have been removed!",
+        NamedTextColor.RED
+    );
+    private final Component blockNotice = Component.text(
+        "There was an illegal block placed in your vicinity! It has been removed!",
+        NamedTextColor.RED
+    );
+    private final Component inventoryNotice = Component.text(
+        "You had an illegal item in your inventory/enderchest! They have been removed",
+        NamedTextColor.RED
+    );
     private final Queue<ChunkCoordinate> chunkQueue = new ConcurrentLinkedQueue<>();
     private final Set<ChunkCoordinate> queuedChunks = ConcurrentHashMap.newKeySet();
     private BukkitTask scanTask;
@@ -61,8 +75,11 @@ final class BeaconSanitizerService {
 
     private void stripPlayerInventories(Player player) {
         PlayerInventory inventory = player.getInventory();
-        BeaconStripper.stripInventory(inventory);
-        BeaconStripper.stripInventory(player.getEnderChest());
+        int removed = BeaconStripper.stripInventory(inventory);
+        removed += BeaconStripper.stripInventory(player.getEnderChest());
+        if (removed > 0) {
+            player.sendMessage(inventoryNotice);
+        }
     }
 
     private void cleanStash(java.util.UUID playerId) {
@@ -120,6 +137,12 @@ final class BeaconSanitizerService {
         int removedBlocks = stripBeacons(chunk);
         int removedItems = stripContainerItems(chunk);
         if (removedBlocks + removedItems > 0) {
+            if (removedItems > 0) {
+                notifyPlayersInChunk(chunk, containerNotice);
+            }
+            if (removedBlocks > 0) {
+                notifyPlayersInChunk(chunk, blockNotice);
+            }
             logger.log(
                 Level.INFO,
                 "Removed " + (removedBlocks + removedItems) + " beacon(s)/stacks in chunk (" + chunk.getX() + "," + chunk.getZ() + ") of world " + world.getName()
@@ -155,6 +178,12 @@ final class BeaconSanitizerService {
             }
         }
         return removed;
+    }
+
+    private void notifyPlayersInChunk(Chunk chunk, Component message) {
+        chunk.getWorld().getPlayers().stream()
+            .filter(player -> player.getChunk().getX() == chunk.getX() && player.getChunk().getZ() == chunk.getZ())
+            .forEach(player -> player.sendMessage(message));
     }
 
     private record ChunkCoordinate(String worldKey, int x, int z) {
