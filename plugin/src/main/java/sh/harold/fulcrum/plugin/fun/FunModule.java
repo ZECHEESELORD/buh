@@ -8,7 +8,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
-import sh.harold.fulcrum.fundamentals.slot.presence.SlotPresenceService;
 import sh.harold.fulcrum.plugin.fun.command.KaboomCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsListener;
@@ -20,7 +19,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
 
 public final class FunModule implements FulcrumModule {
 
@@ -42,8 +40,7 @@ public final class FunModule implements FulcrumModule {
     @Override
     public CompletionStage<Void> enable() {
         staffGuard = new StaffGuard(luckPermsModule);
-        Supplier<SlotPresenceService> presenceSupplier = () -> null;
-        quickMathsManager = new QuickMathsManager(plugin, presenceSupplier);
+        quickMathsManager = new QuickMathsManager(plugin);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new QuickMathsListener(quickMathsManager), plugin);
