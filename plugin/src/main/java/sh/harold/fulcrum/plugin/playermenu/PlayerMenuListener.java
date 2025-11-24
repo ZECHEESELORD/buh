@@ -59,6 +59,10 @@ final class PlayerMenuListener implements Listener {
             return;
         }
 
+        if (!(event.getClickedInventory() instanceof PlayerInventory playerInventory)) {
+            return;
+        }
+
         ItemStack current = event.getCurrentItem();
         ItemStack cursor = event.getCursor();
         if (menuService.isMenuItem(current) || menuService.isMenuItem(cursor)) {
@@ -75,8 +79,7 @@ final class PlayerMenuListener implements Listener {
 
         int hotbarButton = event.getHotbarButton();
         if (hotbarButton >= 0) {
-            PlayerInventory inventory = player.getInventory();
-            if (menuService.isMenuItem(inventory.getItem(hotbarButton))) {
+            if (menuService.isMenuItem(playerInventory.getItem(hotbarButton))) {
                 event.setCancelled(true);
                 return;
             }
