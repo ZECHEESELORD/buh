@@ -18,10 +18,10 @@ public final class FeatureVoteScoreboardModule implements ScoreboardModule {
     public List<String> renderLines(Player player) {
         return List.of(
             "&fVote for features!",
-            "- &cBounties System",
-            "- &dCustom Items Engine",
-            "- &aSettlements",
-            "- &6Economy"
+            "&7\\u25CF &cBounties System",
+            "&7\\u25CF &dCustom Items Engine",
+            "&7\\u25CF &aSettlements",
+            "&7\\u25CF &6Economy"
         );
     }
 }

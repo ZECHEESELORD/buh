@@ -14,6 +14,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
+import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
 import sh.harold.fulcrum.plugin.message.MessageService;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 
@@ -21,6 +22,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 
 public final class ChatModule implements FulcrumModule {
 
@@ -49,6 +51,8 @@ public final class ChatModule implements FulcrumModule {
         }
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
+        Supplier<FormattedUsernameService> usernameServiceSupplier = () -> luckPermsModule.formattedUsernameService().orElse(null);
+        pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier), plugin);
         pluginManager.registerEvents(new ChatListener(plugin, luckPerms, channelService, messageService), plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
