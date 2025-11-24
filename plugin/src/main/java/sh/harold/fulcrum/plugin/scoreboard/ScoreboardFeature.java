@@ -174,12 +174,15 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     }
 
     private String headerLine() {
-        String date = formatDate(config.headerDateFormat());
-        String version = shutdownCountdown()
-            .orElseGet(() -> sanitizeVersion(versionService.version()));
-        return config.headerPattern()
-            .replace("{date}", date)
-            .replace("{version}", version);
+        return shutdownCountdown()
+            .map(timer -> "&cServer Shutdown: " + timer)
+            .orElseGet(() -> {
+                String date = formatDate(config.headerDateFormat());
+                String version = sanitizeVersion(versionService.version());
+                return config.headerPattern()
+                    .replace("{date}", date)
+                    .replace("{version}", version);
+            });
     }
 
     private Optional<String> shutdownCountdown() {
@@ -189,7 +192,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         }
         int remainingSeconds = Math.max(0, seconds.getAsInt());
         String timer = remainingSeconds / 60 + ":" + String.format("%02d", remainingSeconds % 60);
-        return Optional.of("&c" + timer);
+        return Optional.of(timer);
     }
 
     private String formatDate(String pattern) {
