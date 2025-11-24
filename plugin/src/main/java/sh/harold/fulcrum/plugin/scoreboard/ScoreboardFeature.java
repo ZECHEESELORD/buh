@@ -19,14 +19,17 @@ import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
+import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
 import sh.harold.fulcrum.plugin.version.VersionService;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.OptionalInt;
 import java.util.logging.Level;
 
 public final class ScoreboardFeature implements FulcrumModule, ConfigurableModule, Listener {
@@ -40,6 +43,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private final VersionService versionService;
     private final DataModule dataModule;
     private final PlayerDataModule playerDataModule;
+    private final ShutdownModule shutdownModule;
 
     private FeatureConfigService configService;
     private ScoreboardConfig config;
@@ -52,18 +56,23 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         ScoreboardService scoreboardService,
         VersionService versionService,
         DataModule dataModule,
-        PlayerDataModule playerDataModule
+        PlayerDataModule playerDataModule,
+        ShutdownModule shutdownModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.versionService = Objects.requireNonNull(versionService, "versionService");
         this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
+        this.shutdownModule = Objects.requireNonNull(shutdownModule, "shutdownModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("scoreboard"), Set.of(ModuleId.of("data"), ModuleId.of("player-data")));
+        return new ModuleDescriptor(
+            ModuleId.of("scoreboard"),
+            Set.of(ModuleId.of("data"), ModuleId.of("player-data"), ModuleId.of("shutdown"))
+        );
     }
 
     @Override
@@ -166,10 +175,21 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
     private String headerLine() {
         String date = formatDate(config.headerDateFormat());
-        String version = sanitizeVersion(versionService.version());
+        String version = shutdownCountdown()
+            .orElseGet(() -> sanitizeVersion(versionService.version()));
         return config.headerPattern()
             .replace("{date}", date)
             .replace("{version}", version);
+    }
+
+    private Optional<String> shutdownCountdown() {
+        OptionalInt seconds = shutdownModule.secondsUntilShutdown();
+        if (seconds.isEmpty()) {
+            return Optional.empty();
+        }
+        int remainingSeconds = Math.max(0, seconds.getAsInt());
+        String timer = remainingSeconds / 60 + ":" + String.format("%02d", remainingSeconds % 60);
+        return Optional.of("&c" + timer);
     }
 
     private String formatDate(String pattern) {
