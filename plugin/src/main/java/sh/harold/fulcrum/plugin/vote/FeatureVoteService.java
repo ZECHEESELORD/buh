@@ -191,7 +191,7 @@ public final class FeatureVoteService {
         int votes = state.tallies().getOrDefault(option, 0);
 
         MenuButton button = MenuButton.builder(option.material())
-            .name(optionTitle(option, selected))
+            .name(optionTitle(option))
             .lore(buildVoteLore(option, votes, selected).toArray(Component[]::new))
             .onClick(player -> handleVote(player, option))
             .slot(slot)
@@ -214,7 +214,7 @@ public final class FeatureVoteService {
 
     private List<Component> buildVoteLore(FeatureVoteOption option, int votes, boolean selected) {
         List<Component> lore = new ArrayList<>();
-        lore.add(voteStatusLine(selected));
+        lore.add(voteStatusLine(option, selected));
         lore.add(Component.text("Gameplay Feature", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
         lore.add(Component.empty());
@@ -230,16 +230,16 @@ public final class FeatureVoteService {
         return lore;
     }
 
-    private Component voteStatusLine(boolean selected) {
-        Component base = Component.text("Feature Vote", NamedTextColor.WHITE)
+    private Component voteStatusLine(FeatureVoteOption option, boolean selected) {
+        Component name = Component.text(option.displayName(), option.color())
             .decoration(TextDecoration.ITALIC, false);
         if (!selected) {
-            return base;
+            return name;
         }
         Component voted = Component.text("VOTED", NamedTextColor.GREEN)
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false);
-        return base.append(Component.space()).append(voted);
+        return name.append(Component.space()).append(voted);
     }
 
     private String voteCountLabel(int votes) {
@@ -280,13 +280,9 @@ public final class FeatureVoteService {
         return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
-    private Component optionTitle(FeatureVoteOption option, boolean selected) {
-        Component title = Component.text(option.displayName(), option.color())
+    private Component optionTitle(FeatureVoteOption option) {
+        return Component.text(option.displayName(), option.color())
             .decoration(TextDecoration.ITALIC, false);
-        if (selected) {
-            return title.append(Component.text(" (your pick)", NamedTextColor.GRAY));
-        }
-        return title;
     }
 
     private String percentLabel(double percent) {

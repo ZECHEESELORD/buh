@@ -3,6 +3,7 @@ package sh.harold.fulcrum.plugin.permissions;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.plugin.ServicesManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
@@ -20,7 +21,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-public final class LuckPermsModule implements FulcrumModule {
+public final class LuckPermsModule implements FulcrumModule, ConfigurableModule {
 
     private static final FeatureConfigOption<List<String>> STAFF_GROUPS_OPTION = FeatureConfigOptions.stringListOption(
         "staff-groups",
@@ -69,7 +70,22 @@ public final class LuckPermsModule implements FulcrumModule {
     @Override
     public CompletionStage<Void> disable() {
         configService.close();
-        return FulcrumModule.super.disable();
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletionStage<Void> reloadConfig() {
+        var configuration = configService.load(CONFIG_DEFINITION);
+        Set<String> staffGroups = Set.copyOf(configuration.value(STAFF_GROUPS_OPTION));
+        String staffPermission = configuration.value(STAFF_PERMISSION_OPTION);
+
+        LuckPerms resolved = resolveLuckPerms();
+        if (resolved == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("LuckPerms not found; cannot reload configuration."));
+        }
+
+        bindLuckPerms(resolved, staffGroups, staffPermission);
+        return CompletableFuture.completedFuture(null);
     }
 
     public Optional<StaffService> staffService() {

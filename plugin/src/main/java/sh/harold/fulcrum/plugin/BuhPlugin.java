@@ -33,6 +33,9 @@ import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
 import sh.harold.fulcrum.plugin.version.PluginVersionService;
 import sh.harold.fulcrum.plugin.version.VersionService;
+import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
+import sh.harold.fulcrum.plugin.vote.FeatureVoteService;
+import sh.harold.fulcrum.plugin.tab.TabFeature;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -53,6 +56,7 @@ public final class BuhPlugin extends JavaPlugin {
     private MessageModule messageModule;
     private StashModule stashModule;
     private PlayerMenuModule playerMenuModule;
+    private FeatureVoteModule featureVoteModule;
     private FunModule funModule;
     private StaffCommandsModule staffCommandsModule;
     private StatsModule statsModule;
@@ -60,6 +64,7 @@ public final class BuhPlugin extends JavaPlugin {
     private MessageService messageService;
     private VersionService versionService;
     private SimpleScoreboardService scoreboardService;
+    private TabFeature tabFeature;
     private ScoreboardFeature scoreboardFeature;
 
     @Override
@@ -120,6 +125,10 @@ public final class BuhPlugin extends JavaPlugin {
         return statsModule;
     }
 
+    public Optional<FeatureVoteService> featureVoteService() {
+        return featureVoteModule == null ? Optional.empty() : Optional.ofNullable(featureVoteModule.voteService());
+    }
+
     private void createModules() {
         versionService = new PluginVersionService(this);
         scoreboardService = new SimpleScoreboardService(
@@ -136,9 +145,11 @@ public final class BuhPlugin extends JavaPlugin {
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule);
+        featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         statsModule = new StatsModule(this);
+        tabFeature = new TabFeature(this);
         scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService);
         List<FulcrumModule> modules = List.of(
             dataModule,
@@ -148,9 +159,11 @@ public final class BuhPlugin extends JavaPlugin {
             messageModule,
             stashModule,
             playerMenuModule,
+            featureVoteModule,
             funModule,
             staffCommandsModule,
             statsModule,
+            tabFeature,
             scoreboardFeature
         );
         moduleDescriptors = modules.stream()
@@ -184,7 +197,7 @@ public final class BuhPlugin extends JavaPlugin {
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
         Commands registrar = event.registrar();
         ModulesCommand modulesCommand = new ModulesCommand(moduleLoader);
-        registrar.register(getPluginMeta(), modulesCommand.build(), "modules", java.util.List.of());
+        registrar.register(getPluginMeta(), modulesCommand.build(), "module", java.util.List.of("modules"));
     }
 
     private FormattedUsernameService noopFormattedUsernameService() {
