@@ -43,7 +43,7 @@ public final class BeaconSanitizerModule implements FulcrumModule {
             io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents.COMMANDS,
             event -> event.registrar().register(
                 new BeaconDebugCommand(sanitizerService, () -> resolveAdminId()).build(),
-                "beacondebug",
+                "getlegitnetherstar",
                 java.util.List.of()
             )
         );
