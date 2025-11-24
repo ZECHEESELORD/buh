@@ -2,6 +2,12 @@ package sh.harold.fulcrum.plugin.playermenu;
 
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.ServicePriority;
+import sh.harold.fulcrum.api.menu.MenuRegistry;
+import sh.harold.fulcrum.api.menu.MenuService;
+import sh.harold.fulcrum.api.menu.impl.DefaultMenuRegistry;
+import sh.harold.fulcrum.api.menu.impl.DefaultMenuService;
+import sh.harold.fulcrum.api.menu.impl.MenuInventoryListener;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
@@ -20,7 +26,9 @@ public final class PlayerMenuModule implements FulcrumModule {
     private final JavaPlugin plugin;
     private final DataModule dataModule;
     private final StashModule stashModule;
-    private PlayerMenuService menuService;
+    private PlayerMenuService playerMenuService;
+    private DefaultMenuService menuService;
+    private MenuRegistry menuRegistry;
 
     public PlayerMenuModule(JavaPlugin plugin, DataModule dataModule, StashModule stashModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -40,20 +48,33 @@ public final class PlayerMenuModule implements FulcrumModule {
     public CompletionStage<Void> enable() {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         StashService stashService = stashModule.stashService().orElseThrow(() -> new IllegalStateException("StashService not available"));
-        menuService = new PlayerMenuService(plugin, dataApi, stashService);
+        menuRegistry = new DefaultMenuRegistry();
+        menuService = new DefaultMenuService(plugin, menuRegistry);
+        menuService.registerPlugin(plugin);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
-        pluginManager.registerEvents(new PlayerMenuListener(menuService), plugin);
+        pluginManager.registerEvents(new MenuInventoryListener(menuService, plugin), plugin);
+
+        plugin.getServer().getServicesManager().register(MenuService.class, menuService, plugin, ServicePriority.Normal);
+
+        playerMenuService = new PlayerMenuService(plugin, dataApi, stashService, menuService);
+
+        pluginManager.registerEvents(new PlayerMenuListener(playerMenuService), plugin);
 
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletionStage<Void> disable() {
+        if (menuService != null) {
+            plugin.getServer().getServicesManager().unregister(MenuService.class, menuService);
+            menuService.unregisterPlugin(plugin);
+            menuService.shutdown();
+        }
         return CompletableFuture.completedFuture(null);
     }
 
-    public PlayerMenuService menuService() {
-        return menuService;
+    public PlayerMenuService playerMenuService() {
+        return playerMenuService;
     }
 }
