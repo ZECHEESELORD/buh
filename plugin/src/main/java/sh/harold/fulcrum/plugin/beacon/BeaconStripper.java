@@ -3,10 +3,10 @@ package sh.harold.fulcrum.plugin.beacon;
 import org.bukkit.Material;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
-import org.bukkit.inventory.BundleMeta;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public final class BeaconStripper {
         return removed;
     }
 
-    static StripResult stripItem(ItemStack item) {
+    public static StripResult stripItem(ItemStack item) {
         if (item == null || item.getType().isAir()) {
             return new StripResult(null, 0);
         }

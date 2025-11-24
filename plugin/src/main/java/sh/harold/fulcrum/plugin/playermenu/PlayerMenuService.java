@@ -28,7 +28,6 @@ import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
 
-import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -503,11 +502,7 @@ public final class PlayerMenuService {
 
         packet.getItemModifier().writeSafely(0, visual);
 
-        try {
-            protocolManager.sendServerPacket(player, packet);
-        } catch (InvocationTargetException ex) {
-            logger.log(Level.WARNING, "Failed to spoof menu item appearance for " + player.getUniqueId(), ex);
-        }
+        protocolManager.sendServerPacket(player, packet);
     }
 
     private void stashDisplaced(Player player, ItemStack displaced) {
