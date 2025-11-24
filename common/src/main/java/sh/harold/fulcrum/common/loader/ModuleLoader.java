@@ -4,19 +4,25 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class ModuleLoader {
 
     private final Map<ModuleId, FulcrumModule> modules;
     private final List<ModuleId> loadOrder;
+    private final ModuleGraph moduleGraph;
     private final AtomicReference<State> state = new AtomicReference<>(State.IDLE);
+    private List<ModuleId> enabledModules = List.of();
 
     public ModuleLoader(Collection<? extends FulcrumModule> modules) {
         Map<ModuleId, FulcrumModule> modulesById = new HashMap<>();
@@ -28,19 +34,28 @@ public final class ModuleLoader {
         }
 
         this.modules = Map.copyOf(modulesById);
-        this.loadOrder = ModuleGraph.build(this.modules.values().stream()
+        moduleGraph = ModuleGraph.build(this.modules.values().stream()
             .map(FulcrumModule::descriptor)
-            .toList()).loadOrder();
+            .toList());
+        loadOrder = moduleGraph.loadOrder();
     }
 
     public CompletionStage<Void> enableAll() {
+        return enableAll(ModuleActivation.enableAll(modules.keySet()), skip -> {
+        });
+    }
+
+    public CompletionStage<Void> enableAll(ModuleActivation activation, Consumer<SkippedModule> skipHandler) {
+        Objects.requireNonNull(activation, "activation");
+        Objects.requireNonNull(skipHandler, "skipHandler");
         if (!state.compareAndSet(State.IDLE, State.ENABLING)) {
             return failedFuture("Modules are already enabled or mid-transition: " + state.get());
         }
 
+        List<ModuleId> activationOrder = determineActivationOrder(activation, skipHandler);
         List<ModuleId> loadedModules = new ArrayList<>();
         CompletableFuture<Void> pipeline = CompletableFuture.completedFuture(null);
-        for (ModuleId moduleId : loadOrder) {
+        for (ModuleId moduleId : activationOrder) {
             FulcrumModule module = modules.get(moduleId);
             pipeline = pipeline.thenCompose(ignored -> module.enable())
                 .thenRun(() -> loadedModules.add(moduleId));
@@ -48,11 +63,13 @@ public final class ModuleLoader {
 
         return pipeline.handle((ignored, throwable) -> {
             if (throwable == null) {
+                enabledModules = List.copyOf(loadedModules);
                 state.set(State.ENABLED);
                 return CompletableFuture.<Void>completedFuture(null);
             }
 
             state.set(State.IDLE);
+            enabledModules = List.of();
             List<ModuleId> rollbackTargets = List.copyOf(loadedModules);
             return disableInReverse(rollbackTargets)
                 .handle((rollbackIgnored, rollbackThrowable) -> {
@@ -70,8 +87,12 @@ public final class ModuleLoader {
             return failedFuture("Modules are not enabled: " + state.get());
         }
 
-        return disableInReverse(loadOrder)
-            .whenComplete((ignored, throwable) -> state.set(State.IDLE));
+        List<ModuleId> toDisable = List.copyOf(enabledModules);
+        return disableInReverse(toDisable)
+            .whenComplete((ignored, throwable) -> {
+                enabledModules = List.of();
+                state.set(State.IDLE);
+            });
     }
 
     public Optional<FulcrumModule> module(ModuleId id) {
@@ -80,6 +101,10 @@ public final class ModuleLoader {
 
     public List<ModuleId> loadOrder() {
         return loadOrder;
+    }
+
+    public List<ModuleId> enabledModules() {
+        return enabledModules;
     }
 
     private CompletableFuture<Void> disableInReverse(List<ModuleId> ids) {
@@ -96,6 +121,30 @@ public final class ModuleLoader {
 
     private CompletableFuture<Void> failedFuture(String message) {
         return CompletableFuture.failedFuture(new IllegalStateException(message));
+    }
+
+    private List<ModuleId> determineActivationOrder(ModuleActivation activation, Consumer<SkippedModule> skipHandler) {
+        Set<ModuleId> readyModules = new LinkedHashSet<>();
+        for (ModuleId moduleId : loadOrder) {
+            if (!activation.enabled(moduleId)) {
+                skipHandler.accept(new SkippedModule(moduleId, "disabled in configuration"));
+                continue;
+            }
+
+            List<ModuleId> missingDependencies = moduleGraph.dependenciesFor(moduleId).stream()
+                .filter(dependency -> !readyModules.contains(dependency))
+                .toList();
+            if (!missingDependencies.isEmpty()) {
+                skipHandler.accept(new SkippedModule(moduleId, "missing dependencies: " + missingDependencies));
+                continue;
+            }
+
+            readyModules.add(moduleId);
+        }
+        return List.copyOf(readyModules);
+    }
+
+    public record SkippedModule(ModuleId moduleId, String reason) {
     }
 
     private enum State {
