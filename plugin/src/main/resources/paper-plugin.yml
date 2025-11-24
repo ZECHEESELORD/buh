@@ -9,5 +9,9 @@ dependencies:
     required: true
     bootstrap: false
     load: AFTER
+  - name: ProtocolLib
+    required: true
+    bootstrap: false
+    load: AFTER
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
