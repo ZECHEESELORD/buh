@@ -14,10 +14,13 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 final class BeaconSanitizerListener implements Listener {
 
     private final BeaconSanitizerService sanitizerService;
+    private final Set<UUID> playerLoadedChunks = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     BeaconSanitizerListener(BeaconSanitizerService sanitizerService) {
         this.sanitizerService = Objects.requireNonNull(sanitizerService, "sanitizerService");
@@ -72,6 +75,17 @@ final class BeaconSanitizerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onChunkLoad(ChunkLoadEvent event) {
-        sanitizerService.enqueueChunk(event.getChunk());
+        if (event.isNewChunk()) {
+            return;
+        }
+        if (isPlayerLoaded(event.getChunk())) {
+            sanitizerService.enqueueChunk(event.getChunk());
+        }
+    }
+
+    private boolean isPlayerLoaded(org.bukkit.Chunk chunk) {
+        UUID key = chunk.getWorld().getUID();
+        return chunk.getWorld().getPlayers().stream()
+            .anyMatch(player -> player.getChunk().getX() == chunk.getX() && player.getChunk().getZ() == chunk.getZ());
     }
 }
