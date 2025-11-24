@@ -4,6 +4,9 @@ import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.PacketContainer;
+import com.comphenix.protocol.events.PacketAdapter;
+import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.events.ListenerPriority;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -58,6 +61,7 @@ public final class PlayerMenuService {
     private final PlayerSettingsService settingsService;
     private final ScoreboardService scoreboardService;
     private final NamespacedKey markerKey;
+    private final NamespacedKey displayMaterialKey;
     private final ProtocolManager protocolManager;
 
     public PlayerMenuService(
@@ -76,9 +80,11 @@ public final class PlayerMenuService {
         this.settingsService = Objects.requireNonNull(settingsService, "settingsService");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.markerKey = new NamespacedKey(plugin, "player_menu");
+        this.displayMaterialKey = new NamespacedKey(plugin, "player_menu_display");
         this.protocolManager = plugin.getServer().getPluginManager().isPluginEnabled("ProtocolLib")
             ? ProtocolLibrary.getProtocolManager()
             : null;
+        registerSpoofingAdapter();
     }
 
     public CompletionStage<Void> distribute(Player player) {
@@ -329,6 +335,7 @@ public final class PlayerMenuService {
         ItemMeta meta = clone.getItemMeta();
         if (meta != null) {
             meta.getPersistentDataContainer().remove(markerKey);
+            meta.getPersistentDataContainer().remove(displayMaterialKey);
             clone.setItemMeta(meta);
         }
         return clone;
@@ -406,7 +413,7 @@ public final class PlayerMenuService {
         int existingMenuSlot = findMenuItemSlot(inventory);
         int targetSlot = config.slot();
         ItemStack current = inventory.getItem(targetSlot);
-        ItemStack menuItem = buildMenuItem();
+        ItemStack menuItem = buildMenuItem(config.material());
 
         if (existingMenuSlot == targetSlot) {
             inventory.setItem(targetSlot, menuItem);
@@ -443,19 +450,19 @@ public final class PlayerMenuService {
         return container.has(markerKey, PersistentDataType.BYTE);
     }
 
-    private ItemStack buildMenuItem() {
+    private ItemStack buildMenuItem(Material displayMaterial) {
         ItemStack stack = new ItemStack(BASE_MENU_ITEM);
-        applyMenuMeta(stack, true);
+        applyMenuMeta(stack, true, displayMaterial);
         return stack;
     }
 
     private ItemStack buildDisplayItem(Material displayMaterial) {
         ItemStack stack = new ItemStack(normalizeDisplayMaterial(displayMaterial));
-        applyMenuMeta(stack, false);
+        applyMenuMeta(stack, false, displayMaterial);
         return stack;
     }
 
-    private void applyMenuMeta(ItemStack stack, boolean includeMarker) {
+    private void applyMenuMeta(ItemStack stack, boolean includeMarker, Material displayMaterial) {
         ItemMeta meta = stack.getItemMeta();
         if (meta == null) {
             return;
@@ -468,11 +475,29 @@ public final class PlayerMenuService {
         meta.lore(lore);
         if (includeMarker) {
             meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(displayMaterialKey, PersistentDataType.STRING, normalizeDisplayMaterial(displayMaterial).name());
         }
         stack.setItemMeta(meta);
     }
 
     private Material normalizeDisplayMaterial(Material material) {
+        if (material == null || material.isAir()) {
+            return PlayerMenuItemConfig.DEFAULT.material();
+        }
+        return material;
+    }
+
+    private Material displayMaterialFrom(ItemStack item) {
+        if (item == null) {
+            return PlayerMenuItemConfig.DEFAULT.material();
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return PlayerMenuItemConfig.DEFAULT.material();
+        }
+        PersistentDataContainer container = meta.getPersistentDataContainer();
+        String raw = container.get(displayMaterialKey, PersistentDataType.STRING);
+        Material material = materialFrom(raw);
         if (material == null || material.isAir()) {
             return PlayerMenuItemConfig.DEFAULT.material();
         }
@@ -535,5 +560,51 @@ public final class PlayerMenuService {
     }
 
     private record MenuItemPlacement(int menuSlot, MenuButton button) {
+    }
+
+    private void registerSpoofingAdapter() {
+        if (protocolManager == null) {
+            return;
+        }
+
+        protocolManager.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS) {
+            @Override
+            public void onPacketSending(PacketEvent event) {
+                Player target = event.getPlayer();
+                if (target == null) {
+                    return;
+                }
+
+                PacketContainer packet = event.getPacket();
+
+                if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
+                    ItemStack stack = packet.getItemModifier().readSafely(0);
+                    if (isMenuItem(stack)) {
+                        Material displayMaterial = displayMaterialFrom(stack);
+                        packet.getItemModifier().writeSafely(0, buildDisplayItem(displayMaterial));
+                    }
+                    return;
+                }
+
+                var itemLists = packet.getItemListModifier();
+                if (itemLists.size() == 0) {
+                    return;
+                }
+
+                List<ItemStack> items = new ArrayList<>(itemLists.readSafely(0));
+                boolean mutated = false;
+                for (int i = 0; i < items.size(); i++) {
+                    ItemStack stack = items.get(i);
+                    if (isMenuItem(stack)) {
+                        items.set(i, buildDisplayItem(displayMaterialFrom(stack)));
+                        mutated = true;
+                    }
+                }
+
+                if (mutated) {
+                    itemLists.writeSafely(0, items);
+                }
+            }
+        });
     }
 }
