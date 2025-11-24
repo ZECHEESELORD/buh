@@ -18,7 +18,7 @@ public final class FeatureVoteResultScoreboardModule implements ScoreboardModule
     public List<String> renderLines(Player player) {
         return List.of(
             "&7Vote Winner:",
-            "&8● &6Economy &8(44%)"
+            "&8 ● &6Economy &8(44%)"
         );
     }
 }
