@@ -14,7 +14,7 @@ public enum FeatureVoteOption {
         "Hunt marked targets and collect glittering rewards for the takedown.",
         NamedTextColor.RED,
         Material.IRON_SWORD,
-        Material.RED_STAINED_GLASS,
+        Material.RED_STAINED_GLASS_PANE,
         2
     ),
     CUSTOM_ITEMS(
@@ -23,7 +23,7 @@ public enum FeatureVoteOption {
         "Forge bespoke gear and curios that twist encounters in your favour.",
         NamedTextColor.LIGHT_PURPLE,
         Material.COMMAND_BLOCK,
-        Material.MAGENTA_STAINED_GLASS,
+        Material.MAGENTA_STAINED_GLASS_PANE,
         4
     ),
     SETTLEMENTS(
@@ -32,7 +32,7 @@ public enum FeatureVoteOption {
         "Grow shared towns, unlock comforts, and rally neighbours around your banner.",
         NamedTextColor.GREEN,
         Material.GRASS_BLOCK,
-        Material.GREEN_STAINED_GLASS,
+        Material.GREEN_STAINED_GLASS_PANE,
         6
     ),
     ECONOMY(
@@ -41,7 +41,7 @@ public enum FeatureVoteOption {
         "Shape auctions, trading posts, and markets so gold keeps flowing.",
         NamedTextColor.GOLD,
         Material.GOLD_INGOT,
-        Material.YELLOW_STAINED_GLASS,
+        Material.YELLOW_STAINED_GLASS_PANE,
         8
     );
 
