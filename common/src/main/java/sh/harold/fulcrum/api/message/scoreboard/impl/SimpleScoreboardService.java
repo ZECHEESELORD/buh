@@ -244,8 +244,8 @@ public class SimpleScoreboardService implements ScoreboardService {
         if (line.length() > MAX_ENTRY_LENGTH) {
             line = line.substring(0, MAX_ENTRY_LENGTH);
         }
-        if (line.isEmpty()) {
-            line = ChatColor.RESET.toString();
+        if (isBlankLine(line)) {
+            line = BLANK_LINE;
         }
         String candidate = line;
         int salt = 0;
@@ -256,6 +256,10 @@ public class SimpleScoreboardService implements ScoreboardService {
         }
         usedEntries.add(candidate);
         return candidate;
+    }
+
+    private boolean isBlankLine(String line) {
+        return line.isBlank() || ChatColor.stripColor(line).isBlank();
     }
 
     private String objectiveName(String scoreboardId, UUID playerId) {
