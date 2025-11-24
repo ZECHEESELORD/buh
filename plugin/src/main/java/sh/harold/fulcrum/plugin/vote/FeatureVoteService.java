@@ -37,7 +37,7 @@ public final class FeatureVoteService {
     private static final int MENU_ROWS = 6;
     private static final int BAR_HEIGHT = MENU_ROWS - 1;
     private static final Material BACKGROUND = Material.BLACK_STAINED_GLASS_PANE;
-    private static final Material TRACK_MATERIAL = Material.LIGHT_GRAY_STAINED_GLASS_PANE;
+    private static final Material TRACK_MATERIAL = Material.GRAY_STAINED_GLASS_PANE;
     private static final int LORE_WRAP_WORDS = 5;
     private static final String SELECTION_PATH = "selection";
 
