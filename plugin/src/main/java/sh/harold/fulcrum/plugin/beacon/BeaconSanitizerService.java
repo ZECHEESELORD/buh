@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.UUID;
 
 final class BeaconSanitizerService {
 
@@ -111,13 +112,13 @@ final class BeaconSanitizerService {
 
     private void enqueueChunksAround(Player player) {
         World world = player.getWorld();
-        String worldKey = world.getKey().asString();
+        UUID worldId = world.getUID();
         int centerX = player.getChunk().getX();
         int centerZ = player.getChunk().getZ();
 
         for (int dx = -SCAN_RADIUS_CHUNKS; dx <= SCAN_RADIUS_CHUNKS; dx++) {
             for (int dz = -SCAN_RADIUS_CHUNKS; dz <= SCAN_RADIUS_CHUNKS; dz++) {
-                enqueueChunk(new ChunkCoordinate(worldKey, centerX + dx, centerZ + dz));
+                enqueueChunk(new ChunkCoordinate(worldId, centerX + dx, centerZ + dz));
             }
         }
     }
@@ -129,7 +130,7 @@ final class BeaconSanitizerService {
     }
 
     void enqueueChunk(Chunk chunk) {
-        enqueueChunk(new ChunkCoordinate(chunk.getWorld().getKey().asString(), chunk.getX(), chunk.getZ()));
+        enqueueChunk(new ChunkCoordinate(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()));
     }
 
     private void drainQueue() {
@@ -147,7 +148,7 @@ final class BeaconSanitizerService {
     }
 
     private boolean processChunk(ChunkCoordinate coordinate) {
-        World world = plugin.getServer().getWorld(coordinate.worldKey());
+        World world = plugin.getServer().getWorld(coordinate.worldId());
         if (world == null) {
             return true;
         }
@@ -239,6 +240,6 @@ final class BeaconSanitizerService {
             .forEach(player -> player.sendMessage(message));
     }
 
-    private record ChunkCoordinate(String worldKey, int x, int z) {
+    private record ChunkCoordinate(UUID worldId, int x, int z) {
     }
 }
