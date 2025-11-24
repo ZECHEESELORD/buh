@@ -227,6 +227,14 @@ final class BeaconSanitizerService {
         return whitelistKey;
     }
 
+    int stripContainer(org.bukkit.block.Container container) {
+        return BeaconStripper.stripInventory(container.getInventory(), whitelistKey);
+    }
+
+    Component containerNotice() {
+        return containerNotice;
+    }
+
     private boolean isWhitelisted(BlockState state) {
         if (!(state instanceof TileState tileState)) {
             return false;
