@@ -1,27 +1,38 @@
 package sh.harold.fulcrum.plugin;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import sh.harold.fulcrum.api.message.scoreboard.impl.DefaultPlayerScoreboardManager;
 import sh.harold.fulcrum.api.message.scoreboard.impl.SimpleScoreboardService;
 import sh.harold.fulcrum.api.message.scoreboard.registry.DefaultScoreboardRegistry;
 import sh.harold.fulcrum.common.data.DataApi;
+import sh.harold.fulcrum.common.loader.ModuleActivation;
+import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleLoader;
+import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.permissions.StaffService;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
 import sh.harold.fulcrum.plugin.chat.ChatChannelService;
 import sh.harold.fulcrum.plugin.chat.ChatModule;
+import sh.harold.fulcrum.plugin.config.ModuleConfigService;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.message.MessageModule;
 import sh.harold.fulcrum.plugin.message.MessageService;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.fun.FunModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
+import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.staff.StaffCommandsModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
+import sh.harold.fulcrum.plugin.version.PluginVersionService;
+import sh.harold.fulcrum.plugin.version.VersionService;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -32,6 +43,9 @@ import java.util.logging.Level;
 public final class BuhPlugin extends JavaPlugin {
 
     private ModuleLoader moduleLoader;
+    private ModuleConfigService moduleConfigService;
+    private ModuleActivation moduleActivation;
+    private List<ModuleDescriptor> moduleDescriptors;
     private DataModule dataModule;
     private PlayerDataModule playerDataModule;
     private LuckPermsModule luckPermsModule;
@@ -44,28 +58,27 @@ public final class BuhPlugin extends JavaPlugin {
     private StatsModule statsModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
+    private VersionService versionService;
     private SimpleScoreboardService scoreboardService;
+    private ScoreboardFeature scoreboardFeature;
 
     @Override
     public void onLoad() {
+        ensureDataFolder();
         createModules();
     }
 
     @Override
     public void onEnable() {
+        ensureDataFolder();
         if (moduleLoader == null) {
             createModules();
         }
 
-        await(moduleLoader.enableAll(), "enable modules");
+        moduleActivation = moduleConfigService.load(moduleDescriptors);
+        await(moduleLoader.enableAll(moduleActivation, this::logSkippedModule), "enable modules");
         getLogger().info("Fulcrum modules enabled");
-
-        scoreboardService = new SimpleScoreboardService(
-            this,
-            new DefaultScoreboardRegistry(),
-            new DefaultPlayerScoreboardManager()
-        );
-
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
     }
 
     @Override
@@ -91,6 +104,10 @@ public final class BuhPlugin extends JavaPlugin {
         return Optional.ofNullable(scoreboardService);
     }
 
+    public Optional<VersionService> versionService() {
+        return Optional.ofNullable(versionService);
+    }
+
     public Optional<StashService> stashService() {
         return stashModule == null ? Optional.empty() : stashModule.stashService();
     }
@@ -104,6 +121,12 @@ public final class BuhPlugin extends JavaPlugin {
     }
 
     private void createModules() {
+        versionService = new PluginVersionService(this);
+        scoreboardService = new SimpleScoreboardService(
+            this,
+            new DefaultScoreboardRegistry(),
+            new DefaultPlayerScoreboardManager()
+        );
         dataModule = new DataModule(dataPath());
         playerDataModule = new PlayerDataModule(this, dataModule);
         luckPermsModule = new LuckPermsModule(this);
@@ -116,7 +139,8 @@ public final class BuhPlugin extends JavaPlugin {
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule);
         statsModule = new StatsModule(this);
-        moduleLoader = new ModuleLoader(List.of(
+        scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService);
+        List<FulcrumModule> modules = List.of(
             dataModule,
             playerDataModule,
             luckPermsModule,
@@ -126,8 +150,14 @@ public final class BuhPlugin extends JavaPlugin {
             playerMenuModule,
             funModule,
             staffCommandsModule,
-            statsModule
-        ));
+            statsModule,
+            scoreboardFeature
+        );
+        moduleDescriptors = modules.stream()
+            .map(FulcrumModule::descriptor)
+            .toList();
+        moduleLoader = new ModuleLoader(modules);
+        moduleConfigService = new ModuleConfigService(this);
     }
 
     private Path dataPath() {
@@ -141,6 +171,20 @@ public final class BuhPlugin extends JavaPlugin {
             getLogger().log(Level.SEVERE, "Failed to " + action, runtimeException);
             throw runtimeException;
         }
+    }
+
+    private void ensureDataFolder() {
+        getDataFolder().mkdirs();
+    }
+
+    private void logSkippedModule(ModuleLoader.SkippedModule skippedModule) {
+        getLogger().info("Skipping module '" + skippedModule.moduleId().value() + "': " + skippedModule.reason());
+    }
+
+    private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
+        Commands registrar = event.registrar();
+        ModulesCommand modulesCommand = new ModulesCommand(moduleLoader);
+        registrar.register(getPluginMeta(), modulesCommand.build(), "modules", java.util.List.of());
     }
 
     private FormattedUsernameService noopFormattedUsernameService() {

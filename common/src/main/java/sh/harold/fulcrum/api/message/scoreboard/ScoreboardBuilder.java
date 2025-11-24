@@ -3,6 +3,7 @@ package sh.harold.fulcrum.api.message.scoreboard;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Fluent builder for assembling a ScoreboardDefinition.
@@ -12,7 +13,8 @@ public class ScoreboardBuilder {
     private final String scoreboardId;
     private final List<ScoreboardModule> modules = new ArrayList<>();
     private String title;
-    private String headerLabel;
+    private Supplier<String> headerLabel;
+    private Supplier<String> footerLabel;
 
     public ScoreboardBuilder(String scoreboardId) {
         this.scoreboardId = Objects.requireNonNull(scoreboardId, "Scoreboard ID cannot be null");
@@ -27,7 +29,22 @@ public class ScoreboardBuilder {
     }
 
     public ScoreboardBuilder headerLabel(String headerLabel) {
+        this.headerLabel = headerLabel == null ? null : () -> headerLabel;
+        return this;
+    }
+
+    public ScoreboardBuilder headerSupplier(Supplier<String> headerLabel) {
         this.headerLabel = headerLabel;
+        return this;
+    }
+
+    public ScoreboardBuilder footerLabel(String footerLabel) {
+        this.footerLabel = footerLabel == null ? null : () -> footerLabel;
+        return this;
+    }
+
+    public ScoreboardBuilder footerSupplier(Supplier<String> footerLabel) {
+        this.footerLabel = footerLabel;
         return this;
     }
 
@@ -47,6 +64,6 @@ public class ScoreboardBuilder {
     }
 
     public ScoreboardDefinition build() {
-        return new ScoreboardDefinition(scoreboardId, title, modules, headerLabel);
+        return new ScoreboardDefinition(scoreboardId, title, modules, headerLabel, footerLabel);
     }
 }

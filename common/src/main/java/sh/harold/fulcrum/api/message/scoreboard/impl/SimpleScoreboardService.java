@@ -227,6 +227,10 @@ public class SimpleScoreboardService implements ScoreboardService {
                     .forEach(lines::add);
         }
 
+        if (definition.getFooterLabel() != null && !definition.getFooterLabel().isBlank()) {
+            lines.add(translate(definition.getFooterLabel()));
+        }
+
         if (lines.size() > MAX_LINES) {
             return lines.subList(0, MAX_LINES);
         }
