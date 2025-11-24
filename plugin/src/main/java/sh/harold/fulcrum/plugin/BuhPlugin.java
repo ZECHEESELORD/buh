@@ -163,7 +163,6 @@ public final class BuhPlugin extends JavaPlugin {
             this,
             scoreboardService,
             versionService,
-            dataModule,
             playerDataModule,
             shutdownModule
         );
