@@ -3,7 +3,7 @@ version: '${version}'
 main: sh.harold.fulcrum.plugin.BuhPlugin
 api-version: '1.21'
 prefix: buh
-load: STARTUP
+load: POSTWORLD
 softdepend: [LuckPerms]
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
