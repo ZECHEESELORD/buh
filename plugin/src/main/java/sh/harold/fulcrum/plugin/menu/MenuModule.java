@@ -8,9 +8,12 @@ import sh.harold.fulcrum.api.menu.MenuService;
 import sh.harold.fulcrum.api.menu.impl.DefaultMenuRegistry;
 import sh.harold.fulcrum.api.menu.impl.DefaultMenuService;
 import sh.harold.fulcrum.api.menu.impl.MenuInventoryListener;
+import sh.harold.fulcrum.api.menu.component.MenuButton;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
+import sh.harold.fulcrum.common.cooldown.CooldownRegistry;
+import sh.harold.fulcrum.common.cooldown.InMemoryCooldownRegistry;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -23,6 +26,7 @@ public final class MenuModule implements FulcrumModule {
     private final JavaPlugin plugin;
     private DefaultMenuService menuService;
     private MenuRegistry menuRegistry;
+    private CooldownRegistry cooldownRegistry;
 
     public MenuModule(JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -38,6 +42,8 @@ public final class MenuModule implements FulcrumModule {
         menuRegistry = new DefaultMenuRegistry();
         menuService = new DefaultMenuService(plugin, menuRegistry);
         menuService.registerPlugin(plugin);
+        cooldownRegistry = new InMemoryCooldownRegistry();
+        MenuButton.bindCooldownRegistry(cooldownRegistry);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new MenuInventoryListener(menuService, plugin), plugin);
@@ -52,6 +58,10 @@ public final class MenuModule implements FulcrumModule {
             plugin.getServer().getServicesManager().unregister(MenuService.class, menuService);
             menuService.unregisterPlugin(plugin);
             menuService.shutdown();
+        }
+        if (cooldownRegistry != null) {
+            cooldownRegistry.close();
+            MenuButton.clearCooldownRegistry();
         }
         return CompletableFuture.completedFuture(null);
     }
