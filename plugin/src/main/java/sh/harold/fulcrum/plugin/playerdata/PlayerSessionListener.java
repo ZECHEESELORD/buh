@@ -26,11 +26,13 @@ final class PlayerSessionListener implements Listener {
 
     private final Logger logger;
     private final DocumentCollection players;
+    private final PlayerBiomeAggregator biomeAggregator;
     private final Map<UUID, Instant> sessionStarts = new ConcurrentHashMap<>();
 
-    PlayerSessionListener(Logger logger, DataApi dataApi) {
+    PlayerSessionListener(Logger logger, DataApi dataApi, PlayerBiomeAggregator biomeAggregator) {
         this.logger = logger;
         this.players = dataApi.collection("players");
+        this.biomeAggregator = biomeAggregator;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -41,7 +43,8 @@ final class PlayerSessionListener implements Listener {
         sessionStarts.put(playerId, now);
 
         players.load(playerId.toString())
-            .thenCompose(document -> ensureJoinMetadata(document, now, username))
+            .thenCompose(document -> ensureJoinMetadata(document, now, username)
+                .thenCompose(ignored -> biomeAggregator.recordInitialVisit(document, playerId, event.getPlayer().getLocation(), now)))
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to update player metadata for " + playerId, throwable);
                 return null;
