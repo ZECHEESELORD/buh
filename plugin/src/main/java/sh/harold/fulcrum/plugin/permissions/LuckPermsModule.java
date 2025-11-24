@@ -24,15 +24,7 @@ public final class LuckPermsModule implements FulcrumModule {
 
     private static final FeatureConfigOption<List<String>> STAFF_GROUPS_OPTION = FeatureConfigOptions.stringListOption(
         "staff-groups",
-        List.of(
-            "owner",
-            "admin",
-            "manager",
-            "staff",
-            "moderator",
-            "mod",
-            "helper"
-        )
+        List.of("staff")
     );
     private static final FeatureConfigOption<String> STAFF_PERMISSION_OPTION = FeatureConfigOptions.stringOption(
         "staff-permission",
