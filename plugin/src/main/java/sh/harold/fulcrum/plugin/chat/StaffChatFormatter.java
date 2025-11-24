@@ -1,0 +1,68 @@
+package sh.harold.fulcrum.plugin.chat;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+
+import java.util.Objects;
+import java.util.logging.Level;
+
+/**
+ * Formats staff chat messages so commands and chat events render identically.
+ */
+public final class StaffChatFormatter {
+
+    private static final Component STAFF_PREFIX = Component.text("Staff > ", NamedTextColor.AQUA);
+
+    private final Plugin plugin;
+    private final ChatFormatService formatService;
+    private final boolean useLuckPerms;
+
+    public StaffChatFormatter(Plugin plugin, ChatFormatService formatService) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.formatService = formatService;
+        this.useLuckPerms = formatService != null;
+    }
+
+    public Component format(Player sender, Component message) {
+        ChatFormatService.Format format = resolveFormat(sender);
+        return STAFF_PREFIX.append(render(format, message));
+    }
+
+    private ChatFormatService.Format resolveFormat(Player sender) {
+        if (!useLuckPerms) {
+            return fallbackFormat(sender);
+        }
+        try {
+            return formatService.format(sender).join();
+        } catch (RuntimeException runtimeException) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to format chat message", runtimeException);
+            return fallbackFormat(sender);
+        }
+    }
+
+    private ChatFormatService.Format fallbackFormat(Player player) {
+        return new ChatFormatService.Format(
+            Component.empty(),
+            Component.text(player.getName(), NamedTextColor.WHITE),
+            NamedTextColor.WHITE
+        );
+    }
+
+    private Component render(ChatFormatService.Format format, Component message) {
+        TextColor chatColor = format.chatColor() == null ? NamedTextColor.WHITE : format.chatColor();
+        Component coloredMessage = message.color(chatColor);
+        Component prefixPart = format.prefix();
+        if (!prefixPart.equals(Component.empty())) {
+            return prefixPart.append(Component.space())
+                .append(format.name())
+                .append(Component.text(": ", NamedTextColor.GRAY))
+                .append(coloredMessage);
+        }
+        return format.name()
+            .append(Component.text(": ", NamedTextColor.GRAY))
+            .append(coloredMessage);
+    }
+}

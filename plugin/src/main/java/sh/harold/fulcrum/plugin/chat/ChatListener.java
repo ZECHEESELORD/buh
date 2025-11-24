@@ -3,7 +3,6 @@ package sh.harold.fulcrum.plugin.chat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
-import net.luckperms.api.LuckPerms;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -12,6 +11,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.plugin.message.MessageService;
 
+import java.util.Objects;
 import java.util.logging.Level;
 
 final class ChatListener implements Listener {
@@ -21,13 +21,15 @@ final class ChatListener implements Listener {
     private final boolean useLuckPerms;
     private final ChatChannelService channelService;
     private final MessageService messageService;
+    private final StaffChatFormatter staffChatFormatter;
 
-    ChatListener(Plugin plugin, LuckPerms luckPerms, ChatChannelService channelService, MessageService messageService) {
+    ChatListener(Plugin plugin, ChatFormatService formatService, ChatChannelService channelService, MessageService messageService, StaffChatFormatter staffChatFormatter) {
         this.plugin = plugin;
         this.channelService = channelService;
         this.messageService = messageService;
-        this.useLuckPerms = luckPerms != null;
-        this.formatService = luckPerms == null ? null : new ChatFormatService(luckPerms);
+        this.formatService = formatService;
+        this.useLuckPerms = formatService != null;
+        this.staffChatFormatter = Objects.requireNonNull(staffChatFormatter, "staffChatFormatter");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -92,29 +94,8 @@ final class ChatListener implements Listener {
             return;
         }
         event.viewers().removeIf(viewer -> viewer instanceof org.bukkit.entity.Player player && !channelService.isStaff(player.getUniqueId()));
-        Component staffPrefix = Component.text("Staff > ", NamedTextColor.AQUA);
-        if (!useLuckPerms) {
-            ChatFormatService.Format fallback = new ChatFormatService.Format(
-                Component.empty(),
-                Component.text(event.getPlayer().getName(), NamedTextColor.WHITE),
-                NamedTextColor.WHITE
-            );
-            event.renderer((source, sourceDisplayName, message, viewer) -> staffPrefix.append(render(fallback, message)));
-            return;
-        }
-        ChatFormatService.Format format;
-        try {
-            format = formatService.format(event.getPlayer()).join();
-        } catch (RuntimeException runtimeException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to format chat message", runtimeException);
-            format = new ChatFormatService.Format(
-                Component.empty(),
-                Component.text(event.getPlayer().getName(), NamedTextColor.WHITE),
-                NamedTextColor.WHITE
-            );
-        }
-        ChatFormatService.Format captured = format;
-        event.renderer((source, sourceDisplayName, message, viewer) -> staffPrefix.append(render(captured, message)));
+        Component staffMessage = staffChatFormatter.format(event.getPlayer(), event.message());
+        event.renderer((source, sourceDisplayName, message, viewer) -> staffMessage);
     }
 
     private Component render(ChatFormatService.Format format, Component message) {
