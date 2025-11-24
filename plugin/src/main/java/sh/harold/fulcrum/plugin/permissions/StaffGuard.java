@@ -22,7 +22,11 @@ public record StaffGuard(LuckPermsModule luckPermsModule) {
         if (!(sender instanceof Player player)) {
             return true;
         }
-        if (sender.hasPermission(STAFF_PERMISSION)) {
+        return isStaff(player);
+    }
+
+    public boolean isStaff(Player player) {
+        if (player.hasPermission(STAFF_PERMISSION)) {
             return true;
         }
         return luckPermsModule.staffService()
