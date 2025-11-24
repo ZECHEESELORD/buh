@@ -33,6 +33,7 @@ public final class FeatureVoteCommand {
             return 0;
         }
 
+        sender.sendMessage(Component.text("Summoning the feature vote board...", NamedTextColor.GRAY));
         voteService.openMenu(player);
         return Command.SINGLE_SUCCESS;
     }
