@@ -3,6 +3,7 @@ package sh.harold.fulcrum.plugin.chat;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -75,6 +76,11 @@ public final class StaffChatBossBarService implements Listener, ChatChannelServi
     private Component staffChatTitle(boolean inStaffChat) {
         NamedTextColor stateColor = inStaffChat ? NamedTextColor.GREEN : NamedTextColor.RED;
         return STAFF_PREFIX.append(STAFF_CHAT_LABEL)
-            .append(Component.text(Boolean.toString(inStaffChat), stateColor));
+            .append(stateLabel(inStaffChat, stateColor));
+    }
+
+    private Component stateLabel(boolean active, NamedTextColor color) {
+        Component value = Component.text(active ? "TRUE" : "false", color);
+        return active ? value.decorate(TextDecoration.BOLD) : value;
     }
 }
