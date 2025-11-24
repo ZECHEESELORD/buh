@@ -271,6 +271,15 @@ public interface CustomMenuBuilder {
     CustomMenuBuilder addBorder(MenuItem borderItem);
 
     /**
+     * Enables or disables the automatic close button that is injected into the bottom row.
+     * When disabled, no close button will be generated for the menu.
+     *
+     * @param autoClose true to include the close button, false to omit it
+     * @return this builder
+     */
+    CustomMenuBuilder autoCloseButton(boolean autoClose);
+
+    /**
      * Builds the menu asynchronously and opens it for the player.
      *
      * @param player the player to open the menu for

@@ -58,6 +58,7 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     private int initialRowOffset = 0;
     private int initialColumnOffset = 0;
     private boolean closeOnOutsideClick = true;
+    private boolean autoCloseButton = true;
 
     // Parent menu configuration for explicit navigation
     private String parentMenuId = null;
@@ -298,6 +299,12 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     }
 
     @Override
+    public CustomMenuBuilder autoCloseButton(boolean autoClose) {
+        this.autoCloseButton = autoClose;
+        return this;
+    }
+
+    @Override
     public CustomMenuBuilder addBorder(Material borderMaterial) {
         this.borderItem = MenuDisplayItem.builder(borderMaterial)
                 .name(Component.empty())
@@ -355,6 +362,7 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
 
             // Configure menu properties
             menu.getContext().setProperty("closeOnOutsideClick", closeOnOutsideClick);
+            menu.getContext().setProperty("autoCloseButton", autoCloseButton);
 
             // Parent menu configuration for post-rendering pipeline
             if (parentMenuId != null) {
