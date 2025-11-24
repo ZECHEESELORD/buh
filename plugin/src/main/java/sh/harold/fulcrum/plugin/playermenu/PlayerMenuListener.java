@@ -1,21 +1,22 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
-import org.bukkit.event.block.Action;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.entity.Player;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.event.inventory.ClickType;
 
 import java.util.Objects;
 
@@ -55,46 +56,38 @@ final class PlayerMenuListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) {
-            return;
-        }
-
-        if (!(event.getClickedInventory() instanceof PlayerInventory playerInventory)) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
 
         ItemStack current = event.getCurrentItem();
         ItemStack cursor = event.getCursor();
-        if (menuService.isMenuItem(current) || menuService.isMenuItem(cursor)) {
-            event.setCancelled(true);
-            if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
-                menuService.openMenu(player)
-                    .exceptionally(throwable -> {
-                        player.sendMessage("§cFailed to open the player menu; try again soon.");
-                        return null;
-                    });
-            }
+        PlayerInventory inventory = player.getInventory();
+        ItemStack hotbarSwap = event.getHotbarButton() >= 0 ? inventory.getItem(event.getHotbarButton()) : null;
+
+        boolean currentIsMenuItem = menuService.isMenuItem(current);
+        boolean cursorIsMenuItem = menuService.isMenuItem(cursor);
+        boolean hotbarSwapIsMenuItem = menuService.isMenuItem(hotbarSwap);
+
+        if (!currentIsMenuItem && !cursorIsMenuItem && !hotbarSwapIsMenuItem) {
             return;
         }
 
-        int hotbarButton = event.getHotbarButton();
-        if (hotbarButton >= 0) {
-            if (menuService.isMenuItem(playerInventory.getItem(hotbarButton))) {
-                event.setCancelled(true);
-                return;
-            }
-        }
+        event.setCancelled(true);
 
-        if (event.getSlotType() == InventoryType.SlotType.QUICKBAR) {
-            if (menuService.isMenuItem(event.getCurrentItem())) {
-                event.setCancelled(true);
-            }
+        ClickType click = event.getClick();
+        if ((click == ClickType.LEFT || click == ClickType.RIGHT) && (currentIsMenuItem || cursorIsMenuItem)) {
+            menuService.openMenu(player)
+                .exceptionally(throwable -> {
+                    player.sendMessage("§cFailed to open the player menu; try again soon.");
+                    return null;
+                });
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
         PlayerInventory inventory = player.getInventory();
@@ -120,5 +113,12 @@ final class PlayerMenuListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onRespawn(PlayerRespawnEvent event) {
         menuService.distribute(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        if (menuService.isMenuItem(event.getMainHandItem()) || menuService.isMenuItem(event.getOffHandItem())) {
+            event.setCancelled(true);
+        }
     }
 }

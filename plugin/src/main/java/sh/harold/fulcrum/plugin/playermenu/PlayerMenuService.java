@@ -1,15 +1,19 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.ProtocolManager;
+import com.comphenix.protocol.events.PacketContainer;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.Sound;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -24,12 +28,13 @@ import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
 
+import java.lang.reflect.InvocationTargetException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -44,6 +49,7 @@ public final class PlayerMenuService {
     private static final List<String> LORE_LINES = List.of("&e&lCLICK &eto open!");
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     private static final Duration SETTINGS_COOLDOWN = Duration.ofMillis(500);
+    private static final Material BASE_MENU_ITEM = Material.PUFFERFISH;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -53,6 +59,7 @@ public final class PlayerMenuService {
     private final PlayerSettingsService settingsService;
     private final ScoreboardService scoreboardService;
     private final NamespacedKey markerKey;
+    private final ProtocolManager protocolManager;
 
     public PlayerMenuService(
         JavaPlugin plugin,
@@ -70,6 +77,9 @@ public final class PlayerMenuService {
         this.settingsService = Objects.requireNonNull(settingsService, "settingsService");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.markerKey = new NamespacedKey(plugin, "player_menu");
+        this.protocolManager = plugin.getServer().getPluginManager().isPluginEnabled("ProtocolLib")
+            ? ProtocolLibrary.getProtocolManager()
+            : null;
     }
 
     public CompletionStage<Void> distribute(Player player) {
@@ -305,7 +315,11 @@ public final class PlayerMenuService {
 
         if (!free) {
             // Use a sanitized copy so menu-item markers do not trigger other listeners
-            button.setDisplayItem(stripMenuMarker(occupant));
+            if (isMenuItem(occupant)) {
+                button.setDisplayItem(buildDisplayItem(config.material()));
+            } else {
+                button.setDisplayItem(stripMenuMarker(occupant));
+            }
         }
 
         return new MenuItemPlacement(menuSlot, button);
@@ -393,10 +407,11 @@ public final class PlayerMenuService {
         int existingMenuSlot = findMenuItemSlot(inventory);
         int targetSlot = config.slot();
         ItemStack current = inventory.getItem(targetSlot);
-        ItemStack menuItem = buildMenuItem(config.material());
+        ItemStack menuItem = buildMenuItem();
 
         if (existingMenuSlot == targetSlot) {
             inventory.setItem(targetSlot, menuItem);
+            spoofMenuItemAppearance(player, targetSlot, config.material());
             return;
         }
 
@@ -413,6 +428,8 @@ public final class PlayerMenuService {
             inventory.setItem(targetSlot, menuItem);
             stashDisplaced(player, displaced);
         }
+
+        spoofMenuItemAppearance(player, targetSlot, config.material());
     }
 
     public boolean isMenuItem(ItemStack item) {
@@ -427,20 +444,70 @@ public final class PlayerMenuService {
         return container.has(markerKey, PersistentDataType.BYTE);
     }
 
-    private ItemStack buildMenuItem(Material material) {
-        ItemStack stack = new ItemStack(material == null || material.isAir() ? PlayerMenuItemConfig.DEFAULT.material() : material);
-        ItemMeta meta = stack.getItemMeta();
-        if (meta != null) {
-            Component displayName = LEGACY.deserialize(DISPLAY_NAME).decoration(TextDecoration.ITALIC, false);
-            List<Component> lore = LORE_LINES.stream()
-                .map(line -> (Component) LEGACY.deserialize(line).decoration(TextDecoration.ITALIC, false))
-                .toList();
-            meta.displayName(displayName);
-            meta.lore(lore);
-            meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
-            stack.setItemMeta(meta);
-        }
+    private ItemStack buildMenuItem() {
+        ItemStack stack = new ItemStack(BASE_MENU_ITEM);
+        applyMenuMeta(stack, true);
         return stack;
+    }
+
+    private ItemStack buildDisplayItem(Material displayMaterial) {
+        ItemStack stack = new ItemStack(normalizeDisplayMaterial(displayMaterial));
+        applyMenuMeta(stack, false);
+        return stack;
+    }
+
+    private void applyMenuMeta(ItemStack stack, boolean includeMarker) {
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+        Component displayName = LEGACY.deserialize(DISPLAY_NAME).decoration(TextDecoration.ITALIC, false);
+        List<Component> lore = LORE_LINES.stream()
+            .map(line -> (Component) LEGACY.deserialize(line).decoration(TextDecoration.ITALIC, false))
+            .toList();
+        meta.displayName(displayName);
+        meta.lore(lore);
+        if (includeMarker) {
+            meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
+        }
+        stack.setItemMeta(meta);
+    }
+
+    private Material normalizeDisplayMaterial(Material material) {
+        if (material == null || material.isAir()) {
+            return PlayerMenuItemConfig.DEFAULT.material();
+        }
+        return material;
+    }
+
+    private void spoofMenuItemAppearance(Player player, int slot, Material displayMaterial) {
+        if (protocolManager == null) {
+            return;
+        }
+
+        ItemStack visual = buildDisplayItem(displayMaterial);
+        PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.SET_SLOT);
+
+        var integers = packet.getIntegers();
+        if (integers.size() > 0) {
+            integers.writeSafely(0, 0);
+        }
+        if (integers.size() > 1) {
+            integers.writeSafely(1, 0);
+        }
+        if (integers.size() > 2) {
+            integers.writeSafely(2, slot);
+        } else {
+            packet.getShorts().writeSafely(0, (short) slot);
+        }
+
+        packet.getItemModifier().writeSafely(0, visual);
+
+        try {
+            protocolManager.sendServerPacket(player, packet);
+        } catch (InvocationTargetException ex) {
+            logger.log(Level.WARNING, "Failed to spoof menu item appearance for " + player.getUniqueId(), ex);
+        }
     }
 
     private void stashDisplaced(Player player, ItemStack displaced) {
