@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -28,6 +29,14 @@ import java.util.logging.Logger;
 public final class StashService implements AutoCloseable {
 
     private static final Duration SYNC_TIMEOUT = Duration.ofSeconds(5);
+    private static final Set<String> SUPPORTED_ITEM_KEYS = Set.of(
+        "id",
+        "count",
+        "components",
+        "DataVersion",
+        "schema_version",
+        "=="
+    );
 
     private final JavaPlugin plugin;
     private final DocumentCollection players;
@@ -199,9 +208,7 @@ public final class StashService implements AutoCloseable {
     }
 
     private Map<String, Object> serialize(ItemStack item) {
-        Map<String, Object> serialized = new java.util.LinkedHashMap<>(item.serialize());
-        serialized.putIfAbsent("amount", item.getAmount());
-        return serialized;
+        return new java.util.LinkedHashMap<>(item.serialize());
     }
 
     private ItemStack deserialize(Object raw) {
@@ -210,9 +217,30 @@ public final class StashService implements AutoCloseable {
         }
         Map<String, Object> copy = new java.util.LinkedHashMap<>();
         map.forEach((key, value) -> copy.put(String.valueOf(key), value));
+        Object amount = copy.remove("amount");
+        if (!copy.containsKey("count")) {
+            switch (amount) {
+                case Number number -> copy.put("count", number.intValue());
+                case String value -> {
+                    try {
+                        copy.put("count", Integer.parseInt(value));
+                    } catch (NumberFormatException ignored) {
+                        // leave count absent when parsing fails
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        Map<String, Object> sanitized = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : copy.entrySet()) {
+            if (SUPPORTED_ITEM_KEYS.contains(entry.getKey())) {
+                sanitized.put(entry.getKey(), entry.getValue());
+            }
+        }
         try {
-            return ItemStack.deserialize(copy);
-        } catch (IllegalArgumentException exception) {
+            return ItemStack.deserialize(sanitized);
+        } catch (IllegalArgumentException | IllegalStateException exception) {
             logger.log(Level.WARNING, "Failed to deserialize stashed item", exception);
             return null;
         }
