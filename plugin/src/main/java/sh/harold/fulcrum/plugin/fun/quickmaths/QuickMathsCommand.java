@@ -7,28 +7,30 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
-import io.papermc.paper.command.brigadier.Commands;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
+import sh.harold.fulcrum.message.Message;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsManager.Difficulty;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static io.papermc.paper.command.brigadier.Commands.argument;
+import static io.papermc.paper.command.brigadier.Commands.literal;
 
 /**
  * Brigadier command builder for /quickmaths.
  */
 public final class QuickMathsCommand {
-
-    private static final SuggestionProvider<CommandSourceStack> DIFFICULTY_SUGGESTIONS = (context, builder) -> {
-        for (Difficulty value : Difficulty.values()) {
-            builder.suggest(value.name().toLowerCase(Locale.ROOT));
-        }
-        return builder.buildFuture();
-    };
+    private static final SuggestionProvider<CommandSourceStack> DIFFICULTY_SUGGESTIONS =
+            (context, builder) -> {
+                for (Difficulty value : Difficulty.values()) {
+                    builder.suggest(value.name());
+                }
+                return builder.buildFuture();
+            };
 
     private final QuickMathsManager manager;
     private final StaffGuard staffGuard;
@@ -39,22 +41,25 @@ public final class QuickMathsCommand {
     }
 
     public LiteralCommandNode<CommandSourceStack> build() {
-        return Commands.literal("quickmaths")
-            .requires(staffGuard::isStaff)
-            .then(Commands.literal("cancel").executes(this::executeCancel))
-            .then(Commands.argument("difficulty", StringArgumentType.word())
-                .suggests(DIFFICULTY_SUGGESTIONS)
-                .then(Commands.argument("winners", IntegerArgumentType.integer(1, manager.maxWinnersPerRound()))
-                    .executes(this::executeStart)))
-            .build();
+        return literal("quickmaths")
+                .requires(staffGuard::isStaff)
+                .then(literal("cancel")
+                        .executes(this::executeCancel))
+                .then(argument("difficulty", StringArgumentType.word())
+                        .suggests(DIFFICULTY_SUGGESTIONS)
+                        .then(argument("winners", IntegerArgumentType.integer(1, manager.maxWinnersPerRound()))
+                                .executes(this::execute)))
+                .build();
     }
 
-    private int executeStart(CommandContext<CommandSourceStack> context) {
+    private int execute(CommandContext<CommandSourceStack> context) {
         CommandSender sender = context.getSource().getSender();
         String difficultyRaw = StringArgumentType.getString(context, "difficulty");
-        var difficulty = Difficulty.parse(difficultyRaw);
+        Optional<Difficulty> difficulty = Difficulty.parse(difficultyRaw);
         if (difficulty.isEmpty()) {
-            sender.sendMessage(Component.text("Unknown difficulty; try " + readableDifficulties() + ".", NamedTextColor.RED));
+            Message.error("Unknown difficulty '" + difficultyRaw + "'. Use " + readableDifficulties() + ".")
+                .builder()
+                .send(sender);
             return 0;
         }
 
@@ -71,7 +76,7 @@ public final class QuickMathsCommand {
 
     private String readableDifficulties() {
         return Arrays.stream(Difficulty.values())
-            .map(value -> value.name().toLowerCase(Locale.ROOT))
-            .collect(Collectors.joining(", "));
+                .map(value -> value.name().toLowerCase(Locale.ROOT))
+                .collect(Collectors.joining(", "));
     }
 }
