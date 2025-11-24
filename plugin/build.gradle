@@ -6,7 +6,7 @@ plugins {
 dependencies {
     implementation project(":common")
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
-    implementation("net.luckperms:api:5.4")
+    compileOnly("net.luckperms:api:5.4")
 }
 
 tasks.named("runServer") {
