@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.Sound;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -96,6 +97,7 @@ public final class PlayerMenuService {
             .secondary("Game Settings")
             .description("Adjust gameplay preferences and other options.")
             .slot(closeSlot + 1)
+            .sound(Sound.UI_BUTTON_CLICK)
             .onClick(this::openSettingsMenu)
             .build();
 
@@ -139,6 +141,7 @@ public final class PlayerMenuService {
                     .name("&7Back")
                     .description("Return to the player menu.")
                     .slot(closeSlot - 1)
+                    .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(this::openMenu)
                     .build();
 
@@ -147,6 +150,7 @@ public final class PlayerMenuService {
                     .secondary("Display")
                     .description("Toggle the sidebar scoreboard on or off.")
                     .slot(10)
+                    .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(viewer -> toggleScoreboard(viewer, !enabled))
                     .build();
 
@@ -155,6 +159,7 @@ public final class PlayerMenuService {
                     .secondary("Inventory Slot")
                     .description("Choose where the player menu item lives.")
                     .slot(28)
+                    .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(this::openRelocateMenu)
                     .build();
 
@@ -209,6 +214,7 @@ public final class PlayerMenuService {
                     .name("&7Back")
                     .description("Return to the settings menu.")
                     .slot(backSlot)
+                    .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(this::openSettingsMenu)
                     .build();
 
@@ -276,6 +282,7 @@ public final class PlayerMenuService {
         MenuButton.Builder builder = MenuButton.builder(free ? Material.STONE_BUTTON : occupant.getType())
             .name(free ? "&aPlace menu item here" : "&7Select slot")
             .slot(menuSlot)
+            .sound(Sound.UI_BUTTON_CLICK)
             .skipClickPrompt()
             .onClick(viewer -> {
                 if (!free) {
