@@ -26,12 +26,14 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -49,12 +51,14 @@ public final class ShutdownModule implements FulcrumModule, Listener {
     private static final String DEFAULT_REASON = "Scheduled Reboot";
 
     private final JavaPlugin plugin;
+    private final ScoreboardService scoreboardService;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
     private final AtomicBoolean trackPlaying = new AtomicBoolean(false);
     private EvacuationContext currentContext;
 
-    public ShutdownModule(JavaPlugin plugin) {
+    public ShutdownModule(JavaPlugin plugin, ScoreboardService scoreboardService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
     }
 
     @Override
@@ -165,6 +169,7 @@ public final class ShutdownModule implements FulcrumModule, Listener {
         sendCountdownBroadcast(currentContext.secondsRemaining().get());
         playShutdownTrack();
         startCountdown();
+        refreshScoreboards();
         return Command.SINGLE_SUCCESS;
     }
 
@@ -179,6 +184,7 @@ public final class ShutdownModule implements FulcrumModule, Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.sendMessage(Component.text("Shutdown cancelled.", NamedTextColor.YELLOW));
         }
+        refreshScoreboards();
         return Command.SINGLE_SUCCESS;
     }
 
@@ -207,6 +213,8 @@ public final class ShutdownModule implements FulcrumModule, Listener {
             if (secondsBeforeTick == FINAL_REMINDER_SECOND) {
                 sendCountdownBroadcast(secondsBeforeTick);
             }
+
+            refreshScoreboards();
         };
 
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, countdownTick, 20L, 20L);
@@ -330,6 +338,19 @@ public final class ShutdownModule implements FulcrumModule, Listener {
         if (task != null) {
             task.cancel();
         }
+    }
+
+    public OptionalInt secondsUntilShutdown() {
+        EvacuationContext context = currentContext;
+        if (context == null) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(Math.max(0, context.secondsRemaining().get()));
+    }
+
+    private void refreshScoreboards() {
+        Bukkit.getOnlinePlayers()
+            .forEach(player -> scoreboardService.refreshPlayerScoreboard(player.getUniqueId()));
     }
 
     private record ShutdownRequest(String reason, int countdownSeconds) {
