@@ -1,5 +1,6 @@
 package sh.harold.fulcrum.plugin.stash;
 
+import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +30,7 @@ import java.util.logging.Logger;
 public final class StashService implements AutoCloseable {
 
     private static final Duration SYNC_TIMEOUT = Duration.ofSeconds(5);
+    private static final String STASH_LABEL = "item";
     private static final Set<String> SUPPORTED_ITEM_KEYS = Set.of(
         "id",
         "count",
@@ -115,6 +117,9 @@ public final class StashService implements AutoCloseable {
                 persist(document, stash);
             }
             return new StashDepositResult(stashedStacks, stashedItems);
+        }).thenApply(result -> {
+            notifyDeposit(player, result.stashedItems());
+            return result;
         });
     }
 
@@ -140,6 +145,9 @@ public final class StashService implements AutoCloseable {
 
             persist(document, stash);
             return new StashDepositResult(stashedStacks, stashedItems);
+        }).thenApply(result -> {
+            notifyDeposit(player, result.stashedItems());
+            return result;
         });
     }
 
@@ -281,5 +289,17 @@ public final class StashService implements AutoCloseable {
     }
 
     private record OfferOutcome(int insertedAmount, ItemStack leftover) {
+    }
+
+    private void notifyDeposit(Player player, int stashedItems) {
+        if (stashedItems <= 0) {
+            return;
+        }
+        Component message = StashMessages.stashDepositNotice(STASH_LABEL);
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) {
+                player.sendMessage(message);
+            }
+        });
     }
 }

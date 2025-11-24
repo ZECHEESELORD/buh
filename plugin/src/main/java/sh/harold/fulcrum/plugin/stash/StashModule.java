@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
@@ -20,6 +21,7 @@ import sh.harold.fulcrum.plugin.data.DataModule;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -28,9 +30,12 @@ import java.util.logging.Level;
 
 public final class StashModule implements FulcrumModule {
 
+    private static final Duration REMINDER_PERIOD = Duration.ofSeconds(60);
+
     private final JavaPlugin plugin;
     private final DataModule dataModule;
     private StashService stashService;
+    private BukkitTask reminderTask;
 
     public StashModule(JavaPlugin plugin, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -47,11 +52,16 @@ public final class StashModule implements FulcrumModule {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         stashService = new StashService(plugin, dataApi);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
+        startReminderTask();
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> disable() {
+        if (reminderTask != null) {
+            reminderTask.cancel();
+            reminderTask = null;
+        }
         if (stashService != null) {
             stashService.close();
         }
@@ -163,5 +173,44 @@ public final class StashModule implements FulcrumModule {
             return;
         }
         plugin.getServer().getScheduler().runTask(plugin, task);
+    }
+
+    private void startReminderTask() {
+        long periodTicks = REMINDER_PERIOD.toSeconds() * 20L;
+        reminderTask = plugin.getServer().getScheduler().runTaskTimer(
+            plugin,
+            this::dispatchReminders,
+            periodTicks,
+            periodTicks
+        );
+    }
+
+    private void dispatchReminders() {
+        if (stashService == null) {
+            return;
+        }
+        plugin.getServer().getOnlinePlayers()
+            .forEach(player -> stashService.view(player.getUniqueId())
+                .whenComplete((view, throwable) -> {
+                    if (throwable != null) {
+                        plugin.getLogger().log(Level.WARNING, "Failed to check stash for " + player.getUniqueId(), throwable);
+                        return;
+                    }
+                    int totalItems = view.items().stream()
+                        .mapToInt(ItemStack::getAmount)
+                        .sum();
+                    if (totalItems <= 0) {
+                        return;
+                    }
+                    runSync(() -> {
+                        if (!player.isOnline()) {
+                            return;
+                        }
+                        player.sendMessage(Component.empty());
+                        player.sendMessage(StashMessages.reminderTitle(totalItems));
+                        player.sendMessage(StashMessages.reminderAction(totalItems));
+                        player.sendMessage(Component.empty());
+                    });
+                }));
     }
 }
