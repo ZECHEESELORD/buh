@@ -115,7 +115,7 @@ public final class PlayerMenuService {
             .description("Adjust gameplay preferences and other options.")
             .slot(closeSlot + 1)
             .sound(Sound.UI_BUTTON_CLICK)
-            .onClick(this::openSettingsMenu)
+            .onClick(viewer -> openSettings(viewer))
             .build();
 
         CompletableFuture<Void> openFuture = new CompletableFuture<>();
@@ -143,13 +143,20 @@ public final class PlayerMenuService {
         return openFuture;
     }
 
-    private void openSettingsMenu(Player player) {
+    public CompletionStage<Void> openSettings(Player player) {
+        Objects.requireNonNull(player, "player");
+        return openSettingsMenu(player);
+    }
+
+    private CompletionStage<Void> openSettingsMenu(Player player) {
         UUID playerId = player.getUniqueId();
+        CompletableFuture<Void> openFuture = new CompletableFuture<>();
         settingsService.isScoreboardEnabled(playerId)
             .whenComplete((enabled, throwable) -> {
                 if (throwable != null) {
                     logger.log(Level.SEVERE, "Failed to load settings for " + playerId, throwable);
                     player.sendMessage("§cSettings are snoozing; try again soon.");
+                    openFuture.completeExceptionally(throwable);
                     return;
                 }
 
@@ -181,20 +188,32 @@ public final class PlayerMenuService {
                     .onClick(this::openRelocateMenu)
                     .build();
 
-                menuService.createMenuBuilder()
-                    .title("Settings")
-                    .rows(MENU_ROWS)
-                    .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
-                    .addButton(MenuButton.createPositionedClose(MENU_ROWS))
-                    .addButton(backButton)
-                    .addButton(scoreboardToggle)
-                    .addButton(relocateButton)
-                    .buildAsync(player)
-                    .exceptionally(openError -> {
-                        logger.log(Level.SEVERE, "Failed to open settings menu for " + player.getUniqueId(), openError);
-                        return null;
-                    });
+                try {
+                    menuService.createMenuBuilder()
+                        .title("Settings")
+                        .rows(MENU_ROWS)
+                        .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
+                        .addButton(MenuButton.createPositionedClose(MENU_ROWS))
+                        .addButton(backButton)
+                        .addButton(scoreboardToggle)
+                        .addButton(relocateButton)
+                        .buildAsync(player)
+                        .whenComplete((menu, openError) -> {
+                            if (openError != null) {
+                                logger.log(Level.SEVERE, "Failed to open settings menu for " + player.getUniqueId(), openError);
+                                player.sendMessage("§cSettings are snoozing; try again soon.");
+                                openFuture.completeExceptionally(openError);
+                                return;
+                            }
+                            openFuture.complete(null);
+                        });
+                } catch (Throwable openError) {
+                    logger.log(Level.SEVERE, "Failed to open settings menu for " + player.getUniqueId(), openError);
+                    player.sendMessage("§cSettings are snoozing; try again soon.");
+                    openFuture.completeExceptionally(openError);
+                }
             });
+        return openFuture;
     }
 
     private void toggleScoreboard(Player player, boolean enable) {
@@ -206,7 +225,7 @@ public final class PlayerMenuService {
                 } else {
                     scoreboardService.hideScoreboard(playerId);
                 }
-                openSettingsMenu(player);
+                openSettings(player);
             }))
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to toggle scoreboard for " + playerId, throwable);
@@ -235,7 +254,7 @@ public final class PlayerMenuService {
                     .description("Return to the settings menu.")
                     .slot(backSlot)
                     .sound(Sound.UI_BUTTON_CLICK)
-                    .onClick(this::openSettingsMenu)
+                    .onClick(viewer -> openSettings(viewer))
                     .build();
 
                 List<MenuItemPlacement> placements = buildMenuPlacements(player, config);
@@ -289,7 +308,10 @@ public final class PlayerMenuService {
         PlayerMenuItemConfig updated = config.withEnabled(enable);
         persistConfig(playerId, updated)
             .thenCompose(ignored -> placeMenuItem(player, updated))
-            .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> openRelocateMenu(player)))
+            .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+                player.closeInventory();
+                player.sendMessage("§eYou can open the player menu anytime with /menu.");
+            }))
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to update player menu item visibility for " + playerId, throwable);
                 player.sendMessage("§cCould not update your player menu item.");

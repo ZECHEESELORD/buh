@@ -81,5 +81,6 @@ public final class PlayerMenuModule implements FulcrumModule {
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
         Commands registrar = event.registrar();
         registrar.register(new PlayerMenuCommand(playerMenuService).build(), "menu", java.util.List.of());
+        registrar.register(new PlayerSettingsCommand(playerMenuService).build(), "settings", java.util.List.of());
     }
 }
