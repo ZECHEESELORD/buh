@@ -15,8 +15,11 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public final class BeaconStripper {
+
+    private static final Set<Material> ILLEGAL_ITEMS = Set.of(Material.BEACON, Material.NETHER_STAR);
 
     private BeaconStripper() {
     }
@@ -39,7 +42,7 @@ public final class BeaconStripper {
         if (item == null || item.getType().isAir()) {
             return new StripResult(null, 0);
         }
-        if (item.getType() == Material.BEACON && !isWhitelisted(item, whitelistKey)) {
+        if (isIllegal(item) && !isWhitelisted(item, whitelistKey)) {
             return new StripResult(null, item.getAmount());
         }
 
@@ -86,7 +89,7 @@ public final class BeaconStripper {
     }
 
     private static boolean isWhitelisted(ItemStack item, NamespacedKey whitelistKey) {
-        if (whitelistKey == null) {
+        if (whitelistKey == null || item.getType() != Material.BEACON) {
             return false;
         }
         ItemMeta meta = item.getItemMeta();
@@ -95,6 +98,10 @@ public final class BeaconStripper {
         }
         PersistentDataContainer container = meta.getPersistentDataContainer();
         return container.has(whitelistKey, PersistentDataType.BYTE);
+    }
+
+    private static boolean isIllegal(ItemStack item) {
+        return ILLEGAL_ITEMS.contains(item.getType());
     }
 
     public record StripResult(ItemStack item, int removed) {
