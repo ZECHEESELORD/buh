@@ -3,6 +3,7 @@ package sh.harold.fulcrum.plugin.staff;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -198,6 +199,11 @@ public final class VanishService implements Listener {
     private Component vanishTitle(boolean vanished) {
         NamedTextColor stateColor = vanished ? NamedTextColor.GREEN : NamedTextColor.RED;
         return STAFF_PREFIX.append(VANISH_LABEL)
-            .append(Component.text(Boolean.toString(vanished), stateColor));
+            .append(stateLabel(vanished, stateColor));
+    }
+
+    private Component stateLabel(boolean active, NamedTextColor color) {
+        Component value = Component.text(active ? "TRUE" : "false", color);
+        return active ? value.decorate(TextDecoration.BOLD) : value;
     }
 }
