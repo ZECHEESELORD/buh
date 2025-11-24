@@ -235,6 +235,7 @@ public final class FeatureVoteService {
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false);
         Component label = Component.text(singular ? " Vote" : " Votes", NamedTextColor.GRAY)
+            .decoration(TextDecoration.BOLD, false)
             .decoration(TextDecoration.ITALIC, false);
         return number.append(label);
     }
