@@ -27,6 +27,7 @@ public class SimpleScoreboardService implements ScoreboardService {
 
     private static final int MAX_LINES = 15;
     private static final int MAX_ENTRY_LENGTH = 40;
+    private static final String BLANK_LINE = ChatColor.RESET.toString();
 
     private final Plugin plugin;
     private final ScoreboardRegistry registry;
@@ -202,6 +203,7 @@ public class SimpleScoreboardService implements ScoreboardService {
 
         if (definition.getHeaderLabel() != null && !definition.getHeaderLabel().isBlank()) {
             lines.add(translate(definition.getHeaderLabel()));
+            lines.add(BLANK_LINE);
         }
 
         List<ScoreboardModule> modules = definition.getModules();
