@@ -37,6 +37,7 @@ import sh.harold.fulcrum.plugin.version.VersionService;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteService;
 import sh.harold.fulcrum.plugin.tab.TabFeature;
+import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -62,6 +63,7 @@ public final class BuhPlugin extends JavaPlugin {
     private FunModule funModule;
     private StaffCommandsModule staffCommandsModule;
     private StatsModule statsModule;
+    private ShutdownModule shutdownModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -152,9 +154,11 @@ public final class BuhPlugin extends JavaPlugin {
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         statsModule = new StatsModule(this);
+        shutdownModule = new ShutdownModule(this);
         tabFeature = new TabFeature(this);
-        scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService);
+        scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService, dataModule);
         List<FulcrumModule> modules = List.of(
+            shutdownModule,
             dataModule,
             playerDataModule,
             luckPermsModule,
