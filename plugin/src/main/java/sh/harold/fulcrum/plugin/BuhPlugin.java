@@ -137,7 +137,7 @@ public final class BuhPlugin extends JavaPlugin {
         stashModule = new StashModule(this, dataModule);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule);
         funModule = new FunModule(this, luckPermsModule);
-        staffCommandsModule = new StaffCommandsModule(this, luckPermsModule);
+        staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         statsModule = new StatsModule(this);
         scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService);
         List<FulcrumModule> modules = List.of(
