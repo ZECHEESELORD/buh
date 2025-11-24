@@ -24,12 +24,11 @@ final class BeaconDebugCommand {
     }
 
     LiteralCommandNode<CommandSourceStack> build() {
-        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal("beacondebug")
+        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal("getlegitnetherstar")
             .requires(stack -> stack.getSender() instanceof org.bukkit.entity.Player player && isAdmin(player.getUniqueId()))
-            .then(Commands.literal("legit-ns")
-                .executes(context -> giveLegit(context.getSource(), "Legitimate Nether Star"))
-                .then(Commands.argument("name", StringArgumentType.greedyString())
-                    .executes(context -> giveLegit(context.getSource(), context.getArgument("name", String.class)))));
+            .executes(context -> giveLegit(context.getSource(), "Legitimate Nether Star"))
+            .then(Commands.argument("name", StringArgumentType.greedyString())
+                .executes(context -> giveLegit(context.getSource(), context.getArgument("name", String.class))));
         return builder.build();
     }
 
