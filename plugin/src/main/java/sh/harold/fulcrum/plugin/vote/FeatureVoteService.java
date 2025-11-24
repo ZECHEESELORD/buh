@@ -120,7 +120,7 @@ public final class FeatureVoteService {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             try {
                 CustomMenuBuilder builder = menuService.createMenuBuilder()
-                    .title(Component.text("Feature Votes", NamedTextColor.GOLD))
+                    .title("Feature Votes")
                     .rows(MENU_ROWS)
                     .autoCloseButton(false)
                     .fillEmpty(BACKGROUND);

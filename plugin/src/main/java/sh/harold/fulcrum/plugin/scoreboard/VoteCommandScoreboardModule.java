@@ -16,6 +16,6 @@ public final class VoteCommandScoreboardModule implements ScoreboardModule {
 
     @Override
     public List<String> renderLines(Player player) {
-        return List.of("&7/vote");
+        return List.of("&b&l/vote");
     }
 }
