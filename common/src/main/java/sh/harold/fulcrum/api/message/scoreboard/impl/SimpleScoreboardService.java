@@ -227,6 +227,7 @@ public class SimpleScoreboardService implements ScoreboardService {
                     .filter(Objects::nonNull)
                     .map(this::translate)
                     .forEach(lines::add);
+            lines.add(BLANK_LINE);
         }
 
         if (definition.getFooterLabel() != null && !definition.getFooterLabel().isBlank()) {

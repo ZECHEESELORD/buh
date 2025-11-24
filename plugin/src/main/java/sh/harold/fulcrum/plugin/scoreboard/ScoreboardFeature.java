@@ -96,8 +96,8 @@ public final class ScoreboardFeature implements FulcrumModule, Listener {
             .headerSupplier(this::headerLine)
             .module(new FeatureVoteScoreboardModule());
 
-        if (config.bottomLine() != null && !config.bottomLine().isBlank()) {
-            builder.footerLabel(config.bottomLine());
+        if (config.footer() != null && !config.footer().isBlank()) {
+            builder.footerSupplier(config::footer);
         }
 
         return builder.build();
