@@ -112,10 +112,10 @@ final class BeaconSanitizerService {
             return true;
         }
 
-        Chunk chunk = world.getChunkAtIfLoaded(coordinate.x(), coordinate.z());
-        if (chunk == null) {
+        if (!world.isChunkLoaded(coordinate.x(), coordinate.z())) {
             return false;
         }
+        Chunk chunk = world.getChunkAt(coordinate.x(), coordinate.z());
 
         int removedBlocks = stripBeacons(chunk);
         int removedItems = stripContainerItems(chunk);
