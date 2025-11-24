@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -42,6 +43,7 @@ public final class PlayerMenuService {
     private static final String DISPLAY_NAME = "&aPlayer Menu &7(Right Click)";
     private static final List<String> LORE_LINES = List.of("&e&lCLICK &eto open!");
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
+    private static final Duration SETTINGS_COOLDOWN = Duration.ofMillis(500);
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -150,6 +152,7 @@ public final class PlayerMenuService {
                     .secondary("Display")
                     .description("Toggle the sidebar scoreboard on or off.")
                     .slot(10)
+                    .cooldown(SETTINGS_COOLDOWN)
                     .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(viewer -> toggleScoreboard(viewer, !enabled))
                     .build();
@@ -282,6 +285,7 @@ public final class PlayerMenuService {
         MenuButton.Builder builder = MenuButton.builder(free ? Material.STONE_BUTTON : occupant.getType())
             .name(free ? "&aPlace menu item here" : "&7Select slot")
             .slot(menuSlot)
+            .cooldown(SETTINGS_COOLDOWN)
             .sound(Sound.UI_BUTTON_CLICK)
             .skipClickPrompt()
             .onClick(viewer -> {
