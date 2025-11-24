@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
@@ -194,6 +195,7 @@ public final class FeatureVoteService {
             .name(optionTitle(option, selected))
             .lore(buildVoteLore(option, votes, selected).toArray(Component[]::new))
             .onClick(player -> handleVote(player, option))
+            .sound(Sound.UI_BUTTON_CLICK)
             .slot(slot)
             .skipClickPrompt()
             .build();
