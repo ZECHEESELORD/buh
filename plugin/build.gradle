@@ -7,7 +7,7 @@ dependencies {
     implementation project(":common")
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     compileOnly("net.luckperms:api:5.4")
-    compileOnly("com.comphenix.protocol:ProtocolLib:5.4.0")
+    compileOnly("net.dmulloy2:protocollib:5.4.0")
 }
 
 tasks.named("runServer") {
