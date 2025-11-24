@@ -57,19 +57,12 @@ public final class LuckPermsModule implements FulcrumModule {
         Set<String> staffGroups = Set.copyOf(configuration.value(STAFF_GROUPS_OPTION));
         String staffPermission = configuration.value(STAFF_PERMISSION_OPTION);
 
-        ServicesManager services = plugin.getServer().getServicesManager();
-        LuckPerms luckPerms = services.load(LuckPerms.class);
-        if (luckPerms == null) {
-            plugin.getLogger().warning("LuckPerms not found; staff checks will always return false and usernames will not be decorated.");
-            staffService = new NoopStaffService();
-            formattedUsernameService = new NoopFormattedUsernameService();
-            return CompletableFuture.completedFuture(null);
+        LuckPerms resolved = resolveLuckPerms();
+        if (resolved == null) {
+            throw new IllegalStateException("LuckPerms not found; it is a declared dependency and must be present.");
         }
 
-        this.luckPerms = luckPerms;
-        staffService = new LuckPermsStaffService(luckPerms, staffGroups, staffPermission);
-        formattedUsernameService = new LuckPermsFormattedUsernameService(luckPerms);
-        plugin.getLogger().info("LuckPerms found; staff checks enabled.");
+        bindLuckPerms(resolved, staffGroups, staffPermission);
         return CompletableFuture.completedFuture(null);
     }
 
@@ -89,5 +82,17 @@ public final class LuckPermsModule implements FulcrumModule {
 
     public Optional<LuckPerms> luckPerms() {
         return Optional.ofNullable(luckPerms);
+    }
+
+    private LuckPerms resolveLuckPerms() {
+        ServicesManager services = plugin.getServer().getServicesManager();
+        return services.load(LuckPerms.class);
+    }
+
+    private void bindLuckPerms(LuckPerms api, Set<String> staffGroups, String staffPermission) {
+        this.luckPerms = api;
+        staffService = new LuckPermsStaffService(api, staffGroups, staffPermission);
+        formattedUsernameService = new LuckPermsFormattedUsernameService(api);
+        plugin.getLogger().info("LuckPerms found; staff checks enabled.");
     }
 }
