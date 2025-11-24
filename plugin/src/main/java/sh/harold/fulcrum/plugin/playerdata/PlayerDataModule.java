@@ -16,6 +16,7 @@ public final class PlayerDataModule implements FulcrumModule {
 
     private final JavaPlugin plugin;
     private final DataModule dataModule;
+    private PlayerSettingsService settingsService;
 
     public PlayerDataModule(JavaPlugin plugin, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -32,9 +33,14 @@ public final class PlayerDataModule implements FulcrumModule {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         PlayerBiomeAggregator biomeAggregator = new PlayerBiomeAggregator(plugin.getLogger(), dataApi);
         PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi, biomeAggregator);
+        settingsService = new PlayerSettingsService(dataApi);
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(biomeAggregator, plugin);
         pluginManager.registerEvents(listener, plugin);
         return CompletableFuture.completedFuture(null);
+    }
+
+    public java.util.Optional<PlayerSettingsService> playerSettingsService() {
+        return java.util.Optional.ofNullable(settingsService);
     }
 }

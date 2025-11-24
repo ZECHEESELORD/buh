@@ -17,6 +17,8 @@ import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
+import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.version.VersionService;
 
 import java.time.LocalDate;
@@ -29,7 +31,7 @@ import java.util.logging.Level;
 
 public final class ScoreboardFeature implements FulcrumModule, ConfigurableModule, Listener {
 
-    private static final String SCOREBOARD_ID = "default";
+    public static final String SCOREBOARD_ID = "default";
     private static final String DEFAULT_DATE_FORMAT = "MM/dd/yy";
     private static final long REFRESH_PERIOD_TICKS = 40L;
 
@@ -37,22 +39,31 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private final ScoreboardService scoreboardService;
     private final VersionService versionService;
     private final DataModule dataModule;
+    private final PlayerDataModule playerDataModule;
 
     private FeatureConfigService configService;
     private ScoreboardConfig config;
     private BukkitTask refreshTask;
     private FeatureVoteScoreboardModule voteScoreboardModule;
+    private PlayerSettingsService playerSettingsService;
 
-    public ScoreboardFeature(JavaPlugin plugin, ScoreboardService scoreboardService, VersionService versionService, DataModule dataModule) {
+    public ScoreboardFeature(
+        JavaPlugin plugin,
+        ScoreboardService scoreboardService,
+        VersionService versionService,
+        DataModule dataModule,
+        PlayerDataModule playerDataModule
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.versionService = Objects.requireNonNull(versionService, "versionService");
         this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
+        this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("scoreboard"), Set.of(ModuleId.of("data")));
+        return new ModuleDescriptor(ModuleId.of("scoreboard"), Set.of(ModuleId.of("data"), ModuleId.of("player-data")));
     }
 
     @Override
@@ -61,6 +72,8 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         config = ScoreboardConfig.from(configService.load(ScoreboardConfig.CONFIG_DEFINITION));
 
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available for scoreboard"));
+        playerSettingsService = playerDataModule.playerSettingsService()
+            .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available for scoreboard"));
         voteScoreboardModule = new FeatureVoteScoreboardModule(plugin.getLogger(), dataApi.collection("feature_votes"));
         voteScoreboardModule.refreshTallies();
 
@@ -68,7 +81,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         plugin.getServer().getOnlinePlayers()
-            .forEach(player -> scoreboardService.showScoreboard(player.getUniqueId(), SCOREBOARD_ID));
+            .forEach(player -> applyScoreboardVisibility(player.getUniqueId()));
 
         startRefreshTask();
         return CompletableFuture.completedFuture(null);
@@ -108,7 +121,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        scoreboardService.showScoreboard(event.getPlayer().getUniqueId(), SCOREBOARD_ID);
+        applyScoreboardVisibility(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
@@ -180,5 +193,22 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
             return trimmed.substring(1);
         }
         return trimmed;
+    }
+
+    private void applyScoreboardVisibility(java.util.UUID playerId) {
+        playerSettingsService.isScoreboardEnabled(playerId)
+            .whenComplete((enabled, throwable) -> {
+                if (throwable != null) {
+                    plugin.getLogger().log(Level.FINE, "Failed to read scoreboard setting for " + playerId, throwable);
+                    return;
+                }
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (enabled) {
+                        scoreboardService.showScoreboard(playerId, SCOREBOARD_ID);
+                    } else {
+                        scoreboardService.hideScoreboard(playerId);
+                    }
+                });
+            });
     }
 }
