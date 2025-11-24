@@ -1,15 +1,20 @@
 package sh.harold.fulcrum.plugin.beacon;
 
-import org.bukkit.Chunk;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.TileState;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.persistence.PersistentDataType;
 import sh.harold.fulcrum.plugin.stash.StashService;
 
 import java.util.Objects;
@@ -28,6 +33,7 @@ final class BeaconSanitizerService {
     private final JavaPlugin plugin;
     private final StashService stashService;
     private final Logger logger;
+    private final NamespacedKey whitelistKey;
     private final Component containerNotice = Component.text(
         "A container in your area has been detected to contain illegal items! They have been removed!",
         NamedTextColor.RED
@@ -48,6 +54,7 @@ final class BeaconSanitizerService {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.stashService = Objects.requireNonNull(stashService, "stashService");
         this.logger = plugin.getLogger();
+        this.whitelistKey = new NamespacedKey(plugin, "beacon_whitelist");
     }
 
     void start() {
@@ -75,8 +82,8 @@ final class BeaconSanitizerService {
 
     private void stripPlayerInventories(Player player) {
         PlayerInventory inventory = player.getInventory();
-        int removed = BeaconStripper.stripInventory(inventory);
-        removed += BeaconStripper.stripInventory(player.getEnderChest());
+        int removed = BeaconStripper.stripInventory(inventory, whitelistKey);
+        removed += BeaconStripper.stripInventory(player.getEnderChest(), whitelistKey);
         if (removed > 0) {
             player.sendMessage(inventoryNotice);
         }
@@ -159,6 +166,9 @@ final class BeaconSanitizerService {
         int removed = 0;
         for (BlockState state : states) {
             if (state.getType() == Material.BEACON) {
+                if (isWhitelisted(state)) {
+                    continue;
+                }
                 state.getBlock().setType(Material.AIR, false);
                 removed++;
             }
@@ -174,10 +184,33 @@ final class BeaconSanitizerService {
         int removed = 0;
         for (BlockState state : states) {
             if (state instanceof org.bukkit.block.Container container) {
-                removed += BeaconStripper.stripInventory(container.getInventory());
+                removed += BeaconStripper.stripInventory(container.getInventory(), whitelistKey);
             }
         }
         return removed;
+    }
+
+    void markLegitimate(ItemStack item) {
+        if (item == null || item.getType() != Material.BEACON) {
+            return;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+        meta.getPersistentDataContainer().set(whitelistKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+    }
+
+    NamespacedKey whitelistKey() {
+        return whitelistKey;
+    }
+
+    private boolean isWhitelisted(BlockState state) {
+        if (!(state instanceof TileState tileState)) {
+            return false;
+        }
+        return tileState.getPersistentDataContainer().has(whitelistKey, PersistentDataType.BYTE);
     }
 
     private void notifyPlayersInChunk(Chunk chunk, Component message) {

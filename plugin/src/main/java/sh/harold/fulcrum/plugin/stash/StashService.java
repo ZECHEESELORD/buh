@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.stash;
 
 import net.kyori.adventure.text.Component;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -46,12 +47,14 @@ public final class StashService implements AutoCloseable {
     private final ExecutorService executor;
     private final Map<UUID, Lock> locks = new java.util.concurrent.ConcurrentHashMap<>();
     private final Logger logger;
+    private final NamespacedKey beaconWhitelistKey;
 
     StashService(JavaPlugin plugin, DataApi dataApi) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.players = Objects.requireNonNull(dataApi, "dataApi").collection("players");
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.logger = plugin.getLogger();
+        this.beaconWhitelistKey = new NamespacedKey(plugin, "beacon_whitelist");
     }
 
     public CompletionStage<StashView> view(UUID playerId) {
@@ -160,7 +163,7 @@ public final class StashService implements AutoCloseable {
             List<ItemStack> filtered = new ArrayList<>();
             int removed = 0;
             for (ItemStack item : stash) {
-                BeaconStripper.StripResult result = BeaconStripper.stripItem(item);
+                BeaconStripper.StripResult result = BeaconStripper.stripItem(item, beaconWhitelistKey);
                 removed += result.removed();
                 if (result.item() != null && !result.item().getType().isAir()) {
                     filtered.add(result.item());
@@ -282,7 +285,7 @@ public final class StashService implements AutoCloseable {
         }
         List<ItemStack> sanitized = new ArrayList<>();
         for (ItemStack item : items) {
-            BeaconStripper.StripResult result = BeaconStripper.stripItem(item);
+            BeaconStripper.StripResult result = BeaconStripper.stripItem(item, beaconWhitelistKey);
             if (result.item() != null && result.item().getAmount() > 0 && !result.item().getType().isAir()) {
                 sanitized.add(result.item());
             }
