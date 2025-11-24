@@ -57,6 +57,7 @@ public final class FeatureVoteService {
     public CompletionStage<Void> openMenu(Player player) {
         Objects.requireNonNull(player, "player");
         UUID playerId = player.getUniqueId();
+        logger.log(Level.INFO, "Opening feature vote menu for {0} ({1})", new Object[]{player.getName(), playerId});
         return computeState(playerId)
             .thenCompose(state -> renderMenu(player, state))
             .exceptionally(throwable -> {
