@@ -17,6 +17,8 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.persistence.PersistentDataType;
 import sh.harold.fulcrum.plugin.stash.StashService;
 
+import io.papermc.paper.threadedregions.scheduler.RegionScheduler;
+
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
@@ -49,12 +51,14 @@ final class BeaconSanitizerService {
     private final Queue<ChunkCoordinate> chunkQueue = new ConcurrentLinkedQueue<>();
     private final Set<ChunkCoordinate> queuedChunks = ConcurrentHashMap.newKeySet();
     private BukkitTask scanTask;
+    private final RegionScheduler regionScheduler;
 
     BeaconSanitizerService(JavaPlugin plugin, StashService stashService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.stashService = Objects.requireNonNull(stashService, "stashService");
         this.logger = plugin.getLogger();
         this.whitelistKey = new NamespacedKey(plugin, "beacon_whitelist");
+        this.regionScheduler = plugin.getServer().getRegionScheduler();
     }
 
     void start() {
@@ -153,6 +157,11 @@ final class BeaconSanitizerService {
         }
         Chunk chunk = world.getChunkAt(coordinate.x(), coordinate.z());
 
+        regionScheduler.run(plugin, world, chunk.getX(), chunk.getZ(), task -> processChunkSync(chunk));
+        return true;
+    }
+
+    private void processChunkSync(Chunk chunk) {
         int removedBlocks = stripBeacons(chunk);
         int removedItems = stripContainerItems(chunk);
         if (removedBlocks + removedItems > 0) {
@@ -164,10 +173,9 @@ final class BeaconSanitizerService {
             }
             logger.log(
                 Level.INFO,
-                "Removed " + (removedBlocks + removedItems) + " beacon(s)/stacks in chunk (" + chunk.getX() + "," + chunk.getZ() + ") of world " + world.getName()
+                "Removed " + (removedBlocks + removedItems) + " beacon(s)/stacks in chunk (" + chunk.getX() + "," + chunk.getZ() + ") of world " + chunk.getWorld().getName()
             );
         }
-        return true;
     }
 
     private int stripBeacons(Chunk chunk) {
