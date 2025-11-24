@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -118,17 +119,23 @@ final class PlayerSessionListener implements Listener {
     }
 
     private CompletableFuture<Void> ensureMenuItemConfig(Document document) {
-        Optional<String> materialName = document.get(PlayerMenuItemConfig.PATH, String.class);
+        Optional<String> materialName = document.get(PlayerMenuItemConfig.MATERIAL_PATH, String.class);
+        Optional<Integer> slotValue = document.get(PlayerMenuItemConfig.SLOT_PATH, Integer.class);
+
         Material material = materialName
             .map(this::parseMaterial)
             .filter(candidate -> candidate != null && !candidate.isAir())
-            .orElse(null);
+            .orElse(PlayerMenuItemConfig.DEFAULT.material());
+        int slot = slotValue.orElse(PlayerMenuItemConfig.DEFAULT.slot());
 
-        if (material != null) {
-            return CompletableFuture.completedFuture(null);
-        }
+        CompletionStage<Void> materialStage = materialName.isPresent()
+            ? CompletableFuture.completedFuture(null)
+            : document.set(PlayerMenuItemConfig.MATERIAL_PATH, material.name()).toCompletableFuture();
+        CompletionStage<Void> slotStage = slotValue.isPresent()
+            ? CompletableFuture.completedFuture(null)
+            : document.set(PlayerMenuItemConfig.SLOT_PATH, slot).toCompletableFuture();
 
-        return document.set(PlayerMenuItemConfig.PATH, PlayerMenuItemConfig.DEFAULT.material().name()).toCompletableFuture();
+        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture());
     }
 
     private CompletableFuture<Void> updatePlaytime(Document document, Instant sessionStart, Instant logoutTime, String username) {
@@ -155,7 +162,8 @@ final class PlayerSessionListener implements Listener {
                 ),
                 "inventory", Map.of(
                     "menuItem", Map.of(
-                        "material", PlayerMenuItemConfig.DEFAULT.material().name()
+                        "material", PlayerMenuItemConfig.DEFAULT.material().name(),
+                        "slot", PlayerMenuItemConfig.DEFAULT.slot()
                     )
                 )
             )).toCompletableFuture();

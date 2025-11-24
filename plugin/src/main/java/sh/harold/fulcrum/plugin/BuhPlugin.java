@@ -149,14 +149,14 @@ public final class BuhPlugin extends JavaPlugin {
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
-        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule);
+        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         statsModule = new StatsModule(this);
         shutdownModule = new ShutdownModule(this);
         tabFeature = new TabFeature(this);
-        scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService, dataModule);
+        scoreboardFeature = new ScoreboardFeature(this, scoreboardService, versionService, dataModule, playerDataModule);
         List<FulcrumModule> modules = List.of(
             shutdownModule,
             dataModule,
