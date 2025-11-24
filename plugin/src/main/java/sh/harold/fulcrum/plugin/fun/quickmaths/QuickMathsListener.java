@@ -21,7 +21,7 @@ public final class QuickMathsListener implements Listener {
         this.manager = Objects.requireNonNull(manager, "manager");
     }
 
-    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onAsyncChat(AsyncChatEvent event) {
         String plain = PLAIN.serialize(event.originalMessage());
         manager.handleChat(event.getPlayer(), plain);
