@@ -14,6 +14,10 @@ subprojects {
             name = "papermc-repo"
             url = "https://repo.papermc.io/repository/maven-public/"
         }
+        maven {
+            name = "dmulloy2"
+            url = "https://repo.dmulloy2.net/repository/public/"
+        }
     }
 
     def targetJavaVersion = 21
