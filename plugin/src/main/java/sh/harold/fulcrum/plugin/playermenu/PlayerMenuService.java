@@ -2,6 +2,7 @@ package sh.harold.fulcrum.plugin.playermenu;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -32,6 +33,8 @@ import java.util.logging.Logger;
 public final class PlayerMenuService {
 
     private static final int HOTBAR_SLOT = 8;
+    private static final int MENU_ROWS = 6;
+    private static final int MENU_HEADLINE_SLOT = 22;
     private static final String DISPLAY_NAME = "&aPlayer Menu &7(Right Click)";
     private static final List<String> LORE_LINES = List.of("&e&lCLICK &eto open!");
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
@@ -66,26 +69,43 @@ public final class PlayerMenuService {
 
     public CompletionStage<Void> openMenu(Player player) {
         Objects.requireNonNull(player, "player");
-        return CompletableFuture.runAsync(() -> {
-            int rows = 3;
-            MenuDisplayItem headline = MenuDisplayItem.builder(PlayerMenuItemConfig.DEFAULT.material())
-                .name("&aPlayer Menu")
-                .description("&7Features unlock soon; stay tuned.")
-                .slot(13)
-                .build();
+        MenuDisplayItem headline = MenuDisplayItem.builder(PlayerMenuItemConfig.DEFAULT.material())
+            .name("&aPlayer Menu")
+            .description("&7Features unlock soon; stay tuned.")
+            .slot(MENU_HEADLINE_SLOT)
+            .build();
 
+        int closeSlot = MenuButton.getCloseSlot(MENU_ROWS);
+        MenuButton settingsButton = MenuButton.builder(Material.REDSTONE_TORCH)
+            .name("&cView/Modify Settings")
+            .description("Game Settings")
+            .slot(closeSlot + 1)
+            .onClick(viewer -> viewer.sendMessage(Component.text("Settings menu will be available soon.")))
+            .build();
+
+        CompletableFuture<Void> openFuture = new CompletableFuture<>();
+        try {
             menuService.createMenuBuilder()
-                .title("&aPlayer Menu")
-                .rows(rows)
+                .title("Player Menu")
+                .rows(MENU_ROWS)
                 .fillEmpty(Material.GRAY_STAINED_GLASS_PANE)
-                .addButton(MenuButton.createPositionedClose(rows))
-                .addItem(headline, 13)
+                .addButton(MenuButton.createPositionedClose(MENU_ROWS))
+                .addButton(settingsButton)
+                .addItem(headline, MENU_HEADLINE_SLOT)
                 .buildAsync(player)
-                .exceptionally(throwable -> {
-                    logger.log(Level.SEVERE, "Failed to open player menu for " + player.getUniqueId(), throwable);
-                    return null;
+                .whenComplete((menu, throwable) -> {
+                    if (throwable != null) {
+                        logger.log(Level.SEVERE, "Failed to open player menu for " + player.getUniqueId(), throwable);
+                        openFuture.completeExceptionally(throwable);
+                        return;
+                    }
+                    openFuture.complete(null);
                 });
-        }, plugin.getServer().getScheduler().getMainThreadExecutor(plugin));
+        } catch (Throwable throwable) {
+            logger.log(Level.SEVERE, "Failed to open player menu for " + player.getUniqueId(), throwable);
+            openFuture.completeExceptionally(throwable);
+        }
+        return openFuture;
     }
 
     private CompletionStage<PlayerMenuItemConfig> resolveConfig(Document document) {
@@ -155,9 +175,9 @@ public final class PlayerMenuService {
         ItemStack stack = new ItemStack(material == null || material.isAir() ? PlayerMenuItemConfig.DEFAULT.material() : material);
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
-            Component displayName = LEGACY.deserialize(DISPLAY_NAME);
+            Component displayName = LEGACY.deserialize(DISPLAY_NAME).decoration(TextDecoration.ITALIC, false);
             List<Component> lore = LORE_LINES.stream()
-                .map(line -> (Component) LEGACY.deserialize(line))
+                .map(line -> (Component) LEGACY.deserialize(line).decoration(TextDecoration.ITALIC, false))
                 .toList();
             meta.displayName(displayName);
             meta.lore(lore);
