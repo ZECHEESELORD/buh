@@ -9,10 +9,10 @@ import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.fun.command.KaboomCommand;
-import sh.harold.fulcrum.plugin.fun.command.ShrugCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsCommand;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsListener;
 import sh.harold.fulcrum.plugin.fun.quickmaths.QuickMathsManager;
+import sh.harold.fulcrum.plugin.fun.command.ShrugCommand;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 

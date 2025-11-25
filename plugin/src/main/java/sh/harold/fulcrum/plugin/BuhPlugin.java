@@ -19,6 +19,8 @@ import sh.harold.fulcrum.plugin.chat.ChatChannelService;
 import sh.harold.fulcrum.plugin.chat.ChatModule;
 import sh.harold.fulcrum.plugin.config.ModuleConfigService;
 import sh.harold.fulcrum.plugin.data.DataModule;
+import sh.harold.fulcrum.plugin.economy.EconomyModule;
+import sh.harold.fulcrum.plugin.economy.EconomyService;
 import sh.harold.fulcrum.plugin.message.MessageModule;
 import sh.harold.fulcrum.plugin.message.MessageService;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
@@ -54,6 +56,7 @@ public final class BuhPlugin extends JavaPlugin {
     private List<ModuleDescriptor> moduleDescriptors;
     private DataModule dataModule;
     private PlayerDataModule playerDataModule;
+    private EconomyModule economyModule;
     private LuckPermsModule luckPermsModule;
     private ChatModule chatModule;
     private MessageModule messageModule;
@@ -107,6 +110,10 @@ public final class BuhPlugin extends JavaPlugin {
         return luckPermsModule == null ? Optional.empty() : luckPermsModule.staffService();
     }
 
+    public Optional<EconomyService> economyService() {
+        return economyModule == null ? Optional.empty() : economyModule.economyService();
+    }
+
     public Optional<FormattedUsernameService> formattedUsernameService() {
         return luckPermsModule == null ? Optional.empty() : luckPermsModule.formattedUsernameService();
     }
@@ -143,6 +150,7 @@ public final class BuhPlugin extends JavaPlugin {
             new DefaultPlayerScoreboardManager()
         );
         dataModule = new DataModule(dataPath());
+        economyModule = new EconomyModule(this, dataModule);
         playerDataModule = new PlayerDataModule(this, dataModule);
         luckPermsModule = new LuckPermsModule(this);
         chatChannelService = new ChatChannelService(this::staffService);
@@ -169,6 +177,7 @@ public final class BuhPlugin extends JavaPlugin {
         List<FulcrumModule> modules = List.of(
             shutdownModule,
             dataModule,
+            economyModule,
             playerDataModule,
             luckPermsModule,
             chatModule,
