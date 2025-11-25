@@ -215,6 +215,8 @@ public final class BuhPlugin extends JavaPlugin {
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {
         Commands registrar = event.registrar();
         ModulesCommand modulesCommand = new ModulesCommand(moduleLoader);
+        PingCommand pingCommand = new PingCommand();
+        registrar.register(getPluginMeta(), pingCommand.build(), "ping", java.util.List.of());
         registrar.register(getPluginMeta(), modulesCommand.build(), "module", java.util.List.of("modules"));
     }
 

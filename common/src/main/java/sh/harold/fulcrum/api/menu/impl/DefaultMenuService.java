@@ -96,7 +96,7 @@ public class DefaultMenuService implements MenuService {
 
         Menu menu = openMenus.remove(player.getUniqueId());
         if (menu != null) {
-            Bukkit.getScheduler().runTask(plugin, player::closeInventory);
+            Bukkit.getScheduler().runTask(plugin, (Runnable) player::closeInventory);
             return true;
         }
         return false;
