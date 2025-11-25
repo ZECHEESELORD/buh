@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.playerdata;
 
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -14,6 +15,7 @@ import sh.harold.fulcrum.plugin.playermenu.PlayerMenuItemConfig;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,6 +67,23 @@ final class PlayerSessionListener implements Listener {
                 logger.log(Level.SEVERE, "Failed to update playtime for " + playerId, throwable);
                 return null;
             });
+    }
+
+    CompletionStage<Void> flushSessions(Iterable<? extends Player> onlinePlayers, Instant logoutTime) {
+        var writes = new ArrayList<CompletableFuture<Void>>();
+        for (Player player : onlinePlayers) {
+            UUID playerId = player.getUniqueId();
+            Instant sessionStart = sessionStarts.remove(playerId);
+
+            writes.add(players.load(playerId.toString())
+                .thenCompose(document -> updatePlaytime(document, sessionStart, logoutTime, player.getName()))
+                .toCompletableFuture());
+        }
+        if (writes.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        CompletableFuture<?>[] futures = writes.toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(futures);
     }
 
     private CompletableFuture<Void> ensureJoinMetadata(Document document, Instant now, String username) {
