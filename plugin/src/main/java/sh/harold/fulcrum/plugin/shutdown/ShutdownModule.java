@@ -20,6 +20,7 @@ import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.World;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -40,6 +41,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 
 import static io.papermc.paper.command.brigadier.Commands.literal;
 
@@ -241,6 +243,9 @@ public final class ShutdownModule implements FulcrumModule, Listener {
         if (currentContext == null) {
             return;
         }
+        stopShutdownTrack();
+        kickAllPlayers();
+        flushSavesSafely();
         Bukkit.getServer().shutdown();
     }
 
@@ -317,6 +322,25 @@ public final class ShutdownModule implements FulcrumModule, Listener {
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.stopSound(Sound.MUSIC_DISC_STAL, SoundCategory.MASTER);
+        }
+    }
+
+    private void flushSavesSafely() {
+        try {
+            plugin.getServer().savePlayers();
+            for (World world : plugin.getServer().getWorlds()) {
+                world.save();
+            }
+            plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), "save-all flush");
+        } catch (Exception exception) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to flush saves during shutdown", exception);
+        }
+    }
+
+    private void kickAllPlayers() {
+        Component kickMessage = Component.text("Server restarting; please reconnect shortly.", NamedTextColor.YELLOW);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.kick(kickMessage);
         }
     }
 
