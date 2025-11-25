@@ -8,6 +8,9 @@ import sh.harold.fulcrum.api.menu.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Simplified implementation of MenuService focusing on basic menu functionality.
@@ -20,6 +23,8 @@ public class DefaultMenuService implements MenuService {
     private final MenuRegistry menuRegistry;
     private final Map<UUID, Menu> openMenus = new ConcurrentHashMap<>();
     private final Map<Plugin, Set<String>> pluginMenus = new ConcurrentHashMap<>();
+    private final Executor mainThreadExecutor;
+    private final Logger logger;
 
     // NEW: Menu instance registry for ID-based menu storage and retrieval
     private final Map<String, Menu> menuInstances = new ConcurrentHashMap<>();
@@ -27,6 +32,8 @@ public class DefaultMenuService implements MenuService {
     public DefaultMenuService(Plugin plugin, MenuRegistry menuRegistry) {
         this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
         this.menuRegistry = Objects.requireNonNull(menuRegistry, "MenuRegistry cannot be null");
+        this.mainThreadExecutor = plugin.getServer().getScheduler().getMainThreadExecutor(plugin);
+        this.logger = plugin.getLogger();
     }
 
     @Override
@@ -49,15 +56,38 @@ public class DefaultMenuService implements MenuService {
         Objects.requireNonNull(menu, "Menu cannot be null");
         Objects.requireNonNull(player, "Player cannot be null");
 
-        return CompletableFuture.runAsync(() -> {
+        long started = System.nanoTime();
+        String requestId = UUID.randomUUID().toString();
+
+        CompletableFuture<Void> openFuture = CompletableFuture.runAsync(() -> {
             openMenus.put(player.getUniqueId(), menu);
             trackMenuForPlugin(menu);
+            player.openInventory(menu.getInventory());
+            menu.update();
+        }, mainThreadExecutor);
 
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                player.openInventory(menu.getInventory());
-                menu.update();
-            });
+        // Warn if the open request stalls
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!openFuture.isDone()) {
+                logger.log(Level.WARNING, "Menu open still pending after 5s requestId={0} menu={1} player={2}",
+                        new Object[]{requestId, menu.getId(), player.getUniqueId()});
+            }
+        }, 100L);
+
+        openFuture.whenComplete((ignored, throwable) -> {
+            long durationMs = (System.nanoTime() - started) / 1_000_000L;
+            if (throwable != null) {
+                logger.log(Level.SEVERE, "Failed to open menu requestId=" + requestId + " menu=" + menu.getId()
+                        + " player=" + player.getUniqueId() + " after " + durationMs + "ms", throwable);
+                return;
+            }
+            if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Opened menu requestId=" + requestId + " menu=" + menu.getId()
+                        + " player=" + player.getUniqueId() + " in " + durationMs + "ms");
+            }
         });
+
+        return openFuture;
     }
 
     @Override
@@ -66,7 +96,7 @@ public class DefaultMenuService implements MenuService {
 
         Menu menu = openMenus.remove(player.getUniqueId());
         if (menu != null) {
-            Bukkit.getScheduler().runTask(plugin, () -> player.closeInventory());
+            Bukkit.getScheduler().runTask(plugin, player::closeInventory);
             return true;
         }
         return false;
@@ -154,6 +184,10 @@ public class DefaultMenuService implements MenuService {
      */
     public Plugin getPlugin() {
         return plugin;
+    }
+    
+    Executor getMainThreadExecutor() {
+        return mainThreadExecutor;
     }
 
     /**
