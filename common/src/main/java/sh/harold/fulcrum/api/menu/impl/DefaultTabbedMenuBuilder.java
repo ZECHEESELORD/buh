@@ -15,9 +15,12 @@ import sh.harold.fulcrum.api.menu.component.MenuItem;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Default implementation of {@link TabbedMenuBuilder}.
@@ -36,6 +39,8 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final LegacyComponentSerializer legacySerializer = LegacyComponentSerializer.legacySection();
     private final List<TabDefinition> tabs = new ArrayList<>();
+    private final Executor mainThreadExecutor;
+    private final Logger logger;
 
     private Component title = Component.text("Tabbed Menu");
     private int contentRows = 3;
@@ -49,6 +54,8 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
     public DefaultTabbedMenuBuilder(DefaultMenuService menuService) {
         this.menuService = Objects.requireNonNull(menuService, "MenuService cannot be null");
         this.owner = menuService.getPlugin();
+        this.mainThreadExecutor = menuService.getMainThreadExecutor();
+        this.logger = menuService.getPlugin().getLogger();
     }
 
     @Override
@@ -126,9 +133,7 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
     @Override
     public CompletableFuture<Menu> buildAsync(Player player) {
         Objects.requireNonNull(player, "Player cannot be null");
-        return buildMenu(player).thenCompose(menu ->
-                menuService.openMenu(menu, player).thenApply(v -> menu)
-        );
+        return buildMenu(player).thenCompose(menu -> menuService.openMenu(menu, player).thenApply(v -> menu));
     }
 
     @Override
@@ -137,7 +142,10 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
     }
 
     private CompletableFuture<Menu> buildMenu(Player player) {
-        return CompletableFuture.supplyAsync(() -> {
+        String requestId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
+
+        CompletableFuture<Menu> menuFuture = CompletableFuture.supplyAsync(() -> {
             if (tabs.isEmpty()) {
                 throw new IllegalStateException("Tabbed menus require at least one tab");
             }
@@ -162,6 +170,21 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
             );
             menu.renderItems();
             return menu;
+        }, mainThreadExecutor);
+
+        scheduleBuildWarning(menuFuture, requestId, player);
+
+        return menuFuture.whenComplete((menu, throwable) -> {
+            long durationMs = (System.nanoTime() - started) / 1_000_000L;
+            if (throwable != null) {
+                logger.log(Level.SEVERE, "Tabbed menu build failed requestId=" + requestId
+                        + " player=" + (player != null ? player.getUniqueId() : "none")
+                        + " after " + durationMs + "ms", throwable);
+            } else if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Tabbed menu built requestId=" + requestId + " menu=" + menu.getId()
+                        + " player=" + (player != null ? player.getUniqueId() : "none")
+                        + " in " + durationMs + "ms");
+            }
         });
     }
 
@@ -192,6 +215,15 @@ public final class DefaultTabbedMenuBuilder implements TabbedMenuBuilder {
             return legacySerializer.deserialize(input);
         }
         return miniMessage.deserialize(input);
+    }
+
+    private void scheduleBuildWarning(CompletableFuture<?> future, String requestId, Player player) {
+        menuService.getPlugin().getServer().getScheduler().runTaskLater(menuService.getPlugin(), () -> {
+            if (!future.isDone()) {
+                logger.log(Level.WARNING, "Tabbed menu build still pending after 5s requestId={0} player={1}",
+                        new Object[]{requestId, player != null ? player.getUniqueId() : "none"});
+            }
+        }, 100L);
     }
 
     record TabDefinition(String id, Component name, Material iconMaterial, List<Component> lore,

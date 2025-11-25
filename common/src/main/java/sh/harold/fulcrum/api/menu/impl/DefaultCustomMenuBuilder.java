@@ -19,7 +19,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Default implementation of CustomMenuBuilder.
@@ -30,6 +33,8 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     private final DefaultMenuService menuService;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final LegacyComponentSerializer legacySerializer = LegacyComponentSerializer.legacySection();
+    private final Executor mainThreadExecutor;
+    private final Logger logger;
     // Items and buttons
     private final Map<Integer, Map<Integer, MenuItem>> virtualItems = new HashMap<>();
     private final Map<Integer, MenuButton> buttons = new HashMap<>();
@@ -66,6 +71,8 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     public DefaultCustomMenuBuilder(DefaultMenuService menuService) {
         this.menuService = Objects.requireNonNull(menuService, "MenuService cannot be null");
         this.owner = menuService.getPlugin();
+        this.mainThreadExecutor = menuService.getMainThreadExecutor();
+        this.logger = menuService.getPlugin().getLogger();
     }
 
     @Override
@@ -327,14 +334,42 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
     @Override
     public CompletableFuture<Menu> buildAsync(Player player) {
         Objects.requireNonNull(player, "Player cannot be null");
+        String requestId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
 
-        return CompletableFuture.supplyAsync(() -> buildMenu(player, false))
-                .thenCompose(menu -> menuService.openMenu(menu, player).thenApply(ignored -> menu));
+        CompletableFuture<Menu> menuFuture = CompletableFuture.supplyAsync(() -> buildMenu(player, false), mainThreadExecutor);
+        scheduleBuildWarning(menuFuture, requestId, player);
+
+        return menuFuture.whenComplete((menu, throwable) -> {
+            long durationMs = (System.nanoTime() - started) / 1_000_000L;
+            if (throwable != null) {
+                logger.log(Level.SEVERE, "Menu build failed requestId=" + requestId + " player=" + player.getUniqueId()
+                        + " after " + durationMs + "ms", throwable);
+            } else if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Menu built requestId=" + requestId + " menu=" + menu.getId()
+                        + " player=" + player.getUniqueId() + " in " + durationMs + "ms");
+            }
+        }).thenCompose(menu -> menuService.openMenu(menu, player).thenApply(ignored -> menu));
     }
 
     @Override
     public CompletableFuture<Menu> buildAsync() {
-        return CompletableFuture.supplyAsync(() -> buildMenu(null, true));
+        String requestId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
+
+        CompletableFuture<Menu> menuFuture = CompletableFuture.supplyAsync(() -> buildMenu(null, true), mainThreadExecutor);
+        scheduleBuildWarning(menuFuture, requestId, null);
+
+        return menuFuture.whenComplete((menu, throwable) -> {
+            long durationMs = (System.nanoTime() - started) / 1_000_000L;
+            if (throwable != null) {
+                logger.log(Level.SEVERE, "Menu build failed requestId=" + requestId
+                        + " after " + durationMs + "ms", throwable);
+            } else if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Menu built requestId=" + requestId + " menu=" + menu.getId()
+                        + " in " + durationMs + "ms");
+            }
+        });
     }
 
     private Menu buildMenu(Player player, boolean allowNullPlayer) {
@@ -458,6 +493,15 @@ public class DefaultCustomMenuBuilder implements CustomMenuBuilder {
         menu.renderItems();
 
         return menu;
+    }
+
+    private void scheduleBuildWarning(CompletableFuture<?> future, String requestId, Player player) {
+        menuService.getPlugin().getServer().getScheduler().runTaskLater(menuService.getPlugin(), () -> {
+            if (!future.isDone()) {
+                logger.log(Level.WARNING, "Menu build still pending after 5s requestId={0} player={1}",
+                        new Object[]{requestId, player != null ? player.getUniqueId() : "none"});
+            }
+        }, 100L);
     }
 
     /**

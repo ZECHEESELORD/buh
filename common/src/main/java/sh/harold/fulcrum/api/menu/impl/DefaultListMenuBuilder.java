@@ -13,7 +13,10 @@ import sh.harold.fulcrum.api.menu.component.MenuItem;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Default implementation of ListMenuBuilder.
@@ -23,6 +26,8 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
 
     private final DefaultMenuService menuService;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
+    private final Logger logger;
+    private final Executor mainThreadExecutor;
     private final List<MenuItem> items = new ArrayList<>();
     private final Map<Integer, MenuButton> buttons = new HashMap<>();
     private Component title = Component.text("Menu");
@@ -42,6 +47,8 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
 
     public DefaultListMenuBuilder(DefaultMenuService menuService) {
         this.menuService = Objects.requireNonNull(menuService, "MenuService cannot be null");
+        this.logger = menuService.getPlugin().getLogger();
+        this.mainThreadExecutor = menuService.getMainThreadExecutor();
     }
 
     @Override
@@ -233,10 +240,7 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
     public CompletableFuture<Menu> buildAsync(Player player) {
         Objects.requireNonNull(player, "Player cannot be null");
 
-        return buildAsync(player, false).thenCompose(menu -> {
-            // Simple menu opening - no complex NavigationMode logic
-            return menuService.openMenu(menu, player).thenApply(v -> menu);
-        });
+        return buildAsync(player, false).thenCompose(menu -> menuService.openMenu(menu, player).thenApply(v -> menu));
     }
 
     @Override
@@ -245,7 +249,10 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
     }
 
     private CompletableFuture<Menu> buildAsync(Player player, boolean allowNullPlayer) {
-        return CompletableFuture.supplyAsync(() -> {
+        String requestId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
+
+        CompletableFuture<Menu> menuFuture = CompletableFuture.supplyAsync(() -> {
             // Generate unique menu ID
             String menuId = "list-menu-" + UUID.randomUUID();
 
@@ -362,6 +369,21 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
             menu.renderItems();
 
             return menu;
+        }, mainThreadExecutor);
+
+        scheduleBuildWarning(menuFuture, requestId, player);
+
+        return menuFuture.whenComplete((menu, throwable) -> {
+            long durationMs = (System.nanoTime() - started) / 1_000_000L;
+            if (throwable != null) {
+                logger.log(Level.SEVERE, "List menu build failed requestId=" + requestId
+                        + " player=" + (player != null ? player.getUniqueId() : "none")
+                        + " after " + durationMs + "ms", throwable);
+            } else if (logger.isLoggable(Level.FINE)) {
+                logger.fine("List menu built requestId=" + requestId + " menu=" + menu.getId()
+                        + " player=" + (player != null ? player.getUniqueId() : "none")
+                        + " in " + durationMs + "ms");
+            }
         });
     }
 
@@ -432,5 +454,14 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
             MenuButton closeButton = MenuButton.createCloseButton();
             menu.setPersistentButton(closeButton, closeSlot);
         }
+    }
+
+    private void scheduleBuildWarning(CompletableFuture<?> future, String requestId, Player player) {
+        menuService.getPlugin().getServer().getScheduler().runTaskLater(menuService.getPlugin(), () -> {
+            if (!future.isDone()) {
+                logger.log(Level.WARNING, "List menu build still pending after 5s requestId={0} player={1}",
+                        new Object[]{requestId, player != null ? player.getUniqueId() : "none"});
+            }
+        }, 100L);
     }
 }
