@@ -55,22 +55,23 @@ public final class PingCommand {
 
     private Component buildSelfPingComponent(Player player) {
         return pongPrefix()
-            .append(Component.text("Your ping is ", NamedTextColor.GRAY))
+            .append(nonBoldText("Your ping is ", NamedTextColor.GRAY))
             .append(pingValue(player))
-            .append(Component.text("ms!", NamedTextColor.GRAY));
+            .append(nonBoldText("ms!", NamedTextColor.GRAY));
     }
 
     private Component buildTargetPingComponent(Player target) {
         return pongPrefix()
-            .append(Component.text(target.getName(), NamedTextColor.YELLOW))
-            .append(Component.text("'s ping is ", NamedTextColor.GRAY))
+            .append(nonBoldText(target.getName(), NamedTextColor.YELLOW))
+            .append(nonBoldText("'s ping is ", NamedTextColor.GRAY))
             .append(pingValue(target))
-            .append(Component.text("ms!", NamedTextColor.GRAY));
+            .append(nonBoldText("ms!", NamedTextColor.GRAY));
     }
 
     private Component pingValue(Player player) {
         int ping = player.getPing();
-        return Component.text(ping, pingColor(ping));
+        return Component.text(ping, pingColor(ping))
+            .decoration(TextDecoration.BOLD, TextDecoration.State.FALSE);
     }
 
     private Component pongPrefix() {
@@ -79,6 +80,11 @@ public final class PingCommand {
             .color(NamedTextColor.YELLOW)
             .decorate(TextDecoration.BOLD)
             .build();
+    }
+
+    private Component nonBoldText(String content, NamedTextColor color) {
+        return Component.text(content, color)
+            .decoration(TextDecoration.BOLD, TextDecoration.State.FALSE);
     }
 
     private NamedTextColor pingColor(int ping) {
