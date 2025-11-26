@@ -5,6 +5,7 @@ import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEven
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.data.DataApi;
@@ -39,7 +40,7 @@ public final class StaffCommandsModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("staff"), Set.of(ModuleId.of("luckperms"), ModuleId.of("data")));
+        return new ModuleDescriptor(ModuleId.of("staff"), Set.of(ModuleId.of("luckperms"), ModuleId.of("data")), ModuleCategory.STAFF);
     }
 
     @Override

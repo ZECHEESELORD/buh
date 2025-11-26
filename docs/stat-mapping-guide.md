@@ -13,6 +13,7 @@ Fulcrum’s stat engine powers every RPG layer: items feed modifiers, mobs expos
 
 ## Config knobs (plugins/buh/config/stats/config.yml)
 
+- Module toggle lives in `modules.yml` at `modules.gameplay.rpg-stats`.
 - `damage.defense_scale` (default 16.0): larger means slower armor ramp.
 - `damage.max_reduction` (default 0.90): cap on armor’s percent reduction.
 - `visuals.mirror_armor_attributes` (default true): copy armor into vanilla attributes for UI flavor only.
@@ -59,7 +60,7 @@ The mapping layer clamps current health if max drops, keeping vanilla HP honest.
 - Access `StatDefinition.visual()` for icon/color if you need to render HUD elements.
 
 ## Lifecycle notes
-- The stats module bootstraps containers for all living entities and cleans them up on removal.
+- The RPG stats module bootstraps containers for all living entities and cleans them up on removal.
 - Health clamps immediately when max health shrinks.
 - All calculations use doubles; armor is clamped to >= 0 before applying the exponential curve.
 

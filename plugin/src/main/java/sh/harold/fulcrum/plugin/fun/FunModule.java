@@ -6,6 +6,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.fun.command.KaboomCommand;
@@ -35,7 +36,7 @@ public final class FunModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("fun"), Set.of(ModuleId.of("luckperms")));
+        return new ModuleDescriptor(ModuleId.of("fun"), Set.of(ModuleId.of("luckperms")), ModuleCategory.SOCIAL);
     }
 
     @Override

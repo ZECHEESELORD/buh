@@ -5,6 +5,7 @@ import org.bukkit.plugin.ServicesManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.permissions.StaffService;
@@ -49,7 +50,7 @@ public final class LuckPermsModule implements FulcrumModule, ConfigurableModule 
 
     @Override
     public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.of(ModuleId.of("luckperms"));
+        return ModuleDescriptor.of(ModuleId.of("luckperms"), ModuleCategory.STAFF);
     }
 
     @Override

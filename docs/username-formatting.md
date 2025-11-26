@@ -35,6 +35,9 @@ usernames.username(playerId, cachedName)
     .thenAccept(format -> scoreboardLine.setText(format.displayName()));
 ```
 
+Offline cache:
+The player data module tucks the latest username inside `meta.username` of the core `players` document. Pull that string when a user is offline, feed it to `FormattedUsernameService#username(UUID, String)`, and you still get the colourful label without waiting for them to hop back in. The value refreshes on every login so renamed friends do not surprise you.
+
 Meta keys read:
 1) `prefix`: LuckPerms prefix (may be empty).
 2) `nameColour`: Hex `#RRGGBB` or a `NamedTextColor` name.

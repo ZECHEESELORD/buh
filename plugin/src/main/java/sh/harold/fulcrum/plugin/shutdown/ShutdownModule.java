@@ -29,6 +29,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 
@@ -65,7 +66,7 @@ public final class ShutdownModule implements FulcrumModule, Listener {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("shutdown"), Set.of());
+        return new ModuleDescriptor(ModuleId.of("shutdown"), Set.of(), ModuleCategory.ADMIN);
     }
 
     @Override

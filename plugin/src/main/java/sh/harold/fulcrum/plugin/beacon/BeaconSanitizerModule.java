@@ -3,6 +3,7 @@ package sh.harold.fulcrum.plugin.beacon;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
@@ -28,7 +29,7 @@ public final class BeaconSanitizerModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("beacon-sanitizer"), Set.of(ModuleId.of("stash")));
+        return new ModuleDescriptor(ModuleId.of("beacon-sanitizer"), Set.of(ModuleId.of("stash")), ModuleCategory.WORLD);
     }
 
     @Override
