@@ -13,8 +13,12 @@ import sh.harold.fulcrum.common.loader.ModuleActivation;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleLoader;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
+import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.permissions.StaffService;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
+import sh.harold.fulcrum.plugin.accountlink.AccountLinkModule;
+import sh.harold.fulcrum.plugin.accountlink.AccountLinkService;
+import sh.harold.fulcrum.plugin.discordbot.DiscordBotModule;
 import sh.harold.fulcrum.plugin.chat.ChatChannelService;
 import sh.harold.fulcrum.plugin.chat.ChatModule;
 import sh.harold.fulcrum.plugin.config.ModuleConfigService;
@@ -45,10 +49,17 @@ import sh.harold.fulcrum.plugin.beacon.BeaconSanitizerModule;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Level;
 
 public final class BuhPlugin extends JavaPlugin {
+
+    private static final Set<ModuleId> ALWAYS_ENABLED_MODULES = Set.of(
+        ModuleId.of("data"),
+        ModuleId.of("menu")
+    );
+    private static final Set<ModuleId> BASE_MODULES = Set.of();
 
     private ModuleLoader moduleLoader;
     private ModuleConfigService moduleConfigService;
@@ -58,6 +69,8 @@ public final class BuhPlugin extends JavaPlugin {
     private PlayerDataModule playerDataModule;
     private EconomyModule economyModule;
     private LuckPermsModule luckPermsModule;
+    private AccountLinkModule accountLinkModule;
+    private DiscordBotModule discordBotModule;
     private ChatModule chatModule;
     private MessageModule messageModule;
     private StashModule stashModule;
@@ -130,6 +143,14 @@ public final class BuhPlugin extends JavaPlugin {
         return stashModule == null ? Optional.empty() : stashModule.stashService();
     }
 
+    public Optional<AccountLinkService> accountLinkService() {
+        return accountLinkModule == null ? Optional.empty() : accountLinkModule.accountLinkService();
+    }
+
+    public Optional<DiscordBotModule> discordBotModule() {
+        return Optional.ofNullable(discordBotModule);
+    }
+
     public Optional<PlayerMenuService> playerMenuService() {
         return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.playerMenuService());
     }
@@ -153,6 +174,8 @@ public final class BuhPlugin extends JavaPlugin {
         economyModule = new EconomyModule(this, dataModule);
         playerDataModule = new PlayerDataModule(this, dataModule);
         luckPermsModule = new LuckPermsModule(this);
+        accountLinkModule = new AccountLinkModule(this, dataModule, luckPermsModule);
+        discordBotModule = new DiscordBotModule(this, accountLinkModule, dataModule);
         chatChannelService = new ChatChannelService(this::staffService);
         messageService = new MessageService(this, () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService));
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
@@ -180,6 +203,8 @@ public final class BuhPlugin extends JavaPlugin {
             economyModule,
             playerDataModule,
             luckPermsModule,
+            accountLinkModule,
+            discordBotModule,
             chatModule,
             messageModule,
             stashModule,
@@ -197,7 +222,7 @@ public final class BuhPlugin extends JavaPlugin {
             .map(FulcrumModule::descriptor)
             .toList();
         moduleLoader = new ModuleLoader(modules);
-        moduleConfigService = new ModuleConfigService(this);
+        moduleConfigService = new ModuleConfigService(this, ALWAYS_ENABLED_MODULES, BASE_MODULES);
     }
 
     private Path dataPath() {

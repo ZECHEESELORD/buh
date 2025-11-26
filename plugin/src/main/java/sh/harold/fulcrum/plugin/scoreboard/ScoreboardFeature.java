@@ -12,6 +12,7 @@ import sh.harold.fulcrum.api.message.scoreboard.ScoreboardDefinition;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
@@ -66,7 +67,8 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("scoreboard"),
-            Set.of(ModuleId.of("player-data"), ModuleId.of("shutdown"))
+            Set.of(ModuleId.of("player-data"), ModuleId.of("shutdown")),
+            ModuleCategory.HUD
         );
     }
 

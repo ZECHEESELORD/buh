@@ -13,6 +13,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
@@ -43,7 +44,7 @@ public final class ChatModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("chat"), Set.of(ModuleId.of("luckperms")));
+        return new ModuleDescriptor(ModuleId.of("chat"), Set.of(ModuleId.of("luckperms")), ModuleCategory.SOCIAL);
     }
 
     @Override

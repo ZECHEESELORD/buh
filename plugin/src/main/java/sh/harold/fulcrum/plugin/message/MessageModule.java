@@ -12,6 +12,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.chat.ChatChannelService;
@@ -42,7 +43,7 @@ public final class MessageModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("message"), Set.of(ModuleId.of("luckperms")));
+        return new ModuleDescriptor(ModuleId.of("message"), Set.of(ModuleId.of("luckperms")), ModuleCategory.SOCIAL);
     }
 
     @Override

@@ -128,7 +128,12 @@ public final class DiscordBotService implements AutoCloseable {
     @Override
     public void close() {
         if (jda != null) {
-            jda.shutdownNow();
+            jda.shutdown();
+            try {
+                jda.awaitShutdown();
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+            }
             jda = null;
         }
     }

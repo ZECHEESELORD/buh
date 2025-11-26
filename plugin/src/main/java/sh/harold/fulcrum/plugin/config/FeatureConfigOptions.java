@@ -22,6 +22,10 @@ public final class FeatureConfigOptions {
         return new FeatureConfigOption<>(path, defaultValue, YamlConfiguration::getInt);
     }
 
+    public static FeatureConfigOption<Long> longOption(String path, long defaultValue) {
+        return new FeatureConfigOption<>(path, defaultValue, YamlConfiguration::getLong);
+    }
+
     public static FeatureConfigOption<Double> doubleOption(String path, double defaultValue) {
         return new FeatureConfigOption<>(path, defaultValue, YamlConfiguration::getDouble);
     }

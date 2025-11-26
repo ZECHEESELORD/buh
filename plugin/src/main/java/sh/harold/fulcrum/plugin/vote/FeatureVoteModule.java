@@ -7,6 +7,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.api.menu.MenuService;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.data.DataModule;
@@ -31,7 +32,8 @@ public final class FeatureVoteModule implements FulcrumModule {
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("feature-vote"),
-             Set.of(ModuleId.of("data"), ModuleId.of("menu"))
+             Set.of(ModuleId.of("data"), ModuleId.of("menu")),
+            ModuleCategory.UTILITY
         );
     }
 

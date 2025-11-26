@@ -10,6 +10,7 @@ import sh.harold.fulcrum.api.menu.impl.DefaultMenuService;
 import sh.harold.fulcrum.api.menu.impl.MenuInventoryListener;
 import sh.harold.fulcrum.api.menu.component.MenuButton;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.cooldown.CooldownRegistry;
@@ -34,7 +35,7 @@ public final class MenuModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("menu"), Set.of());
+        return new ModuleDescriptor(ModuleId.of("menu"), Set.of(), ModuleCategory.API);
     }
 
     @Override

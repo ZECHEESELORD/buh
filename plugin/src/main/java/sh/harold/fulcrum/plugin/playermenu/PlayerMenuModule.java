@@ -6,6 +6,7 @@ import sh.harold.fulcrum.api.menu.MenuService;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.data.DataModule;
@@ -53,7 +54,8 @@ public final class PlayerMenuModule implements FulcrumModule {
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("player-menu"),
-            Set.of(ModuleId.of("data"), ModuleId.of("stash"), ModuleId.of("player-data"), ModuleId.of("menu"))
+            Set.of(ModuleId.of("data"), ModuleId.of("stash"), ModuleId.of("player-data"), ModuleId.of("menu")),
+            ModuleCategory.HUD
         );
     }
 

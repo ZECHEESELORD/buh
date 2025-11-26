@@ -4,6 +4,7 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.DocumentStore;
 import sh.harold.fulcrum.common.data.impl.JsonDocumentStore;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 
@@ -28,7 +29,7 @@ public final class DataModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.of(ModuleId.of("data"));
+        return ModuleDescriptor.of(ModuleId.of("data"), ModuleCategory.API);
     }
 
     @Override

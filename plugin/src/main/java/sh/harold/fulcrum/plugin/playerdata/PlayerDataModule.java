@@ -4,6 +4,7 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
+import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.data.DataModule;
@@ -28,7 +29,7 @@ public final class PlayerDataModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("player-data"), java.util.Set.of(ModuleId.of("data")));
+        return new ModuleDescriptor(ModuleId.of("player-data"), java.util.Set.of(ModuleId.of("data")), ModuleCategory.PLAYER);
     }
 
     @Override
