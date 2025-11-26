@@ -93,6 +93,7 @@ public final class DiscordBotService implements AutoCloseable {
             );
 
             RequestStore requestStore = new RequestStore(dataApi);
+            SponsorRequestStore sponsorRequestStore = new SponsorRequestStore(dataApi);
             OsuLookupService osuLookupService = new OsuLookupService(dataApi);
 
             LinkDiscordFeature linkFeature = new LinkDiscordFeature(
@@ -109,10 +110,12 @@ public final class DiscordBotService implements AutoCloseable {
                 sponsorPingTemplate,
                 dataApi,
                 requestStore,
+                sponsorRequestStore,
                 osuLookupService,
                 config
             );
             linkFeature.register(jda);
+            linkFeature.restoreSponsorRequests();
 
             stateStore = new MessageStateStore(configRoot.resolve(config.stateFile()), logger);
             ensurePersistentMessages(linkFeature);

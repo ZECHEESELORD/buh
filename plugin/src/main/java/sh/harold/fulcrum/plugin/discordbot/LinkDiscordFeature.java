@@ -40,7 +40,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -81,6 +80,7 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
     private final MessageTemplate sponsorPingTemplate;
     private final DataApi dataApi;
     private final RequestStore requestStore;
+    private final SponsorRequestStore sponsorRequestStore;
     private final OsuLookupService osuLookupService;
     private final DiscordBotConfig botConfig;
     private final Map<Long, Session> sessionsByUser = new ConcurrentHashMap<>();
@@ -102,6 +102,7 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
         MessageTemplate sponsorPingTemplate,
         DataApi dataApi,
         RequestStore requestStore,
+        SponsorRequestStore sponsorRequestStore,
         OsuLookupService osuLookupService,
         DiscordBotConfig botConfig
     ) {
@@ -118,6 +119,7 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
         this.sponsorPingTemplate = sponsorPingTemplate;
         this.dataApi = dataApi;
         this.requestStore = requestStore;
+        this.sponsorRequestStore = sponsorRequestStore;
         this.osuLookupService = osuLookupService;
         this.botConfig = botConfig;
     }
@@ -535,9 +537,72 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
             .thenAccept(message -> {
                 session.sponsorRequestExpiresAt = Instant.now().plus(SPONSOR_TIMEOUT);
                 sessionsBySponsorMessage.put(message.getIdLong(), session);
+                persistSponsorRequest(message.getIdLong(), session);
                 scheduleSponsorTimeout(message.getIdLong());
                 event.getHook().sendMessage("Sent sponsor request. Waiting for confirmation.").setEphemeral(true).queue();
             });
+    }
+
+    public void restoreSponsorRequests() {
+        sponsorRequestStore.loadPending()
+            .thenAccept(list -> list.forEach(this::restoreSponsorSession))
+            .exceptionally(throwable -> {
+                logger.log(Level.WARNING, "Failed to restore sponsor requests", throwable);
+                return null;
+            });
+    }
+
+    private void restoreSponsorSession(SponsorRequestStore.SponsorRequest request) {
+        Session session = Session.forUser(request.discordId(), request.discordUsername());
+        session.source = request.source();
+        session.invitedBy = request.invitedBy();
+        session.minecraftId = request.minecraftId();
+        session.minecraftUsername = request.minecraftUsername();
+        session.osuInfo = new OsuLookupService.OsuInfo(
+            request.osuUserId(),
+            request.osuUsername(),
+            request.osuRank(),
+            request.osuCountry()
+        );
+        session.sponsorId = request.sponsorId();
+        session.createdAt = request.createdAt();
+        session.sponsorRequestExpiresAt = request.sponsorExpiresAt();
+        sessionsBySponsorMessage.put(request.messageId(), session);
+        if (Instant.now().isAfter(request.sponsorExpiresAt())) {
+            expireSponsorRequest(request.messageId());
+        } else {
+            long delay = Duration.between(Instant.now(), request.sponsorExpiresAt()).toSeconds();
+            CompletableFuture.runAsync(
+                () -> expireSponsorRequest(request.messageId()),
+                CompletableFuture.delayedExecutor(delay, TimeUnit.SECONDS)
+            );
+        }
+    }
+
+    private void persistSponsorRequest(long sponsorMessageId, Session session) {
+        if (session.discordId == null || session.sponsorId == null || session.minecraftId == null || session.osuInfo == null) {
+            return;
+        }
+        SponsorRequestStore.SponsorRequest request = new SponsorRequestStore.SponsorRequest(
+            sponsorMessageId,
+            session.discordId,
+            session.discordUsername != null ? session.discordUsername : "",
+            session.source != null ? session.source : "",
+            session.invitedBy,
+            session.minecraftId,
+            session.minecraftUsername != null ? session.minecraftUsername : "",
+            session.osuInfo.userId(),
+            session.osuInfo.username(),
+            session.osuInfo.rank(),
+            session.osuInfo.country(),
+            session.sponsorId,
+            session.createdAt != null ? session.createdAt : Instant.now(),
+            session.sponsorRequestExpiresAt != null ? session.sponsorRequestExpiresAt : Instant.now().plus(SPONSOR_TIMEOUT)
+        );
+        sponsorRequestStore.save(request).exceptionally(throwable -> {
+            logger.log(Level.WARNING, "Failed to persist sponsor request " + sponsorMessageId, throwable);
+            return null;
+        });
     }
 
     private void scheduleSponsorTimeout(long sponsorMessageId) {
@@ -549,6 +614,16 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
 
     private void expireSponsorRequest(long sponsorMessageId) {
         Session session = sessionsBySponsorMessage.get(sponsorMessageId);
+        if (session == null) {
+            session = sponsorRequestStore.load(sponsorMessageId)
+                .toCompletableFuture()
+                .join()
+                .map(this::sessionFromStoredRequest)
+                .orElse(null);
+            if (session != null) {
+                sessionsBySponsorMessage.put(sponsorMessageId, session);
+            }
+        }
         if (session == null || session.sponsorResolved) {
             return;
         }
@@ -557,8 +632,27 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
         }
         sessionsBySponsorMessage.remove(sponsorMessageId);
         session.sponsorResolved = true;
+        sponsorRequestStore.delete(sponsorMessageId);
         logger.info("Sponsor request timed out for applicant " + session.discordId + " with sponsor " + session.sponsorId);
         notifyApplicantOfTimeout(session);
+    }
+
+    private Session sessionFromStoredRequest(SponsorRequestStore.SponsorRequest request) {
+        Session session = Session.forUser(request.discordId(), request.discordUsername());
+        session.source = request.source();
+        session.invitedBy = request.invitedBy();
+        session.minecraftId = request.minecraftId();
+        session.minecraftUsername = request.minecraftUsername();
+        session.osuInfo = new OsuLookupService.OsuInfo(
+            request.osuUserId(),
+            request.osuUsername(),
+            request.osuRank(),
+            request.osuCountry()
+        );
+        session.sponsorId = request.sponsorId();
+        session.createdAt = request.createdAt();
+        session.sponsorRequestExpiresAt = request.sponsorExpiresAt();
+        return session;
     }
 
     private void notifyApplicantOfTimeout(Session session) {
@@ -612,6 +706,7 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
             return;
         }
         session.sponsorResolved = true;
+        sponsorRequestStore.delete(event.getMessageIdLong());
         if (session.sponsorRequestExpiresAt != null && Instant.now().isAfter(session.sponsorRequestExpiresAt)) {
             event.reply("Sponsor request timed out.").setEphemeral(true).queue();
             return;
