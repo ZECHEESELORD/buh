@@ -535,8 +535,44 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
             .thenAccept(message -> {
                 session.sponsorRequestExpiresAt = Instant.now().plus(SPONSOR_TIMEOUT);
                 sessionsBySponsorMessage.put(message.getIdLong(), session);
+                scheduleSponsorTimeout(message.getIdLong());
                 event.getHook().sendMessage("Sent sponsor request. Waiting for confirmation.").setEphemeral(true).queue();
             });
+    }
+
+    private void scheduleSponsorTimeout(long sponsorMessageId) {
+        CompletableFuture.runAsync(
+            () -> expireSponsorRequest(sponsorMessageId),
+            CompletableFuture.delayedExecutor(SPONSOR_TIMEOUT.toSeconds(), TimeUnit.SECONDS)
+        );
+    }
+
+    private void expireSponsorRequest(long sponsorMessageId) {
+        Session session = sessionsBySponsorMessage.get(sponsorMessageId);
+        if (session == null || session.sponsorResolved) {
+            return;
+        }
+        if (session.sponsorRequestExpiresAt != null && Instant.now().isBefore(session.sponsorRequestExpiresAt)) {
+            return;
+        }
+        sessionsBySponsorMessage.remove(sponsorMessageId);
+        session.sponsorResolved = true;
+        logger.info("Sponsor request timed out for applicant " + session.discordId + " with sponsor " + session.sponsorId);
+        notifyApplicantOfTimeout(session);
+    }
+
+    private void notifyApplicantOfTimeout(Session session) {
+        if (session.discordId == null || jda == null) {
+            return;
+        }
+        jda.retrieveUserById(session.discordId)
+            .queue(
+                user -> user.openPrivateChannel().queue(
+                    dm -> dm.sendMessage("Your sponsor did not respond within 24 hours. Please restart the whitelist flow and try again.").queue(),
+                    throwable -> logger.log(Level.WARNING, "Failed to DM applicant about sponsor timeout", throwable)
+                ),
+                throwable -> logger.log(Level.WARNING, "Failed to resolve applicant for sponsor timeout", throwable)
+            );
     }
 
     private CompletionStage<Boolean> validateSponsor(Long sponsorId) {
@@ -570,11 +606,12 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
     }
 
     private void handleSponsorDecision(ButtonInteractionEvent event, boolean approve) {
-        Session session = sessionsBySponsorMessage.get(event.getMessageIdLong());
+        Session session = sessionsBySponsorMessage.remove(event.getMessageIdLong());
         if (session == null) {
             event.reply("No pending sponsor request found.").setEphemeral(true).queue();
             return;
         }
+        session.sponsorResolved = true;
         if (session.sponsorRequestExpiresAt != null && Instant.now().isAfter(session.sponsorRequestExpiresAt)) {
             event.reply("Sponsor request timed out.").setEphemeral(true).queue();
             return;
