@@ -1,0 +1,26 @@
+{
+  "embeds": [
+    {
+      "title": "Complete *after* agreeing to rules.",
+      "description": "# Whitelist Request\n-# Click \"Start Whitelist Process\" to start!",
+      "color": 16777215,
+      "fields": [
+        {
+          "name": "Required:",
+          "value": "Where did you find us?",
+          "inline": true
+        },
+        {
+          "name": "Required:",
+          "value": "Minecraft Username",
+          "inline": true
+        },
+        {
+          "name": "Required:",
+          "value": "osu! Account Link",
+          "inline": true
+        }
+      ]
+    }
+  ]
+}

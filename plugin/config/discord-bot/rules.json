@@ -1,0 +1,36 @@
+{
+  "embeds": [
+    {
+      "title": "Minecraft Server Rules",
+      "description": "We know we probably don't need to say this, but for the sake of clarity (and so nobody can say they didn't know), here are the general expectations for the server. We trust you guys, just keep it cool!",
+      "color": 2895153,
+      "fields": []
+    },
+    {
+      "title": "\ud83d\udcd5 1. Be Chill!",
+      "color": 2895153,
+      "description": "> This is a semi-exclusive osu tournament player SMP- everyone knows someone in the community. Treat everyone with the kindness you'd expect in return. We're here to hang out and have fun! let's keep the drama to a minimum."
+    },
+    {
+      "fields": [],
+      "description": "> Please don't touch other people's builds or items unless you have permission. Pranks are totally fine (and encouraged!), just make sure they're harmless and easy to clean up.",
+      "title": "\ud83d\udcd9 2. Respecting Space",
+      "color": 2895153
+    },
+    {
+      "fields": [],
+      "title": "\ud83d\udcd7 3. Keep it Fair",
+      "description": "> We want everyone playing on the same level, so please stick to the vanilla client (or vanilla adjacent, such as Lunar, etc.) without any unfair advantages (X-ray, flight, etc.). It keeps gameplay meaningful for everyone. Ask a staff member if you are not sure if a modification is an \"unfair advantage\".",
+      "color": 2895153
+    },
+    {
+      "title": "\ud83d\udcd8 4. Bugs, Exploits, and \"Features\"",
+      "description": "> If you find a glitch or exploit, and let's be real, given that Harold is the dev, you definitely will- please report it rather than abusing it. Let's be nice and help him fix his spaghetti code.",
+      "footer": {
+        "text": "Violations will result in a punishment at the discretion of a moderator.\nModerators have the right to take action based on their best judgement.\n\nLast Updated \u2022 11/26/2025"
+      },
+      "color": 2895153
+    }
+  ],
+  "attachments": []
+}

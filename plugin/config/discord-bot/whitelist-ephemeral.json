@@ -1,0 +1,27 @@
+{
+  "embeds": [
+    {
+      "title": "Complete Whitelist Process Here!",
+      "description": "-# *In a realm whose cartography scholars rejected for excessive stupidity, there loomed a kingdom named Tenderia, where all citizens were chicken nuggets. Not chickens that became nuggets. Nuggets that… spontaneously existed. Philosophers argued about this until they got hungry and ate each other, which was considered both rude and a valid form of debate.*\n## Link Steps: `{completed}`/`{total}`",
+      "color": 14024635,
+      "fields": [
+        {
+          "name": "❌ **Where did you come from?**",
+          "value": "> `Waiting for response...`",
+          "inline": false
+        },
+        {
+          "name": "❌ Minecraft Username",
+          "value": "> `Waiting for response...`",
+          "inline": true
+        },
+        {
+          "name": "❌ osu! Account Link",
+          "value": "> `Waiting...`",
+          "inline": true
+        }
+      ]
+    }
+  ],
+  "components": []
+}
