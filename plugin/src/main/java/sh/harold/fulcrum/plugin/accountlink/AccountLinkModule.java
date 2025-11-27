@@ -26,6 +26,7 @@ public final class AccountLinkModule implements FulcrumModule {
     private AccountLinkService accountLinkService;
     private AccountLinkListener listener;
     private AccountLinkConfig config;
+    private java.util.concurrent.atomic.AtomicReference<SourcesConfig> sourcesConfig;
     private AccountLinkHttpServer httpServer;
 
     public AccountLinkModule(JavaPlugin plugin, DataModule dataModule, LuckPermsModule luckPermsModule) {
@@ -48,11 +49,12 @@ public final class AccountLinkModule implements FulcrumModule {
     public CompletionStage<Void> enable() {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         config = AccountLinkConfig.from(configService.load(AccountLinkConfig.CONFIG_DEFINITION));
+        sourcesConfig = new java.util.concurrent.atomic.AtomicReference<>(SourcesConfig.from(configService.load(SourcesConfig.CONFIG_DEFINITION)));
         DocumentCollection players = dataApi.collection("players");
-        DocumentCollection tickets = dataApi.collection("link_tickets");
         DocumentCollection discordLinks = dataApi.collection("discord_links");
+        DocumentCollection linkRequests = dataApi.collection("link_requests");
 
-        accountLinkService = new AccountLinkService(plugin, players, tickets, discordLinks);
+        accountLinkService = new AccountLinkService(plugin, players, discordLinks, linkRequests);
         listener = new AccountLinkListener(accountLinkService, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(listener, plugin);
@@ -90,5 +92,16 @@ public final class AccountLinkModule implements FulcrumModule {
 
     public java.util.Optional<AccountLinkConfig> accountLinkConfig() {
         return java.util.Optional.ofNullable(config);
+    }
+
+    public SourcesConfig sourcesConfig() {
+        return sourcesConfig != null ? sourcesConfig.get() : null;
+    }
+
+    public void reloadSourcesConfig() {
+        if (sourcesConfig == null) {
+            return;
+        }
+        sourcesConfig.set(SourcesConfig.from(configService.load(SourcesConfig.CONFIG_DEFINITION)));
     }
 }

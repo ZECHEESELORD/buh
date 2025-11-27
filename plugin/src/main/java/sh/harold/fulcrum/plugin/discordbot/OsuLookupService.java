@@ -17,7 +17,7 @@ public final class OsuLookupService {
     }
 
     public CompletionStage<Optional<OsuInfo>> fromTicket(UUID playerId) {
-        return dataApi.collection("link_tickets").load(playerId.toString())
+        return dataApi.collection("link_requests").load(playerId.toString())
             .thenApply(this::toOsuInfo);
     }
 

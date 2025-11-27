@@ -6,6 +6,7 @@ import sh.harold.fulcrum.common.data.DocumentCollection;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,25 +25,26 @@ public final class SponsorRequestStore {
     }
 
     public CompletionStage<Void> save(SponsorRequest request) {
-        Map<String, Object> payload = Map.of(
-            "discordId", request.discordId(),
-            "discordUsername", request.discordUsername(),
-            "source", request.source(),
-            "invitedBy", request.invitedBy(),
-            "minecraft", Map.of(
-                "uuid", request.minecraftId().toString(),
-                "username", request.minecraftUsername()
-            ),
-            "osu", Map.of(
-                "userId", request.osuUserId(),
-                "username", request.osuUsername(),
-                "rank", request.osuRank(),
-                "country", request.osuCountry()
-            ),
-            "sponsorId", request.sponsorId(),
-            "createdAt", request.createdAt().toString(),
-            "expiresAt", request.sponsorExpiresAt().toString()
-        );
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("discordId", request.discordId());
+        payload.put("discordUsername", request.discordUsername());
+        payload.put("source", request.source());
+        if (request.invitedBy() != null && !request.invitedBy().isBlank()) {
+            payload.put("invitedBy", request.invitedBy());
+        }
+        payload.put("minecraft", Map.of(
+            "uuid", request.minecraftId().toString(),
+            "username", request.minecraftUsername()
+        ));
+        payload.put("osu", Map.of(
+            "userId", request.osuUserId(),
+            "username", request.osuUsername(),
+            "rank", request.osuRank(),
+            "country", request.osuCountry()
+        ));
+        payload.put("sponsorId", request.sponsorId());
+        payload.put("createdAt", request.createdAt().toString());
+        payload.put("expiresAt", request.sponsorExpiresAt().toString());
         return sponsorRequests.create(Long.toString(request.messageId()), payload).thenApply(ignored -> null);
     }
 
