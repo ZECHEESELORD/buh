@@ -88,31 +88,19 @@ final class PlayerSessionListener implements Listener {
 
     private CompletableFuture<Void> ensureJoinMetadata(Document document, Instant now, String username) {
         String timestamp = now.toString();
-        if (!document.exists()) {
-            return document.overwrite(Map.of(
-                "meta", Map.of(
-                    "firstJoin", timestamp,
-                    "lastJoin", timestamp,
-                    "username", username
-                ),
-                "statistics", Map.of(
-                    "playtimeSeconds", 0L
-                ),
-                "inventory", Map.of(
-                    "menuItem", Map.of(
-                        "material", PlayerMenuItemConfig.DEFAULT.material().name(),
-                        "slot", PlayerMenuItemConfig.DEFAULT.slot(),
-                        "enabled", true
-                    )
-                )
-            )).toCompletableFuture();
-        }
+        CompletionStage<Void> firstJoinStage = ensureFirstJoin(document, timestamp);
+        CompletionStage<Void> lastJoinStage = document.set("meta.lastJoin", timestamp);
+        CompletionStage<Void> usernameStage = ensureUsername(document, username);
+        CompletionStage<Void> playtimeStage = ensurePlaytimeCounter(document);
+        CompletionStage<Void> menuStage = ensureMenuItemConfig(document);
 
-        return ensureFirstJoin(document, timestamp)
-            .thenCompose(ignored -> ensurePlaytimeCounter(document))
-            .thenCompose(ignored -> ensureUsername(document, username))
-            .thenCompose(ignored -> ensureMenuItemConfig(document))
-            .thenCompose(ignored -> document.set("meta.lastJoin", timestamp).toCompletableFuture());
+        return CompletableFuture.allOf(
+            firstJoinStage.toCompletableFuture(),
+            lastJoinStage.toCompletableFuture(),
+            usernameStage.toCompletableFuture(),
+            playtimeStage.toCompletableFuture(),
+            menuStage.toCompletableFuture()
+        );
     }
 
     private CompletableFuture<Void> ensureFirstJoin(Document document, String timestamp) {
@@ -174,32 +162,23 @@ final class PlayerSessionListener implements Listener {
         long sessionSeconds = computeSessionSeconds(effectiveStart, logoutTime);
         String logoutTimestamp = logoutTime.toString();
 
-        if (!document.exists()) {
-            Instant fallbackJoin = effectiveStart == null ? logoutTime : effectiveStart;
-            return document.overwrite(Map.of(
-                "meta", Map.of(
-                    "firstJoin", fallbackJoin.toString(),
-                    "lastJoin", fallbackJoin.toString(),
-                    "lastLeave", logoutTimestamp,
-                    "username", username
-                ),
-                "statistics", Map.of(
-                    "playtimeSeconds", sessionSeconds
-                ),
-                "inventory", Map.of(
-                    "menuItem", Map.of(
-                        "material", PlayerMenuItemConfig.DEFAULT.material().name(),
-                        "slot", PlayerMenuItemConfig.DEFAULT.slot(),
-                        "enabled", true
-                    )
-                )
-            )).toCompletableFuture();
-        }
-
-        return ensurePlaytimeCounter(document)
-            .thenCompose(ignored -> ensureUsername(document, username))
-            .thenCompose(ignored -> document.set("meta.lastLeave", logoutTimestamp).toCompletableFuture())
+        Instant fallbackJoin = effectiveStart == null ? logoutTime : effectiveStart;
+        CompletionStage<Void> firstJoinStage = ensureFirstJoin(document, fallbackJoin.toString());
+        CompletionStage<Void> lastJoinStage = document.set("meta.lastJoin", fallbackJoin.toString());
+        CompletionStage<Void> lastLeaveStage = document.set("meta.lastLeave", logoutTimestamp);
+        CompletionStage<Void> usernameStage = ensureUsername(document, username);
+        CompletionStage<Void> playtimeStage = ensurePlaytimeCounter(document)
             .thenCompose(ignored -> incrementPlaytime(document, sessionSeconds));
+        CompletionStage<Void> menuStage = ensureMenuItemConfig(document);
+
+        return CompletableFuture.allOf(
+            firstJoinStage.toCompletableFuture(),
+            lastJoinStage.toCompletableFuture(),
+            lastLeaveStage.toCompletableFuture(),
+            usernameStage.toCompletableFuture(),
+            playtimeStage.toCompletableFuture(),
+            menuStage.toCompletableFuture()
+        );
     }
 
     private long computeSessionSeconds(Instant start, Instant end) {
