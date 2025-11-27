@@ -281,6 +281,11 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
                 event.reply("Give me a Minecraft username and try again.").setEphemeral(true).queue();
                 return;
             }
+            username = username.trim();
+            if (!isValidMinecraftUsername(username)) {
+                event.reply("That doesn't look like a valid Minecraft username (3-16 letters, numbers, or underscores).").setEphemeral(true).queue();
+                return;
+            }
             if (handleExpired(event, session)) {
                 return;
             }
@@ -884,7 +889,8 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
                 if (!valid) {
                     return CompletableFuture.failedFuture(new IllegalStateException("Sponsor is not eligible to invite."));
                 }
-                return dispatchSponsorDm(event, session);
+                return ensureSponsorHasOsu(session.sponsorId)
+                    .thenCompose(ignored -> dispatchSponsorDm(event, session));
             })
             .exceptionally(throwable -> {
                 if (botConfig.generalChannelId() > 0) {
@@ -1517,6 +1523,23 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
         return CompletableFuture.allOf(minecraftCheck.toCompletableFuture(), osuCheck.toCompletableFuture());
     }
 
+    private CompletionStage<Void> ensureSponsorHasOsu(Long sponsorId) {
+        if (sponsorId == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Sponsor not set."));
+        }
+        return dataApi.collection("players").all()
+            .thenCompose(list -> {
+                boolean missingOsu = list.stream()
+                    .filter(Document::exists)
+                    .filter(doc -> doc.get("discordId", Number.class).map(Number::longValue).orElse(0L) == sponsorId)
+                    .noneMatch(doc -> doc.get("osu.userId", Number.class).isPresent());
+                if (missingOsu) {
+                    return CompletableFuture.failedFuture(new IllegalStateException("Sponsors must have a linked osu! account to vouch for others."));
+                }
+                return CompletableFuture.completedFuture(null);
+            });
+    }
+
     private CompletionStage<Void> ensureMinecraftNotTaken(UUID minecraftId, long discordId) {
         if (minecraftId == null) {
             return CompletableFuture.completedFuture(null);
@@ -1606,6 +1629,14 @@ public final class LinkDiscordFeature extends ListenerAdapter implements Discord
     private boolean isActiveRequest(Document document) {
         String status = document.get("status", String.class).map(String::toUpperCase).orElse("PENDING");
         return !"DENIED".equals(status);
+    }
+
+    private boolean isValidMinecraftUsername(String username) {
+        if (username == null) {
+            return false;
+        }
+        int length = username.length();
+        return length >= 3 && length <= 16 && username.matches("^[A-Za-z0-9_]+$");
     }
 
     private String buildAuthUrl(String stateToken) {

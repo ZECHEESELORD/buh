@@ -42,10 +42,17 @@ public final class DiscordBotModule implements FulcrumModule {
         DiscordBotConfig botConfig = DiscordBotConfig.from(configService.load(DiscordBotConfig.CONFIG_DEFINITION));
         AccountLinkConfig linkConfig = accountLinkModule.accountLinkConfig()
             .orElseThrow(() -> new IllegalStateException("Account link config missing; cannot start Discord bot."));
-        SourcesConfig sourcesConfig = SourcesConfig.from(configService.load(SourcesConfig.CONFIG_DEFINITION));
         var dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
+        accountLinkModule.reloadSourcesConfig();
 
-        botService = DiscordBotService.withLinkFeature(plugin.getLogger(), botConfig, linkConfig, plugin.getDataFolder().toPath().resolve("config/discord-bot"), sourcesConfig, dataApi);
+        botService = DiscordBotService.withLinkFeature(
+            plugin.getLogger(),
+            botConfig,
+            linkConfig,
+            plugin.getDataFolder().toPath().resolve("config/discord-bot"),
+            () -> accountLinkModule.sourcesConfig(),
+            dataApi
+        );
         return botService.start();
     }
 
