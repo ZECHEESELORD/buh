@@ -32,18 +32,19 @@ public final class DiscordBotService implements AutoCloseable {
     private final DiscordBotConfig config;
     private final AccountLinkConfig linkConfig;
     private final Path configRoot;
-    private final SourcesConfig sourcesConfig;
+    private final java.util.function.Supplier<sh.harold.fulcrum.plugin.accountlink.SourcesConfig> sourcesSupplier;
     private final sh.harold.fulcrum.common.data.DataApi dataApi;
     private final java.util.Set<Long> acceptedUsers = ConcurrentHashMap.newKeySet();
     private JDA jda;
     private MessageStateStore stateStore;
+    private LinkDiscordFeature linkFeature;
 
-    public DiscordBotService(Logger logger, DiscordBotConfig config, AccountLinkConfig linkConfig, Path configRoot, SourcesConfig sourcesConfig, sh.harold.fulcrum.common.data.DataApi dataApi) {
+    public DiscordBotService(Logger logger, DiscordBotConfig config, AccountLinkConfig linkConfig, Path configRoot, java.util.function.Supplier<sh.harold.fulcrum.plugin.accountlink.SourcesConfig> sourcesSupplier, sh.harold.fulcrum.common.data.DataApi dataApi) {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.config = Objects.requireNonNull(config, "config");
         this.linkConfig = Objects.requireNonNull(linkConfig, "linkConfig");
         this.configRoot = Objects.requireNonNull(configRoot, "configRoot");
-        this.sourcesConfig = Objects.requireNonNull(sourcesConfig, "sourcesConfig");
+        this.sourcesSupplier = Objects.requireNonNull(sourcesSupplier, "sourcesSupplier");
         this.dataApi = Objects.requireNonNull(dataApi, "dataApi");
     }
 
@@ -96,13 +97,13 @@ public final class DiscordBotService implements AutoCloseable {
             SponsorRequestStore sponsorRequestStore = new SponsorRequestStore(dataApi);
             OsuLookupService osuLookupService = new OsuLookupService(dataApi);
 
-            LinkDiscordFeature linkFeature = new LinkDiscordFeature(
+            linkFeature = new LinkDiscordFeature(
                 stateCodec,
                 linkConfig,
                 mojangClient,
                 logger,
                 acceptedUsers,
-                () -> sourcesConfig.sources(),
+                sourcesSupplier,
                 whitelistTemplate,
                 reviewTemplate,
                 decisionTemplate,
@@ -209,24 +210,70 @@ public final class DiscordBotService implements AutoCloseable {
         }
     }
 
-    public static DiscordBotService withLinkFeature(Logger logger, DiscordBotConfig config, AccountLinkConfig linkConfig, Path configRoot, SourcesConfig sourcesConfig, sh.harold.fulcrum.common.data.DataApi dataApi) {
-        return new DiscordBotService(logger, config, linkConfig, configRoot, sourcesConfig, dataApi);
+    public static DiscordBotService withLinkFeature(Logger logger, DiscordBotConfig config, AccountLinkConfig linkConfig, Path configRoot, java.util.function.Supplier<sh.harold.fulcrum.plugin.accountlink.SourcesConfig> sourcesSupplier, sh.harold.fulcrum.common.data.DataApi dataApi) {
+        return new DiscordBotService(logger, config, linkConfig, configRoot, sourcesSupplier, dataApi);
     }
 
     private static final class Defaults {
         private static MessageTemplate rulesTemplate() {
+            int emerald = 2_895_153;
             return new MessageTemplate(
-                "Please accept the rules before linking.",
-                java.util.List.of(new MessageTemplate.EmbedTemplate(
-                    "Server Rules",
-                    "Click the button below to accept the rules.",
-                    null,
-                    0x00AAAA,
-                    java.util.List.of(),
-                    null,
-                    null,
-                    null
-                ))
+                null,
+                java.util.List.of(
+                    new MessageTemplate.EmbedTemplate(
+                        "Minecraft Server Rules",
+                        "We know we probably don't need to say this, but for the sake of clarity (and so nobody can say they didn't know), here are the general expectations for the server. We trust you guys, just keep it cool!",
+                        null,
+                        emerald,
+                        java.util.List.of(),
+                        null,
+                        null,
+                        null
+                    ),
+                    new MessageTemplate.EmbedTemplate(
+                        "📕 1. Be Chill!",
+                        "> This is a semi-exclusive osu tournament player SMP- everyone knows someone in the community. Treat everyone with the kindness you'd expect in return. We're here to hang out and have fun! let's keep the drama to a minimum.",
+                        null,
+                        emerald,
+                        java.util.List.of(),
+                        null,
+                        null,
+                        null
+                    ),
+                    new MessageTemplate.EmbedTemplate(
+                        "📙 2. Respecting Space",
+                        "> Please don't touch other people's builds or items unless you have permission. Pranks are totally fine (and encouraged!), just make sure they're harmless and easy to clean up.",
+                        null,
+                        emerald,
+                        java.util.List.of(),
+                        null,
+                        null,
+                        null
+                    ),
+                    new MessageTemplate.EmbedTemplate(
+                        "📗 3. Keep it Fair",
+                        "> We want everyone playing on the same level, so please stick to the vanilla client (or vanilla adjacent, such as Lunar, Modrinth, Curseforge, etc.) without any unfair advantages (X-ray, flight, etc.). It keeps gameplay meaningful for everyone. Ask a staff member if you are not sure if a modification is an \"unfair advantage\"",
+                        null,
+                        emerald,
+                        java.util.List.of(),
+                        null,
+                        null,
+                        null
+                    ),
+                    new MessageTemplate.EmbedTemplate(
+                        "📘 4. Bugs, Exploits, and \"Features\"",
+                        "> If you find a glitch or exploit, and let's be real, given that Harold is the dev, you definitely will- please report it rather than abusing it. Let's be nice and help him fix his spaghetti code.",
+                        null,
+                        emerald,
+                        java.util.List.of(),
+                        new MessageTemplate.FooterTemplate(
+                            "Violations will result in a punishment at the discretion of a moderator.\nModerators have the right to take action based on their best judgement.\n\nLast Updated • 11/26/2025",
+                            null
+                        ),
+                        null,
+                        null
+                    )
+                )
             );
         }
 
@@ -316,8 +363,8 @@ public final class DiscordBotService implements AutoCloseable {
             return new MessageTemplate(
                 null,
                 java.util.List.of(new MessageTemplate.EmbedTemplate(
-                    "🎟️ Vouch Request: `[Player Name]`",
-                    "<@{discordId}> has applied to join the server and listed you as their sponsor.\n-# Since we operate on trust, we need you to confirm that you actually know this person and invited them.",
+                    "🎟️ Vouch Request: `{minecraftUsername}`",
+                    "<@{discordId}> has applied to join the server and listed you as their sponsor.\nSince we operate on trust, we need you to confirm that you actually know this person and invited them.",
                     null,
                     0xFF7775,
                     java.util.List.of(
@@ -331,8 +378,8 @@ public final class DiscordBotService implements AutoCloseable {
             );
         }
 
-        private static MessageTemplate sponsorPingTemplate() {
-            return new MessageTemplate(
+                private static MessageTemplate sponsorPingTemplate() {
+                    return new MessageTemplate(
                 "Hey <@{sponsorId}>, you were listed as a sponsor. Click below to respond.",
                 java.util.List.of(new MessageTemplate.EmbedTemplate(
                     "Sponsor Confirmation Needed",

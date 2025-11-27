@@ -250,8 +250,10 @@ public final class BuhPlugin extends JavaPlugin {
         Commands registrar = event.registrar();
         ModulesCommand modulesCommand = new ModulesCommand(moduleLoader);
         PingCommand pingCommand = new PingCommand();
+        AddInviteSourceCommand addInviteSourceCommand = new AddInviteSourceCommand(this, accountLinkModule);
         registrar.register(getPluginMeta(), pingCommand.build(), "ping", java.util.List.of());
         registrar.register(getPluginMeta(), modulesCommand.build(), "module", java.util.List.of("modules"));
+        registrar.register(getPluginMeta(), addInviteSourceCommand.build(), "addinvitesource", java.util.List.of());
     }
 
     private FormattedUsernameService noopFormattedUsernameService() {

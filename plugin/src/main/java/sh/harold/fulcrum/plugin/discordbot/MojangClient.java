@@ -4,9 +4,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,8 +33,9 @@ public final class MojangClient {
 
     public CompletionStage<Optional<MojangProfile>> lookup(String username) {
         Objects.requireNonNull(username, "username");
+        String encodedUsername = URLEncoder.encode(username, StandardCharsets.UTF_8);
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(PROFILE_URL + username))
+            .uri(URI.create(PROFILE_URL + encodedUsername))
             .timeout(HTTP_TIMEOUT)
             .build();
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
