@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+import java.util.function.BiConsumer;
 
 /**
  * Listener for inventory events related to menus.
@@ -56,12 +57,20 @@ public class MenuInventoryListener implements Listener {
             return;
         }
 
+        boolean clickedTop = clickedInventory != null && clickedInventory.equals(view.getTopInventory());
+
         // Always cancel the event to prevent item movement
         event.setCancelled(true);
 
-        // Validate the click is in the menu inventory (not player inventory)
-        if (clickedInventory == null || !clickedInventory.equals(view.getTopInventory())) {
-            // Handle outside click
+        if (!clickedTop) {
+            @SuppressWarnings("unchecked")
+            BiConsumer<Player, InventoryClickEvent> handler = menu.getContext()
+                .getProperty("bottomClickHandler", BiConsumer.class)
+                .orElse(null);
+            if (handler != null) {
+                handler.accept(player, event);
+                return;
+            }
             if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
                 handleOutsideClick(player, menu);
             }

@@ -136,6 +136,11 @@ public class MenuButton implements MenuItem {
     }
     private final Map<UUID, Instant> localCooldowns = new ConcurrentHashMap<>();
     private final String cooldownGroup;
+    private final Map<UUID, ConfirmationState> pendingConfirmations = new ConcurrentHashMap<>();
+    private final boolean confirmationRequired;
+    private final Duration confirmationWindow;
+    private final Component confirmationPrompt;
+    private ItemStack confirmationDisplayItem;
 
     // Slot calculation utility methods for different menu sizes
     // Standard menu sizes: 3 rows=27 slots, 4 rows=36 slots, 5 rows=45 slots, 6 rows=54 slots
@@ -155,6 +160,9 @@ public class MenuButton implements MenuItem {
         this.volume = builder.volume;
         this.pitch = builder.pitch;
         this.anchored = builder.anchored;
+        this.confirmationRequired = builder.confirmationRequired;
+        this.confirmationWindow = builder.confirmationWindow;
+        this.confirmationPrompt = builder.confirmationPrompt != null ? builder.confirmationPrompt : defaultConfirmationPrompt();
 
         // Add click prompt if there are handlers and it's not already there
         if (!clickHandlers.isEmpty() && !builder.skipClickPrompt) {
@@ -168,6 +176,7 @@ public class MenuButton implements MenuItem {
         // Build the ItemStack
         this.displayItem = new ItemStack(builder.material, builder.amount);
         updateItemMeta();
+        rebuildConfirmationDisplayItem();
     }
 
     public static void bindCooldownRegistry(CooldownRegistry registry) {
@@ -641,17 +650,19 @@ public class MenuButton implements MenuItem {
      * @return true if the click was handled, false otherwise
      */
     public boolean handleClick(Menu menu, int slot, Player player, ClickType clickType) {
+        Consumer<Player> handler = resolveHandler(clickType);
+        if (handler == null) {
+            return false;
+        }
+
+        if (confirmationRequired && handleConfirmation(menu, slot, player)) {
+            return true;
+        }
+
         if (cooldown != null && !cooldown.isZero()) {
             if (!acquireCooldown(menu, slot, player)) {
                 return false;
             }
-        }
-
-        // Try specific click type first
-        Consumer<Player> handler = clickHandlers.get(clickType);
-        if (handler == null) {
-            // Fall back to generic handler
-            handler = clickHandlers.get(null);
         }
 
         if (handler != null) {
@@ -665,6 +676,90 @@ public class MenuButton implements MenuItem {
         }
 
         return false;
+    }
+
+    private Consumer<Player> resolveHandler(ClickType clickType) {
+        Consumer<Player> handler = clickHandlers.get(clickType);
+        if (handler == null) {
+            handler = clickHandlers.get(null);
+        }
+        return handler;
+    }
+
+    private boolean handleConfirmation(Menu menu, int slot, Player player) {
+        Instant now = Instant.now();
+        purgeExpiredConfirmations(now);
+
+        UUID playerId = player.getUniqueId();
+        String menuId = menu != null ? menu.getId() : "anonymous";
+        ConfirmationState state = pendingConfirmations.get(playerId);
+
+        if (state != null && state.matches(menuId, slot) && !state.isExpired(now)) {
+            pendingConfirmations.remove(playerId);
+            resetConfirmationDisplay(menu, slot);
+            return false;
+        }
+
+        if (state != null && menu != null && state.matches(menu.getId(), state.slot())) {
+            resetConfirmationDisplay(menu, state.slot());
+        }
+
+        pendingConfirmations.put(playerId, new ConfirmationState(menuId, slot, now.plus(confirmationWindow)));
+        if (confirmationDisplayItem != null && menu != null && slot >= 0 && slot < menu.getSize()) {
+            menu.getInventory().setItem(slot, confirmationDisplayItem.clone());
+        }
+        player.sendMessage(confirmationPrompt);
+        return true;
+    }
+
+    private void purgeExpiredConfirmations(Instant now) {
+        pendingConfirmations.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+    }
+
+    private void resetConfirmationDisplay(Menu menu, int slot) {
+        if (menu == null) {
+            return;
+        }
+        if (slot < 0 || slot >= menu.getSize()) {
+            return;
+        }
+        menu.getInventory().setItem(slot, getDisplayItem());
+    }
+
+    private ItemStack buildConfirmationDisplayItem() {
+        ItemStack item = displayItem.clone();
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return item;
+        }
+
+        List<Component> confirmationLore = new ArrayList<>(lore);
+        if (!confirmationLore.isEmpty()) {
+            confirmationLore.add(Component.empty());
+        }
+        confirmationLore.add(confirmationPrompt);
+
+        Component confirmationName;
+        if (name != null) {
+            confirmationName = Component.text()
+                    .append(Component.text("Confirm: ", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                    .append(name)
+                    .build()
+                    .decoration(TextDecoration.ITALIC, false);
+        } else {
+            confirmationName = Component.text("Confirm action", NamedTextColor.RED)
+                    .decoration(TextDecoration.ITALIC, false);
+        }
+
+        meta.lore(confirmationLore);
+        meta.displayName(confirmationName);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private Component defaultConfirmationPrompt() {
+        return Component.text("Click again to confirm.", NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false);
     }
 
     private boolean acquireCooldown(Menu menu, int slot, Player player) {
@@ -743,6 +838,7 @@ public class MenuButton implements MenuItem {
         if (name != null || !lore.isEmpty()) {
             updateItemMeta();
         }
+        rebuildConfirmationDisplayItem();
     }
 
     @Override
@@ -765,9 +861,27 @@ public class MenuButton implements MenuItem {
         this.anchored = anchored;
     }
 
+    private void rebuildConfirmationDisplayItem() {
+        if (!confirmationRequired) {
+            confirmationDisplayItem = null;
+            return;
+        }
+        confirmationDisplayItem = buildConfirmationDisplayItem();
+    }
+
     /**
      * Builder class for MenuButton with fluent API.
      */
+    private record ConfirmationState(String menuId, int slot, Instant expiresAt) {
+        boolean matches(String otherMenuId, int otherSlot) {
+            return Objects.equals(menuId, otherMenuId) && slot == otherSlot;
+        }
+
+        boolean isExpired(Instant now) {
+            return expiresAt.isBefore(now);
+        }
+    }
+
     public static class Builder {
         private final MiniMessage miniMessage = MiniMessage.miniMessage();
         private final Material material;
@@ -783,6 +897,9 @@ public class MenuButton implements MenuItem {
         private float volume = 1.0f;
         private float pitch = 1.0f;
         private boolean anchored = false;
+        private boolean confirmationRequired = false;
+        private Duration confirmationWindow = Duration.ofSeconds(4);
+        private Component confirmationPrompt;
 
         private Builder(Material material) {
             this.material = Objects.requireNonNull(material, "Material cannot be null");
@@ -1067,6 +1184,61 @@ public class MenuButton implements MenuItem {
          */
         public Builder anchor() {
             return anchor(true);
+        }
+
+        /**
+         * Requires a second click within the confirmation window before executing handlers.
+         *
+         * @return this builder
+         */
+        public Builder requireConfirmation() {
+            this.confirmationRequired = true;
+            return this;
+        }
+
+        /**
+         * Requires confirmation with a custom prompt shown to the player.
+         *
+         * @param prompt confirmation prompt text
+         * @return this builder
+         */
+        public Builder requireConfirmation(String prompt) {
+            this.confirmationRequired = true;
+            if (prompt != null && !prompt.isEmpty()) {
+                this.confirmationPrompt = miniMessage.deserialize(ColorUtils.convertLegacyToMiniMessage(prompt))
+                        .color(NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false);
+            }
+            return this;
+        }
+
+        /**
+         * Requires confirmation with a custom prompt component.
+         *
+         * @param prompt confirmation prompt component
+         * @return this builder
+         */
+        public Builder requireConfirmation(Component prompt) {
+            this.confirmationRequired = true;
+            this.confirmationPrompt = prompt;
+            return this;
+        }
+
+        /**
+         * Sets how long a confirmation stays active before expiring.
+         *
+         * @param window positive confirmation window
+         * @return this builder
+         */
+        public Builder confirmationWindow(Duration window) {
+            if (window == null) {
+                throw new IllegalArgumentException("Confirmation window cannot be null");
+            }
+            if (window.isZero() || window.isNegative()) {
+                throw new IllegalArgumentException("Confirmation window must be positive");
+            }
+            this.confirmationWindow = window;
+            return this;
         }
 
         /**
