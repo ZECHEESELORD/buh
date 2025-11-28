@@ -29,7 +29,7 @@ public final class JsonDocumentStore implements DocumentStore {
     private final Path basePath;
     private final ObjectMapper mapper;
     private final Executor executor;
-    private final Map<String, ReadWriteLock> collectionLocks = new ConcurrentHashMap<>();
+    private final Map<DocumentKey, ReadWriteLock> documentLocks = new ConcurrentHashMap<>();
 
     public JsonDocumentStore(Path basePath) {
         this(basePath, null);
@@ -51,7 +51,7 @@ public final class JsonDocumentStore implements DocumentStore {
     public CompletionStage<DocumentSnapshot> read(DocumentKey key) {
         return CompletableFuture.supplyAsync(() -> {
             Path documentPath = documentPath(key);
-            ReadWriteLock lock = lockFor(key.collection());
+            ReadWriteLock lock = lockFor(key);
             lock.readLock().lock();
             try {
                 if (!Files.exists(documentPath)) {
@@ -71,7 +71,7 @@ public final class JsonDocumentStore implements DocumentStore {
     public CompletionStage<Void> write(DocumentKey key, Map<String, Object> data) {
         Map<String, Object> copy = MapPath.deepCopy(data);
         return CompletableFuture.runAsync(() -> {
-            ReadWriteLock lock = lockFor(key.collection());
+            ReadWriteLock lock = lockFor(key);
             lock.writeLock().lock();
             try {
                 Path collectionPath = basePath.resolve(key.collection());
@@ -95,7 +95,7 @@ public final class JsonDocumentStore implements DocumentStore {
     public CompletionStage<Boolean> delete(DocumentKey key) {
         return CompletableFuture.supplyAsync(() -> {
             Path documentPath = documentPath(key);
-            ReadWriteLock lock = lockFor(key.collection());
+            ReadWriteLock lock = lockFor(key);
             lock.writeLock().lock();
             try {
                 if (!Files.exists(documentPath)) {
@@ -115,8 +115,6 @@ public final class JsonDocumentStore implements DocumentStore {
     public CompletionStage<List<DocumentSnapshot>> all(String collection) {
         return CompletableFuture.supplyAsync(() -> {
             Path collectionPath = basePath.resolve(collection);
-            ReadWriteLock lock = lockFor(collection);
-            lock.readLock().lock();
             try {
                 if (!Files.exists(collectionPath)) {
                     return List.of();
@@ -130,15 +128,19 @@ public final class JsonDocumentStore implements DocumentStore {
                         }
                         String id = fileName.substring(0, fileName.length() - 5);
                         DocumentKey key = DocumentKey.of(collection, id);
-                        Map<String, Object> data = mapper.readValue(entry.toFile(), Map.class);
-                        snapshots.add(new DocumentSnapshot(key, data, true));
+                        ReadWriteLock lock = lockFor(key);
+                        lock.readLock().lock();
+                        try {
+                            Map<String, Object> data = mapper.readValue(entry.toFile(), Map.class);
+                            snapshots.add(new DocumentSnapshot(key, data, true));
+                        } finally {
+                            lock.readLock().unlock();
+                        }
                     }
                 }
                 return List.copyOf(snapshots);
             } catch (IOException e) {
                 return List.of();
-            } finally {
-                lock.readLock().unlock();
             }
         }, executor());
     }
@@ -173,7 +175,7 @@ public final class JsonDocumentStore implements DocumentStore {
         return basePath.resolve(key.collection()).resolve(key.id() + ".json");
     }
 
-    private ReadWriteLock lockFor(String collection) {
-        return collectionLocks.computeIfAbsent(collection, ignored -> new ReentrantReadWriteLock());
+    private ReadWriteLock lockFor(DocumentKey key) {
+        return documentLocks.computeIfAbsent(key, ignored -> new ReentrantReadWriteLock());
     }
 }

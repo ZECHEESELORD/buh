@@ -8,14 +8,20 @@ import java.util.concurrent.Executor;
 public interface DataApi extends AutoCloseable {
 
     static DataApi using(DocumentStore store) {
-        return new DefaultDataApi(store, null);
+        return new DefaultDataApi(store, null, null);
     }
 
     static DataApi using(DocumentStore store, Executor executor) {
-        return new DefaultDataApi(store, executor);
+        return new DefaultDataApi(store, executor, null);
+    }
+
+    static DataApi using(DocumentStore store, Executor executor, sh.harold.fulcrum.common.data.ledger.LedgerRepository ledgerRepository) {
+        return new DefaultDataApi(store, executor, ledgerRepository);
     }
 
     DocumentCollection collection(String name);
+
+    java.util.Optional<sh.harold.fulcrum.common.data.ledger.LedgerRepository> ledger();
 
     @Override
     void close();
