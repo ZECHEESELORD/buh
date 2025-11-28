@@ -1,7 +1,6 @@
 package sh.harold.fulcrum.plugin;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -16,9 +15,6 @@ import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.common.permissions.StaffService;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
-import sh.harold.fulcrum.plugin.accountlink.AccountLinkModule;
-import sh.harold.fulcrum.plugin.accountlink.AccountLinkService;
-import sh.harold.fulcrum.plugin.discordbot.DiscordBotModule;
 import sh.harold.fulcrum.plugin.chat.ChatChannelService;
 import sh.harold.fulcrum.plugin.chat.ChatModule;
 import sh.harold.fulcrum.plugin.config.ModuleConfigService;
@@ -36,6 +32,7 @@ import sh.harold.fulcrum.plugin.staff.StaffCommandsModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
+import sh.harold.fulcrum.plugin.datamigrator.DataMigratorModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
 import sh.harold.fulcrum.plugin.version.PluginVersionService;
@@ -44,9 +41,8 @@ import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteService;
 import sh.harold.fulcrum.plugin.tab.TabFeature;
 import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
-import sh.harold.fulcrum.plugin.beacon.BeaconSanitizerModule;
+import sh.harold.fulcrum.plugin.osu.OsuLinkModule;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -59,18 +55,17 @@ public final class BuhPlugin extends JavaPlugin {
         ModuleId.of("data"),
         ModuleId.of("menu")
     );
-    private static final Set<ModuleId> BASE_MODULES = Set.of();
+    private static final Set<ModuleId> BASE_MODULES = Set.of(ModuleId.of("data-migrator"));
 
     private ModuleLoader moduleLoader;
     private ModuleConfigService moduleConfigService;
     private ModuleActivation moduleActivation;
     private List<ModuleDescriptor> moduleDescriptors;
     private DataModule dataModule;
+    private DataMigratorModule dataMigratorModule;
     private PlayerDataModule playerDataModule;
     private EconomyModule economyModule;
     private LuckPermsModule luckPermsModule;
-    private AccountLinkModule accountLinkModule;
-    private DiscordBotModule discordBotModule;
     private ChatModule chatModule;
     private MessageModule messageModule;
     private StashModule stashModule;
@@ -81,7 +76,7 @@ public final class BuhPlugin extends JavaPlugin {
     private StaffCommandsModule staffCommandsModule;
     private StatsModule statsModule;
     private ShutdownModule shutdownModule;
-    private BeaconSanitizerModule beaconSanitizerModule;
+    private OsuLinkModule osuLinkModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -143,14 +138,6 @@ public final class BuhPlugin extends JavaPlugin {
         return stashModule == null ? Optional.empty() : stashModule.stashService();
     }
 
-    public Optional<AccountLinkService> accountLinkService() {
-        return accountLinkModule == null ? Optional.empty() : accountLinkModule.accountLinkService();
-    }
-
-    public Optional<DiscordBotModule> discordBotModule() {
-        return Optional.ofNullable(discordBotModule);
-    }
-
     public Optional<PlayerMenuService> playerMenuService() {
         return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.playerMenuService());
     }
@@ -170,18 +157,17 @@ public final class BuhPlugin extends JavaPlugin {
             new DefaultScoreboardRegistry(),
             new DefaultPlayerScoreboardManager()
         );
-        dataModule = new DataModule(dataPath());
+        dataModule = new DataModule(this);
+        dataMigratorModule = new DataMigratorModule(this, dataModule);
         economyModule = new EconomyModule(this, dataModule);
         playerDataModule = new PlayerDataModule(this, dataModule);
         luckPermsModule = new LuckPermsModule(this);
-        accountLinkModule = new AccountLinkModule(this, dataModule, luckPermsModule);
-        discordBotModule = new DiscordBotModule(this, accountLinkModule, dataModule);
+        osuLinkModule = new OsuLinkModule(this, dataModule);
         chatChannelService = new ChatChannelService(this::staffService);
         messageService = new MessageService(this, () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService));
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
-        beaconSanitizerModule = new BeaconSanitizerModule(this, stashModule, new sh.harold.fulcrum.plugin.permissions.StaffGuard(luckPermsModule));
         menuModule = new MenuModule(this);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
@@ -200,15 +186,14 @@ public final class BuhPlugin extends JavaPlugin {
         List<FulcrumModule> modules = List.of(
             shutdownModule,
             dataModule,
+            dataMigratorModule,
             economyModule,
             playerDataModule,
             luckPermsModule,
-            accountLinkModule,
-            discordBotModule,
+            osuLinkModule,
             chatModule,
             messageModule,
             stashModule,
-            beaconSanitizerModule,
             menuModule,
             playerMenuModule,
             featureVoteModule,
@@ -223,10 +208,6 @@ public final class BuhPlugin extends JavaPlugin {
             .toList();
         moduleLoader = new ModuleLoader(modules);
         moduleConfigService = new ModuleConfigService(this, ALWAYS_ENABLED_MODULES, BASE_MODULES);
-    }
-
-    private Path dataPath() {
-        return getDataFolder().toPath().resolve("data");
     }
 
     private void await(CompletionStage<Void> stage, String action) {
@@ -250,10 +231,8 @@ public final class BuhPlugin extends JavaPlugin {
         Commands registrar = event.registrar();
         ModulesCommand modulesCommand = new ModulesCommand(moduleLoader);
         PingCommand pingCommand = new PingCommand();
-        AddInviteSourceCommand addInviteSourceCommand = new AddInviteSourceCommand(this, accountLinkModule);
         registrar.register(getPluginMeta(), pingCommand.build(), "ping", java.util.List.of());
         registrar.register(getPluginMeta(), modulesCommand.build(), "module", java.util.List.of("modules"));
-        registrar.register(getPluginMeta(), addInviteSourceCommand.build(), "addinvitesource", java.util.List.of());
     }
 
     private FormattedUsernameService noopFormattedUsernameService() {
