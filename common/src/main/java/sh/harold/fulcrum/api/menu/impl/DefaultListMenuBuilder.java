@@ -41,6 +41,7 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
     private int contentEndSlot = -1;
     private boolean closeOnOutsideClick = true;
     private int autoRefreshInterval = 0;
+    private boolean showPageIndicator = true;
 
     // Parent menu configuration for explicit navigation
     private String parentMenuId = null;
@@ -209,6 +210,12 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
     }
 
     @Override
+    public ListMenuBuilder showPageIndicator(boolean showIndicator) {
+        this.showPageIndicator = showIndicator;
+        return this;
+    }
+
+    @Override
     public ListMenuBuilder fillEmpty(Material material) {
         this.fillEmptyItem = MenuDisplayItem.builder(material)
                 .name("") // Empty name (builder automatically adds &r prefix)
@@ -328,10 +335,13 @@ public class DefaultListMenuBuilder implements ListMenuBuilder {
             } else {
                 // Add page indicator in top row, slot 4 (5th slot in first row)
                 int pageIndicatorSlot = 4; // Top row, index 4
-                if (!buttons.containsKey(pageIndicatorSlot)) {
+                if (showPageIndicator && !buttons.containsKey(pageIndicatorSlot)) {
                     menu.setPageIndicatorSlot(pageIndicatorSlot);
+                } else {
+                    menu.setPageIndicatorSlot(-1);
                 }
             }
+            menu.setPageIndicatorEnabled(showPageIndicator);
             // Set empty message
             if (emptyMessage != null) {
                 menu.setEmptyMessage(emptyMessage);
