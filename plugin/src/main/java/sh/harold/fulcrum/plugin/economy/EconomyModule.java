@@ -27,7 +27,7 @@ public final class EconomyModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("economy"), Set.of(ModuleId.of("data")), ModuleCategory.ECONOMY);
+        return new ModuleDescriptor(ModuleId.of("economy"), Set.of(ModuleId.of("data")), ModuleCategory.GAMEPLAY);
     }
 
     @Override
