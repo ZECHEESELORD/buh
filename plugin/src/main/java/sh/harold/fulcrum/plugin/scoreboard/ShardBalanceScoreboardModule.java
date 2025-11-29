@@ -60,6 +60,19 @@ public final class ShardBalanceScoreboardModule implements ScoreboardModule {
         deltas.remove(playerId);
     }
 
+    void pushBalance(UUID playerId, long balance) {
+        balances.compute(playerId, (ignored, previous) -> {
+            long previousAmount = previous == null ? balance : previous.amount();
+            long delta = balance - previousAmount;
+            if (delta != 0) {
+                deltas.put(playerId, new BalanceDelta(delta, Instant.now()));
+            } else {
+                deltas.remove(playerId);
+            }
+            return new CachedBalance(balance, Instant.now());
+        });
+    }
+
     private boolean shouldRefresh(CachedBalance cached) {
         if (cached == null) {
             return true;
