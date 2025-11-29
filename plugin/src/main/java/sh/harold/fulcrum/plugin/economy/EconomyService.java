@@ -3,6 +3,8 @@ package sh.harold.fulcrum.plugin.economy;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
+import sh.harold.fulcrum.common.data.ledger.LedgerEntry;
+import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
 
 import java.util.Map;
 import java.util.Objects;
@@ -20,9 +22,10 @@ import java.util.logging.Logger;
 
 public final class EconomyService implements AutoCloseable {
 
-    private static final String BALANCE_PATH = "economy.balance";
+    private static final String BALANCE_PATH = "bank.shards";
 
     private final DocumentCollection players;
+    private final LedgerRepository ledger;
     private final ExecutorService executor;
     private final Map<UUID, Lock> accountLocks = new ConcurrentHashMap<>();
     private final Logger logger;
@@ -30,6 +33,7 @@ public final class EconomyService implements AutoCloseable {
     EconomyService(DataApi dataApi, Logger logger) {
         Objects.requireNonNull(dataApi, "dataApi");
         this.players = dataApi.collection("players");
+        this.ledger = dataApi.ledger().orElse(null);
         this.logger = Objects.requireNonNull(logger, "logger");
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
     }
@@ -53,6 +57,7 @@ public final class EconomyService implements AutoCloseable {
             persistBalance(document, updatedBalance);
             BalanceSnapshot before = new BalanceSnapshot(playerId, currentBalance);
             BalanceSnapshot after = new BalanceSnapshot(playerId, updatedBalance);
+            appendLedger(playerId, LedgerEntry.LedgerType.DEPOSIT, amount, updatedBalance, "manual");
             return new MoneyChange.Success(new BalanceChange(before, after));
         });
     }
@@ -70,6 +75,7 @@ public final class EconomyService implements AutoCloseable {
             persistBalance(document, updatedBalance);
             BalanceSnapshot before = new BalanceSnapshot(playerId, currentBalance);
             BalanceSnapshot after = new BalanceSnapshot(playerId, updatedBalance);
+            appendLedger(playerId, LedgerEntry.LedgerType.WITHDRAWAL, amount, updatedBalance, "manual");
             return new MoneyChange.Success(new BalanceChange(before, after));
         });
     }
@@ -102,6 +108,8 @@ public final class EconomyService implements AutoCloseable {
                 rollback(source, sourceBalance, sourcePlayerId);
                 throw exception;
             }
+            appendLedger(sourcePlayerId, LedgerEntry.LedgerType.TRANSFER_OUT, amount, updatedSource, "to:" + targetPlayerId);
+            appendLedger(targetPlayerId, LedgerEntry.LedgerType.TRANSFER_IN, amount, updatedTarget, "from:" + sourcePlayerId);
 
             BalanceChange withdrawn = new BalanceChange(
                 new BalanceSnapshot(sourcePlayerId, sourceBalance),
@@ -153,6 +161,17 @@ public final class EconomyService implements AutoCloseable {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Failed to roll back balance for " + playerId, exception);
         }
+    }
+
+    private void appendLedger(UUID playerId, LedgerEntry.LedgerType type, long amount, long balance, String source) {
+        if (ledger == null) {
+            return;
+        }
+        LedgerEntry entry = new LedgerEntry(playerId, type, amount, balance, source, java.time.Instant.now());
+        ledger.append(entry).exceptionally(throwable -> {
+            logger.log(Level.WARNING, "Failed to append ledger entry for " + playerId, throwable);
+            return null;
+        });
     }
 
     private Lock lockFor(UUID playerId) {
