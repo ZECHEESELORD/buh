@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -45,12 +46,18 @@ final class PlayerSessionListener implements Listener {
         Instant now = Instant.now();
         sessionStarts.put(playerId, now);
 
+        long startedAt = System.nanoTime();
+        logger.info(() -> "[login:data] join metadata load for " + playerId + " (" + username + ")");
         players.load(playerId.toString())
             .thenCompose(document -> ensureJoinMetadata(document, now, username)
                 .thenCompose(ignored -> biomeAggregator.recordInitialVisit(document, playerId, event.getPlayer().getLocation(), now)))
-            .exceptionally(throwable -> {
-                logger.log(Level.SEVERE, "Failed to update player metadata for " + playerId, throwable);
-                return null;
+            .whenComplete((ignored, throwable) -> {
+                long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+                if (throwable != null) {
+                    logger.log(Level.SEVERE, "[login:data] join metadata update failed for " + playerId + " after " + elapsedMillis + "ms", throwable);
+                    return;
+                }
+                logger.info(() -> "[login:data] join metadata update completed for " + playerId + " in " + elapsedMillis + "ms");
             });
     }
 
