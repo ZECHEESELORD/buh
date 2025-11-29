@@ -6,6 +6,7 @@ import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.plugin.economy.EconomyService;
 import sh.harold.fulcrum.plugin.economy.MoneyChange;
 
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -22,16 +23,25 @@ public final class UnlockableService {
 
     private static final String UNLOCKABLES_ROOT = "progression.unlockables";
     private static final String LEGACY_PERKS_ROOT = "progression.perks";
+    private static final String COSMETICS_ROOT = "progression.cosmetics";
 
     private final UnlockableRegistry registry;
+    private final CosmeticRegistry cosmeticRegistry;
     private final DocumentCollection players;
     private final Map<UUID, PlayerUnlockableState> stateCache = new ConcurrentHashMap<>();
     private final Supplier<Optional<EconomyService>> economySupplier;
     private final Logger logger;
 
-    public UnlockableService(DataApi dataApi, UnlockableRegistry registry, Supplier<Optional<EconomyService>> economySupplier, Logger logger) {
+    public UnlockableService(
+        DataApi dataApi,
+        UnlockableRegistry registry,
+        CosmeticRegistry cosmeticRegistry,
+        Supplier<Optional<EconomyService>> economySupplier,
+        Logger logger
+    ) {
         Objects.requireNonNull(dataApi, "dataApi");
         this.registry = Objects.requireNonNull(registry, "registry");
+        this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
         this.economySupplier = Objects.requireNonNull(economySupplier, "economySupplier");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.players = dataApi.collection("players");
@@ -56,6 +66,11 @@ public final class UnlockableService {
 
     public Optional<PlayerUnlockableState> cachedState(UUID playerId) {
         return Optional.ofNullable(stateCache.get(Objects.requireNonNull(playerId, "playerId")));
+    }
+
+    public CompletionStage<PlayerCosmeticLoadout> loadCosmetics(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return loadState(playerId).thenApply(PlayerUnlockableState::cosmetics);
     }
 
     public void evict(UUID playerId) {
@@ -158,6 +173,42 @@ public final class UnlockableService {
             });
     }
 
+    public CompletionStage<PlayerUnlockableState> equipCosmetic(UUID playerId, CosmeticSection section, UnlockableId cosmeticId) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(section, "section");
+        Objects.requireNonNull(cosmeticId, "cosmeticId");
+        Cosmetic cosmetic = cosmeticRegistry.cosmetic(cosmeticId)
+            .orElseThrow(() -> new IllegalArgumentException("Unknown cosmetic: " + cosmeticId));
+        if (cosmetic.section() != section) {
+            throw new IllegalArgumentException("Cosmetic " + cosmeticId + " does not belong to " + section);
+        }
+        UnlockableDefinition definition = requireDefinition(cosmeticId);
+        if (definition.type() != UnlockableType.COSMETIC) {
+            throw new IllegalArgumentException("Unlockable " + cosmeticId + " is not a cosmetic");
+        }
+        return players.load(playerId.toString())
+            .thenCompose(document -> {
+                PlayerUnlockable unlocked = resolveUnlockable(document, definition);
+                if (!unlocked.unlocked()) {
+                    return CompletableFuture.failedFuture(new UnlockableOperationException("Cosmetic is locked: " + cosmeticId));
+                }
+                return persistCosmetic(document, playerId, section, Optional.of(cosmeticId));
+            })
+            .exceptionally(throwable -> {
+                throw new CompletionException("Failed to equip cosmetic " + cosmeticId + " for " + playerId, throwable);
+            });
+    }
+
+    public CompletionStage<PlayerUnlockableState> clearCosmetic(UUID playerId, CosmeticSection section) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(section, "section");
+        return players.load(playerId.toString())
+            .thenCompose(document -> persistCosmetic(document, playerId, section, Optional.empty()))
+            .exceptionally(throwable -> {
+                throw new CompletionException("Failed to clear cosmetic for " + section + " (" + playerId + ")", throwable);
+            });
+    }
+
     private UnlockableDefinition requireDefinition(UnlockableId unlockableId) {
         return registry.definition(unlockableId)
             .orElseThrow(() -> new IllegalArgumentException("Unknown unlockable: " + unlockableId));
@@ -231,10 +282,24 @@ public final class UnlockableService {
             .thenApply(ignored -> cacheState(playerId, document).unlockable(definition.id()).orElse(updated));
     }
 
+    private CompletionStage<PlayerUnlockableState> persistCosmetic(
+        Document document,
+        UUID playerId,
+        CosmeticSection section,
+        Optional<UnlockableId> cosmeticId
+    ) {
+        CompletableFuture<Void> update = cosmeticId
+            .map(id -> document.set(cosmeticPath(section), id.value()).toCompletableFuture())
+            .orElseGet(() -> document.remove(cosmeticPath(section)).toCompletableFuture());
+        return update.thenApply(ignored -> cacheState(playerId, document));
+    }
+
     private PlayerUnlockableState buildState(Document document) {
         Map<UnlockableId, PlayerUnlockable> unlockables = new LinkedHashMap<>();
+        Map<CosmeticSection, UnlockableId> cosmetics = new EnumMap<>(CosmeticSection.class);
         Map<?, ?> raw = document.get(UNLOCKABLES_ROOT, Map.class).orElse(Map.of());
         Map<?, ?> legacyRaw = document.get(LEGACY_PERKS_ROOT, Map.class).orElse(Map.of());
+        Map<?, ?> cosmeticsRaw = document.get(COSMETICS_ROOT, Map.class).orElse(Map.of());
 
         for (UnlockableDefinition definition : registry.definitions()) {
             String basePath = unlockablePath(definition.id());
@@ -246,7 +311,43 @@ public final class UnlockableService {
         }
         logUnknown(raw);
         logUnknown(legacyRaw);
-        return new PlayerUnlockableState(unlockables);
+        parseCosmetics(cosmeticsRaw, cosmetics, unlockables);
+        return new PlayerUnlockableState(unlockables, new PlayerCosmeticLoadout(cosmetics));
+    }
+
+    private void parseCosmetics(
+        Map<?, ?> raw,
+        Map<CosmeticSection, UnlockableId> cosmetics,
+        Map<UnlockableId, PlayerUnlockable> unlockables
+    ) {
+        if (raw.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (!(entry.getKey() instanceof String rawSection) || !(entry.getValue() instanceof String rawId)) {
+                continue;
+            }
+            Optional<CosmeticSection> section = CosmeticSection.fromKey(rawSection);
+            if (section.isEmpty()) {
+                logger.fine(() -> "Ignoring unknown cosmetic section in data: " + rawSection);
+                continue;
+            }
+            try {
+                UnlockableId cosmeticId = new UnlockableId(rawId);
+                if (cosmeticRegistry.cosmetic(cosmeticId).isEmpty()) {
+                    logger.fine(() -> "Ignoring unknown cosmetic entry in data: " + rawId);
+                    continue;
+                }
+                PlayerUnlockable unlockable = unlockables.get(cosmeticId);
+                if (unlockable == null || !unlockable.unlocked()) {
+                    logger.fine(() -> "Ignoring cosmetic that is not unlocked: " + rawId);
+                    continue;
+                }
+                cosmetics.put(section.get(), cosmeticId);
+            } catch (IllegalArgumentException ignored) {
+                logger.fine(() -> "Ignoring malformed cosmetic entry in data: " + rawId);
+            }
+        }
     }
 
     private PlayerUnlockable parseUnlockable(Map<?, ?> raw, String basePath, Document document, UnlockableDefinition definition) {
@@ -311,6 +412,10 @@ public final class UnlockableService {
 
     private String legacyPerkPath(UnlockableId unlockableId) {
         return LEGACY_PERKS_ROOT + "." + unlockableId.value();
+    }
+
+    private String cosmeticPath(CosmeticSection section) {
+        return COSMETICS_ROOT + "." + section.dataKey();
     }
 
     private static final class UnlockableOperationException extends RuntimeException {

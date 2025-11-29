@@ -26,6 +26,7 @@ public final class UnlockableModule implements FulcrumModule {
     private final DataModule dataModule;
     private final EconomyModule economyModule;
     private UnlockableRegistry registry;
+    private CosmeticRegistry cosmeticRegistry;
     private UnlockableService unlockableService;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
@@ -47,8 +48,15 @@ public final class UnlockableModule implements FulcrumModule {
     public CompletionStage<Void> enable() {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         registry = new UnlockableRegistry();
-        UnlockableCatalog.registerDefaults(registry);
-        unlockableService = new UnlockableService(dataApi, registry, economyModule::economyService, plugin.getLogger());
+        cosmeticRegistry = new CosmeticRegistry();
+        UnlockableCatalog.registerDefaults(registry, cosmeticRegistry);
+        unlockableService = new UnlockableService(
+            dataApi,
+            registry,
+            cosmeticRegistry,
+            economyModule::economyService,
+            plugin.getLogger()
+        );
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
@@ -61,6 +69,10 @@ public final class UnlockableModule implements FulcrumModule {
 
     public UnlockableRegistry registry() {
         return registry;
+    }
+
+    public CosmeticRegistry cosmeticRegistry() {
+        return cosmeticRegistry;
     }
 
     private void registerCommands(ReloadableRegistrarEvent<Commands> event) {

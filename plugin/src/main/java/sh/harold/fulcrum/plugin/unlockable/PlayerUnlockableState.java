@@ -5,11 +5,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public record PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockables) {
+public record PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockables, PlayerCosmeticLoadout cosmetics) {
 
     public PlayerUnlockableState {
         Objects.requireNonNull(unlockables, "unlockables");
+        Objects.requireNonNull(cosmetics, "cosmetics");
         unlockables = Map.copyOf(unlockables);
+    }
+
+    public PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockables) {
+        this(unlockables, PlayerCosmeticLoadout.empty());
     }
 
     public Optional<PlayerUnlockable> unlockable(UnlockableId id) {
@@ -31,5 +36,9 @@ public record PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockab
         return unlockables.values().stream()
             .filter(PlayerUnlockable::unlocked)
             .toList();
+    }
+
+    public Optional<UnlockableId> equippedCosmetic(CosmeticSection section) {
+        return cosmetics.equipped(section);
     }
 }
