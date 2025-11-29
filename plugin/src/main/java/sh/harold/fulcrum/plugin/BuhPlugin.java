@@ -171,7 +171,11 @@ public final class BuhPlugin extends JavaPlugin {
         luckPermsModule = new LuckPermsModule(this);
         osuLinkModule = new OsuLinkModule(this, dataModule);
         chatChannelService = new ChatChannelService(this::staffService);
-        messageService = new MessageService(this, () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService));
+        messageService = new MessageService(
+            this,
+            () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService),
+            () -> playerDataModule.usernameDisplayService().orElse(null)
+        );
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService, playerDataModule);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
