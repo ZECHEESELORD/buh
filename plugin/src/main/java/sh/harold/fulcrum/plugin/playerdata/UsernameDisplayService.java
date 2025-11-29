@@ -294,11 +294,6 @@ public final class UsernameDisplayService implements Listener {
             }
             if (mutated) {
                 dataLists.writeSafely(0, updated);
-                if (actionsHandle != null && actionsHandle.size() > 0) {
-                    EnumSet<EnumWrappers.PlayerInfoAction> actions = EnumSet.copyOf(actionsHandle.readSafely(0));
-                    actions.add(EnumWrappers.PlayerInfoAction.UPDATE_DISPLAY_NAME);
-                    actionsHandle.write(0, actions);
-                }
                 debug(() -> "Rewrote player info for viewer " + viewer.getUniqueId() + " (" + updated.size() + " entries)");
             }
         }
