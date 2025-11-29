@@ -35,6 +35,8 @@ import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.datamigrator.DataMigratorModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import sh.harold.fulcrum.plugin.version.PluginVersionService;
 import sh.harold.fulcrum.plugin.version.VersionService;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
@@ -77,6 +79,7 @@ public final class BuhPlugin extends JavaPlugin {
     private StatsModule statsModule;
     private ShutdownModule shutdownModule;
     private OsuLinkModule osuLinkModule;
+    private UnlockableModule unlockableModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -142,6 +145,10 @@ public final class BuhPlugin extends JavaPlugin {
         return playerMenuModule == null ? Optional.empty() : Optional.ofNullable(playerMenuModule.playerMenuService());
     }
 
+    public Optional<UnlockableService> unlockableService() {
+        return unlockableModule == null ? Optional.empty() : Optional.ofNullable(unlockableModule.unlockableService());
+    }
+
     public StatsModule statsModule() {
         return statsModule;
     }
@@ -165,11 +172,12 @@ public final class BuhPlugin extends JavaPlugin {
         osuLinkModule = new OsuLinkModule(this, dataModule);
         chatChannelService = new ChatChannelService(this::staffService);
         messageService = new MessageService(this, () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService));
-        chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService);
+        chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService, playerDataModule);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
-        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService);
+        unlockableModule = new UnlockableModule(this, dataModule, economyModule);
+        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService, unlockableModule);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
@@ -181,7 +189,8 @@ public final class BuhPlugin extends JavaPlugin {
             scoreboardService,
             versionService,
             playerDataModule,
-            shutdownModule
+            shutdownModule,
+            economyModule
         );
         List<FulcrumModule> modules = List.of(
             shutdownModule,
@@ -196,6 +205,7 @@ public final class BuhPlugin extends JavaPlugin {
             stashModule,
             menuModule,
             playerMenuModule,
+            unlockableModule,
             featureVoteModule,
             funModule,
             staffCommandsModule,
