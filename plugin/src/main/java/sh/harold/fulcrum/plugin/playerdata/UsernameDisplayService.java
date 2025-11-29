@@ -149,7 +149,7 @@ public final class UsernameDisplayService implements Listener {
         }
         UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            sendTabDisplayUpdate(viewer, preference);
+            fallbackResendTab(viewer);
             sendNametagUpdate(viewer, preference);
         });
     }
@@ -159,37 +159,6 @@ public final class UsernameDisplayService implements Listener {
         protocolManager.addPacketListener(new EntityMetadataPacketAdapter(plugin));
         if (PacketType.Play.Server.ENTITY_DESTROY.isSupported()) {
             protocolManager.addPacketListener(new EntityDestroyAdapter(plugin));
-        }
-    }
-
-    private void sendTabDisplayUpdate(Player viewer, UsernameView preference) {
-        if (protocolManager == null) {
-            return;
-        }
-        PacketContainer packet = protocolManager.createPacket(playerInfoPacketType);
-        EnumSet<EnumWrappers.PlayerInfoAction> actions = PlayerInfoActions.updateDisplayName();
-        packet.getPlayerInfoActions().write(0, actions);
-        List<PlayerInfoData> entries = new ArrayList<>();
-        for (Player target : plugin.getServer().getOnlinePlayers()) {
-            UUID targetId = target.getUniqueId();
-            UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, target.getName());
-            if (preference == UsernameView.MINECRAFT
-                && !tabNameDecorator.hasTabDecorations(targetId, target)
-                && baseName.value().equals(target.getName())) {
-                continue;
-            }
-            Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component());
-            entries.add(buildInfoData(target, decorated));
-        }
-        if (entries.isEmpty()) {
-            return;
-        }
-        packet.getPlayerInfoDataLists().write(0, entries);
-        try {
-            protocolManager.sendServerPacket(viewer, packet);
-        } catch (RuntimeException runtimeException) {
-            logger.log(Level.WARNING, "Failed to send tab display update to " + viewer.getUniqueId(), runtimeException);
-            fallbackResendTab(viewer);
         }
     }
 
