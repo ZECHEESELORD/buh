@@ -73,6 +73,10 @@ public final class DataModule implements FulcrumModule {
         return Optional.ofNullable(dataApi);
     }
 
+    public Optional<DocumentStore> documentStore() {
+        return Optional.ofNullable(store);
+    }
+
     private DocumentStore createStore(DataConfig.DataStore selection, ExecutorService executor) {
         return switch (selection) {
             case JSON -> new JsonDocumentStore(storagePath, executor);
