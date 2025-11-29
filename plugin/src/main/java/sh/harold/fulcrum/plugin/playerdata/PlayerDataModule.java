@@ -20,7 +20,9 @@ public final class PlayerDataModule implements FulcrumModule {
     private final JavaPlugin plugin;
     private final DataModule dataModule;
     private PlayerSettingsService settingsService;
+    private PlayerDirectoryService directoryService;
     private PlayerSessionListener sessionListener;
+    private UsernameDisplayService usernameDisplayService;
 
     public PlayerDataModule(JavaPlugin plugin, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -39,9 +41,14 @@ public final class PlayerDataModule implements FulcrumModule {
         PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi, biomeAggregator);
         sessionListener = listener;
         settingsService = new PlayerSettingsService(dataApi);
+        directoryService = new PlayerDirectoryService(dataApi, plugin.getLogger());
+        usernameDisplayService = new UsernameDisplayService(plugin, dataApi, settingsService);
+        PvpSettingsListener pvpSettingsListener = new PvpSettingsListener(settingsService, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(biomeAggregator, plugin);
         pluginManager.registerEvents(listener, plugin);
+        pluginManager.registerEvents(pvpSettingsListener, plugin);
+        pluginManager.registerEvents(usernameDisplayService, plugin);
         return CompletableFuture.completedFuture(null);
     }
 
@@ -56,13 +63,22 @@ public final class PlayerDataModule implements FulcrumModule {
         }
         Instant logoutTime = Instant.now();
         return sessionListener.flushSessions(players, logoutTime)
-            .exceptionally(throwable -> {
-                plugin.getLogger().log(Level.SEVERE, "Failed to flush playtime on shutdown", throwable);
-                return null;
+            .whenComplete((ignored, throwable) -> {
+                if (throwable != null) {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to flush playtime on shutdown", throwable);
+                }
             });
     }
 
     public java.util.Optional<PlayerSettingsService> playerSettingsService() {
         return java.util.Optional.ofNullable(settingsService);
+    }
+
+    public java.util.Optional<PlayerDirectoryService> playerDirectoryService() {
+        return java.util.Optional.ofNullable(directoryService);
+    }
+
+    public java.util.Optional<UsernameDisplayService> usernameDisplayService() {
+        return java.util.Optional.ofNullable(usernameDisplayService);
     }
 }
