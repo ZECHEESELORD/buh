@@ -10,6 +10,7 @@ import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
+import sh.harold.fulcrum.plugin.osu.LinkAccountConfig;
 
 import java.util.Objects;
 import java.util.Set;
@@ -24,6 +25,7 @@ public final class OsuLinkModule implements FulcrumModule {
     private OsuLinkService osuLinkService;
     private OsuLinkHttpServer httpServer;
     private FeatureConfigService configService;
+    private OsuVerificationService verificationService;
 
     public OsuLinkModule(org.bukkit.plugin.java.JavaPlugin plugin, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -32,22 +34,40 @@ public final class OsuLinkModule implements FulcrumModule {
 
     @Override
     public ModuleDescriptor descriptor() {
-        return new ModuleDescriptor(ModuleId.of("osu-link"), Set.of(ModuleId.of("data")), ModuleCategory.UTILITY);
+        return new ModuleDescriptor(ModuleId.of("link-account"), Set.of(ModuleId.of("data")), ModuleCategory.UTILITY);
     }
 
     @Override
     public CompletionStage<Void> enable() {
-        return CompletableFuture.runAsync(() -> {
+        try {
             configService = new FeatureConfigService(plugin);
             var dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
             DocumentCollection players = dataApi.collection("players");
-            OsuLinkConfig config = OsuLinkConfig.load(configService);
+            LinkAccountConfig config = LinkAccountConfig.load(configService);
 
-            osuLinkService = new OsuLinkService(plugin, players, config);
+            if (config.osu().clientId().isBlank() || config.osu().clientSecret().isBlank() || config.discord().clientId().isBlank() || config.discord().clientSecret().isBlank()) {
+                plugin.getLogger().warning("link-account module disabled: set osu/discord client id/secret in config/link-account/config.yml");
+                return CompletableFuture.completedFuture(null);
+            }
+
+            VerificationWorld verificationWorld = new VerificationWorld(plugin);
+            OsuVerificationService[] verificationRef = new OsuVerificationService[1];
+            osuLinkService = new OsuLinkService(plugin, players, config, playerId -> {
+                OsuVerificationService service = verificationRef[0];
+                if (service != null) {
+                    service.handleLinkCompleted(playerId);
+                }
+            });
+            verificationService = new OsuVerificationService(plugin, players, verificationWorld, config.requireOsuLink(), osuLinkService);
+            verificationRef[0] = verificationService;
+            verificationService.registerListeners();
             httpServer = new OsuLinkHttpServer(osuLinkService, config, plugin.getLogger());
             httpServer.start();
             plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
-        });
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception exception) {
+            return CompletableFuture.failedFuture(exception);
+        }
     }
 
     @Override
@@ -55,6 +75,10 @@ public final class OsuLinkModule implements FulcrumModule {
         if (httpServer != null) {
             httpServer.close();
             httpServer = null;
+        }
+        if (verificationService != null) {
+            verificationService.close();
+            verificationService = null;
         }
         if (configService != null) {
             configService.close();
@@ -74,5 +98,7 @@ public final class OsuLinkModule implements FulcrumModule {
         }
         Commands registrar = event.registrar();
         registrar.register(new OsuLinkCommand(osuLinkService).build(), "linkosuaccount", java.util.List.of());
+        registrar.register(new DiscordLinkCommand(osuLinkService).build(), "linkdiscordaccount", java.util.List.of());
+        registrar.register(new SkipOsuCommand().build(), "skiposu", java.util.List.of());
     }
 }

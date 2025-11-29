@@ -33,6 +33,7 @@ public class DefaultListMenu extends AbstractMenu {
     private int previousButtonSlot = -1;
     private int nextButtonSlot = -1;
     private int pageIndicatorSlot = -1;
+    private boolean pageIndicatorEnabled = true;
 
     private Component emptyMessage = Component.text("No items to display", NamedTextColor.GRAY);
     private boolean autoRefresh = false;
@@ -125,6 +126,10 @@ public class DefaultListMenu extends AbstractMenu {
      */
     public void setPageIndicatorSlot(int slot) {
         this.pageIndicatorSlot = slot;
+    }
+
+    public void setPageIndicatorEnabled(boolean enabled) {
+        this.pageIndicatorEnabled = enabled;
     }
 
     /**
@@ -361,19 +366,21 @@ public class DefaultListMenu extends AbstractMenu {
     }
 
     private void updatePageIndicator() {
-        if (pageIndicatorSlot >= 0) {
-            Component indicatorText = Component.text("&rPage ", NamedTextColor.YELLOW) // Add &r prefix
-                    .append(Component.text(currentPage, NamedTextColor.WHITE))
-                    .append(Component.text(" of ", NamedTextColor.YELLOW))
-                    .append(Component.text(getTotalPages(), NamedTextColor.WHITE));
-
-            MenuItem indicator = MenuDisplayItem.builder(Material.BOOK)
-                    .name(indicatorText)
-                    .lore(Component.text(contentItems.size() + " total items", NamedTextColor.GRAY)) // Add &r prefix
-                    .build();
-
-            super.setItem(indicator, pageIndicatorSlot);
+        if (!pageIndicatorEnabled || pageIndicatorSlot < 0) {
+            return;
         }
+
+        Component indicatorText = Component.text("&rPage ", NamedTextColor.YELLOW) // Add &r prefix
+                .append(Component.text(currentPage, NamedTextColor.WHITE))
+                .append(Component.text(" of ", NamedTextColor.YELLOW))
+                .append(Component.text(getTotalPages(), NamedTextColor.WHITE));
+
+        MenuItem indicator = MenuDisplayItem.builder(Material.BOOK)
+                .name(indicatorText)
+                .lore(Component.text(contentItems.size() + " total items", NamedTextColor.GRAY)) // Add &r prefix
+                .build();
+
+        super.setItem(indicator, pageIndicatorSlot);
     }
 
     /**

@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-final class OsuOAuthClient {
+final class DiscordOAuthClient {
 
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
 
@@ -24,7 +24,7 @@ final class OsuOAuthClient {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    OsuOAuthClient(LinkAccountConfig config, LinkAccountConfig.OAuthConfig oauth) {
+    DiscordOAuthClient(LinkAccountConfig config, LinkAccountConfig.OAuthConfig oauth) {
         this.config = Objects.requireNonNull(config, "config");
         this.oauth = Objects.requireNonNull(oauth, "oauth");
         this.httpClient = HttpClient.newBuilder()
@@ -37,21 +37,19 @@ final class OsuOAuthClient {
     String authorizationUrl(String state) {
         Objects.requireNonNull(state, "state");
         String scopes = encode(String.join(" ", oauth.scopes()));
-        String encodedState = encode(state);
-        String redirect = encode(config.callbackUrl(oauth));
         return oauth.authorizationUrl()
             + "?response_type=code"
             + "&client_id=" + encode(oauth.clientId())
-            + "&redirect_uri=" + redirect
+            + "&redirect_uri=" + encode(config.callbackUrl(oauth))
             + "&scope=" + scopes
-            + "&state=" + encodedState;
+            + "&state=" + encode(state);
     }
 
-    OsuUserProfile exchangeCode(String code) throws IOException, InterruptedException {
+    DiscordUser exchangeCode(String code) throws IOException, InterruptedException {
         Objects.requireNonNull(code, "code");
         OAuthTokenResponse tokenResponse = requestToken(code);
         if (tokenResponse.accessToken == null || tokenResponse.accessToken.isBlank()) {
-            throw new IOException("osu token response missing access token");
+            throw new IOException("discord token response missing access token");
         }
         return fetchUser(tokenResponse.accessToken);
     }
@@ -72,12 +70,12 @@ final class OsuOAuthClient {
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
-            throw new IOException("osu token request failed with status " + response.statusCode());
+            throw new IOException("discord token request failed with status " + response.statusCode());
         }
         return objectMapper.readValue(response.body(), OAuthTokenResponse.class);
     }
 
-    private OsuUserProfile fetchUser(String accessToken) throws IOException, InterruptedException {
+    private DiscordUser fetchUser(String accessToken) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(oauth.meUrl()))
             .timeout(HTTP_TIMEOUT)
@@ -86,14 +84,14 @@ final class OsuOAuthClient {
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
-            throw new IOException("osu profile request failed with status " + response.statusCode());
+            throw new IOException("discord profile request failed with status " + response.statusCode());
         }
-        OsuUserResponse userResponse = objectMapper.readValue(response.body(), OsuUserResponse.class);
-        return new OsuUserProfile(
+        DiscordUserResponse userResponse = objectMapper.readValue(response.body(), DiscordUserResponse.class);
+        return new DiscordUser(
             userResponse.id,
             userResponse.username,
-            userResponse.countryCode,
-            userResponse.statistics == null ? null : userResponse.statistics.globalRank
+            userResponse.globalName,
+            userResponse.discriminator
         );
     }
 
@@ -114,16 +112,14 @@ final class OsuOAuthClient {
     record OAuthTokenResponse(@JsonProperty("access_token") String accessToken) {
     }
 
-    record OsuUserResponse(
-        long id,
+    record DiscordUserResponse(
+        String id,
         String username,
-        @JsonProperty("country_code") String countryCode,
-        Statistics statistics
+        @JsonProperty("global_name") String globalName,
+        String discriminator
     ) {
-        record Statistics(@JsonProperty("global_rank") Integer globalRank) {
-        }
     }
 
-    record OsuUserProfile(long userId, String username, String countryCode, Integer globalRank) {
+    record DiscordUser(String id, String username, String globalName, String discriminator) {
     }
 }
