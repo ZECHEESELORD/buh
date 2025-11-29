@@ -20,6 +20,8 @@ import org.bukkit.inventory.PlayerInventory;
 
 import java.util.Objects;
 
+import static sh.harold.fulcrum.plugin.osu.VerificationConstants.REGISTRATION_TAG;
+
 final class PlayerMenuListener implements Listener {
 
     private final PlayerMenuService menuService;
@@ -43,6 +45,10 @@ final class PlayerMenuListener implements Listener {
             return;
         }
         if (!menuService.isMenuItem(event.getItem())) {
+            return;
+        }
+        if (isRegistrationLocked(event.getPlayer())) {
+            event.setCancelled(true);
             return;
         }
 
@@ -74,6 +80,10 @@ final class PlayerMenuListener implements Listener {
         }
 
         event.setCancelled(true);
+
+        if (isRegistrationLocked(player)) {
+            return;
+        }
 
         ClickType click = event.getClick();
         if ((click == ClickType.LEFT || click == ClickType.RIGHT) && (currentIsMenuItem || cursorIsMenuItem)) {
@@ -120,5 +130,9 @@ final class PlayerMenuListener implements Listener {
         if (menuService.isMenuItem(event.getMainHandItem()) || menuService.isMenuItem(event.getOffHandItem())) {
             event.setCancelled(true);
         }
+    }
+
+    private boolean isRegistrationLocked(Player player) {
+        return player.getScoreboardTags().contains(REGISTRATION_TAG);
     }
 }

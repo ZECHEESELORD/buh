@@ -12,6 +12,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.ItemFlag;
 import sh.harold.fulcrum.api.menu.Menu;
 import sh.harold.fulcrum.api.menu.util.ColorUtils;
 import sh.harold.fulcrum.common.cooldown.*;
@@ -160,6 +162,7 @@ public class MenuButton implements MenuItem {
         this.volume = builder.volume;
         this.pitch = builder.pitch;
         this.anchored = builder.anchored;
+        this.glow = builder.glow;
         this.confirmationRequired = builder.confirmationRequired;
         this.confirmationWindow = builder.confirmationWindow;
         this.confirmationPrompt = builder.confirmationPrompt != null ? builder.confirmationPrompt : defaultConfirmationPrompt();
@@ -177,6 +180,10 @@ public class MenuButton implements MenuItem {
         this.displayItem = new ItemStack(builder.material, builder.amount);
         updateItemMeta();
         rebuildConfirmationDisplayItem();
+        if (glow) {
+            applyGlow(displayItem);
+            applyGlow(confirmationDisplayItem);
+        }
     }
 
     public static void bindCooldownRegistry(CooldownRegistry registry) {
@@ -189,6 +196,7 @@ public class MenuButton implements MenuItem {
     private final Component name;
     private final List<Component> lore;
     private boolean anchored;
+    private final boolean glow;
 
     public static void clearCooldownRegistry() {
         sharedCooldownRegistry = null;
@@ -757,6 +765,19 @@ public class MenuButton implements MenuItem {
         return item;
     }
 
+    private void applyGlow(ItemStack item) {
+        if (item == null) {
+            return;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+        meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        item.setItemMeta(meta);
+    }
+
     private Component defaultConfirmationPrompt() {
         return Component.text("Click again to confirm.", NamedTextColor.RED)
                 .decoration(TextDecoration.ITALIC, false);
@@ -900,6 +921,7 @@ public class MenuButton implements MenuItem {
         private boolean confirmationRequired = false;
         private Duration confirmationWindow = Duration.ofSeconds(4);
         private Component confirmationPrompt;
+        private boolean glow = false;
 
         private Builder(Material material) {
             this.material = Objects.requireNonNull(material, "Material cannot be null");
@@ -1045,6 +1067,17 @@ public class MenuButton implements MenuItem {
          */
         public Builder lore(Component... lines) {
             lore.addAll(Arrays.asList(lines));
+            return this;
+        }
+
+        /**
+         * Applies a fake enchantment glow to the button item.
+         *
+         * @param glow whether to show the glow
+         * @return this builder
+         */
+        public Builder glow(boolean glow) {
+            this.glow = glow;
             return this;
         }
 

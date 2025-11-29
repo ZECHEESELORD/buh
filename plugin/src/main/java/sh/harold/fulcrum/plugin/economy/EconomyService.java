@@ -29,6 +29,7 @@ public final class EconomyService implements AutoCloseable {
     private final ExecutorService executor;
     private final Map<UUID, Lock> accountLocks = new ConcurrentHashMap<>();
     private final Logger logger;
+    private final java.util.Set<BalanceListener> balanceListeners = ConcurrentHashMap.newKeySet();
 
     EconomyService(DataApi dataApi, Logger logger) {
         Objects.requireNonNull(dataApi, "dataApi");
@@ -58,6 +59,7 @@ public final class EconomyService implements AutoCloseable {
             BalanceSnapshot before = new BalanceSnapshot(playerId, currentBalance);
             BalanceSnapshot after = new BalanceSnapshot(playerId, updatedBalance);
             appendLedger(playerId, LedgerEntry.LedgerType.DEPOSIT, amount, updatedBalance, "manual");
+            notifyBalanceChanged(playerId, updatedBalance);
             return new MoneyChange.Success(new BalanceChange(before, after));
         });
     }
@@ -76,6 +78,7 @@ public final class EconomyService implements AutoCloseable {
             BalanceSnapshot before = new BalanceSnapshot(playerId, currentBalance);
             BalanceSnapshot after = new BalanceSnapshot(playerId, updatedBalance);
             appendLedger(playerId, LedgerEntry.LedgerType.WITHDRAWAL, amount, updatedBalance, "manual");
+            notifyBalanceChanged(playerId, updatedBalance);
             return new MoneyChange.Success(new BalanceChange(before, after));
         });
     }
@@ -110,6 +113,8 @@ public final class EconomyService implements AutoCloseable {
             }
             appendLedger(sourcePlayerId, LedgerEntry.LedgerType.TRANSFER_OUT, amount, updatedSource, "to:" + targetPlayerId);
             appendLedger(targetPlayerId, LedgerEntry.LedgerType.TRANSFER_IN, amount, updatedTarget, "from:" + sourcePlayerId);
+            notifyBalanceChanged(sourcePlayerId, updatedSource);
+            notifyBalanceChanged(targetPlayerId, updatedTarget);
 
             BalanceChange withdrawn = new BalanceChange(
                 new BalanceSnapshot(sourcePlayerId, sourceBalance),
@@ -215,5 +220,28 @@ public final class EconomyService implements AutoCloseable {
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
+    }
+
+    public void addBalanceListener(BalanceListener listener) {
+        balanceListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    public void removeBalanceListener(BalanceListener listener) {
+        balanceListeners.remove(listener);
+    }
+
+    private void notifyBalanceChanged(UUID playerId, long balance) {
+        for (BalanceListener listener : balanceListeners) {
+            try {
+                listener.onBalanceChanged(playerId, balance);
+            } catch (Exception exception) {
+                logger.log(Level.FINE, "Balance listener failed for " + playerId, exception);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    public interface BalanceListener {
+        void onBalanceChanged(UUID playerId, long balance);
     }
 }

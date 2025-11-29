@@ -49,6 +49,12 @@ public final class PlayerDataModule implements FulcrumModule {
         pluginManager.registerEvents(listener, plugin);
         pluginManager.registerEvents(pvpSettingsListener, plugin);
         pluginManager.registerEvents(usernameDisplayService, plugin);
+        plugin.getServer().getOnlinePlayers()
+            .forEach(player -> settingsService.loadSettings(player.getUniqueId())
+                .exceptionally(throwable -> {
+                    plugin.getLogger().log(Level.WARNING, "[startup:data] failed to warm settings for " + player.getUniqueId(), throwable);
+                    return null;
+                }));
         return CompletableFuture.completedFuture(null);
     }
 

@@ -204,12 +204,12 @@ public final class UnlockableService {
         }
         Optional<EconomyService> economy = economySupplier.get();
         if (economy.isEmpty()) {
-            return CompletableFuture.failedFuture(new IllegalStateException("Shard economy unavailable for unlock cost of " + cost));
+            return CompletableFuture.failedFuture(new IllegalStateException("Shard economy is snoozing; try again soon."));
         }
         return economy.get().withdraw(playerId, cost).thenCompose(result -> switch (result) {
             case MoneyChange.Success ignored -> CompletableFuture.completedFuture(null);
             case MoneyChange.InsufficientFunds insufficient -> CompletableFuture.failedFuture(new IllegalStateException(
-                "Need " + cost + " shards, have " + insufficient.balance().balance()
+                "You need " + cost + " shards to unlock this perk, but only have " + insufficient.balance().balance() + "."
             ));
         });
     }
