@@ -386,15 +386,8 @@ public final class UsernameDisplayService implements Listener {
 
     private void applyNametag(PacketContainer packet, Component nameComponent) {
         var dataValues = packet.getDataValueCollectionModifier();
-        if (dataValues.size() == 0) {
-            return;
-        }
-        List<WrappedDataValue> values = dataValues.readSafely(0);
-        if (values == null) {
-            values = new ArrayList<>();
-        } else {
-            values = new ArrayList<>(values);
-        }
+        List<WrappedDataValue> values = dataValues.size() == 0 ? null : dataValues.readSafely(0);
+        values = values == null ? new ArrayList<>() : new ArrayList<>(values);
         boolean updatedName = false;
         boolean updatedVisibility = false;
 
