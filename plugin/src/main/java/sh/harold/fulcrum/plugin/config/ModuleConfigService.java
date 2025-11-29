@@ -33,9 +33,7 @@ public final class ModuleConfigService {
 
     private static final String BASE_MODULES_KEY = "base-modules";
     private static final String MODULES_KEY = "modules";
-    private static final Set<ModuleId> OPTIONAL_DEPENDENT_MODULES = Set.of(
-        ModuleId.of("account-link")
-    );
+    private static final Set<ModuleId> OPTIONAL_DEPENDENT_MODULES = Set.of(ModuleId.of("economy"));
 
     private final Path configPath;
     private final Logger logger;

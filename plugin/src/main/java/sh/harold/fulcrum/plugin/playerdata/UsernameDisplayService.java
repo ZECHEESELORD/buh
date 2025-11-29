@@ -21,6 +21,8 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -48,6 +50,7 @@ public final class UsernameDisplayService implements Listener {
         .decoration(TextDecoration.ITALIC, false);
     private static final Component PVP_DISABLED_BADGE = Component.text("[☮]", NamedTextColor.GREEN)
         .decoration(TextDecoration.ITALIC, false);
+    private static final long HEALTH_REFRESH_INTERVAL_MILLIS = 500L;
 
     private final Plugin plugin;
     private final Logger logger;
@@ -55,6 +58,7 @@ public final class UsernameDisplayService implements Listener {
     private final PlayerSettingsService settingsService;
     private final ProtocolManager protocolManager;
     private final Map<UUID, PlayerIdentity> identities = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> recentHealthRefresh = new ConcurrentHashMap<>();
     private final GsonComponentSerializer gson = GsonComponentSerializer.gson();
     private final WrappedDataWatcher.Serializer nameSerializer;
     private final WrappedDataWatcher.Serializer booleanSerializer;
@@ -75,7 +79,7 @@ public final class UsernameDisplayService implements Listener {
         if (protocolManager != null) {
             registerPacketAdapters();
         } else {
-            logger.warning("ProtocolLib not detected; username masking will only apply in chat.");
+            logger.warning("ProtocolLib not detected; username masking will only apply in chat and viewer-aware messages. Tab and nametags will stay vanilla.");
         }
     }
 
@@ -95,6 +99,17 @@ public final class UsernameDisplayService implements Listener {
         UUID playerId = event.getPlayer().getUniqueId();
         identities.remove(playerId);
         settingsService.evictCachedSettings(playerId);
+        recentHealthRefresh.remove(playerId);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        refreshHealthIfPeaceful(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onRegain(EntityRegainHealthEvent event) {
+        refreshHealthIfPeaceful(event.getEntity());
     }
 
     public void track(Player player) {
@@ -114,7 +129,7 @@ public final class UsernameDisplayService implements Listener {
     public Component displayComponent(UUID viewerId, Player target, TextColor color) {
         TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
         UsernameView preference = settingsService.cachedUsernameView(viewerId);
-        return renderDisplayName(preference, target, resolvedColor);
+        return renderDisplayName(preference, target, resolvedColor, DisplayContext.GENERAL);
     }
 
     public void refreshView(Player viewer) {
@@ -193,44 +208,7 @@ public final class UsernameDisplayService implements Listener {
         protocolManager.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.PLAYER_INFO) {
             @Override
             public void onPacketSending(PacketEvent event) {
-                Player viewer = event.getPlayer();
-                if (viewer == null) {
-                    return;
-                }
-                UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-                var dataLists = event.getPacket().getPlayerInfoDataLists();
-                if (dataLists.size() == 0) {
-                    return;
-                }
-                List<PlayerInfoData> originals = dataLists.readSafely(0);
-                if (originals == null || originals.isEmpty()) {
-                    return;
-                }
-                List<PlayerInfoData> updated = new ArrayList<>(originals);
-                boolean mutated = false;
-                for (int i = 0; i < updated.size(); i++) {
-                    PlayerInfoData data = updated.get(i);
-                    if (data == null) {
-                        continue;
-                    }
-                    UUID targetId = data.getProfileId();
-                    if (targetId == null && data.getProfile() != null) {
-                        targetId = data.getProfile().getUUID();
-                    }
-                    if (targetId == null) {
-                        continue;
-                    }
-                    Player target = plugin.getServer().getPlayer(targetId);
-                    Component display = target != null
-                        ? renderDisplayName(preference, target, NamedTextColor.WHITE)
-                        : renderDisplayName(preference, targetId, data.getProfile() == null ? null : data.getProfile().getName(), NamedTextColor.WHITE);
-                    PlayerInfoData replacement = cloneWithDisplayName(data, display);
-                    updated.set(i, replacement);
-                    mutated = true;
-                }
-                if (mutated) {
-                    dataLists.writeSafely(0, updated);
-                }
+                rewritePlayerInfo(event);
             }
         });
 
@@ -250,6 +228,47 @@ public final class UsernameDisplayService implements Listener {
                 applyNametag(packet, target, preference);
             }
         });
+    }
+
+    private void rewritePlayerInfo(PacketEvent event) {
+        Player viewer = event.getPlayer();
+        if (viewer == null) {
+            return;
+        }
+        UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
+        var dataLists = event.getPacket().getPlayerInfoDataLists();
+        if (dataLists.size() == 0) {
+            return;
+        }
+        List<PlayerInfoData> originals = dataLists.readSafely(0);
+        if (originals == null || originals.isEmpty()) {
+            return;
+        }
+        List<PlayerInfoData> updated = new ArrayList<>(originals);
+        boolean mutated = false;
+        for (int i = 0; i < updated.size(); i++) {
+            PlayerInfoData data = updated.get(i);
+            if (data == null) {
+                continue;
+            }
+            UUID targetId = data.getProfileId();
+            if (targetId == null && data.getProfile() != null) {
+                targetId = data.getProfile().getUUID();
+            }
+            if (targetId == null) {
+                continue;
+            }
+            Player target = plugin.getServer().getPlayer(targetId);
+            Component display = target != null
+                ? renderDisplayName(preference, target, NamedTextColor.WHITE, DisplayContext.TAB)
+                : renderDisplayName(preference, targetId, data.getProfile() == null ? null : data.getProfile().getName(), NamedTextColor.WHITE, DisplayContext.TAB);
+            PlayerInfoData replacement = cloneWithDisplayName(data, display);
+            updated.set(i, replacement);
+            mutated = true;
+        }
+        if (mutated) {
+            dataLists.writeSafely(0, updated);
+        }
     }
 
     private PlayerInfoData cloneWithDisplayName(PlayerInfoData source, Component display) {
@@ -281,7 +300,7 @@ public final class UsernameDisplayService implements Listener {
         boolean updatedName = false;
         boolean updatedVisibility = false;
 
-        Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE);
+        Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE, DisplayContext.GENERAL);
         WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
         Optional<?> namePayload = Optional.ofNullable(serialized.getHandle());
 
@@ -332,7 +351,7 @@ public final class UsernameDisplayService implements Listener {
     private PlayerInfoData buildInfoData(Player target, UsernameView preference) {
         WrappedGameProfile profile = WrappedGameProfile.fromPlayer(target);
         WrappedRemoteChatSessionData chatSession = WrappedRemoteChatSessionData.fromPlayer(target);
-        Component display = renderDisplayName(preference, target, NamedTextColor.WHITE);
+        Component display = renderDisplayName(preference, target, NamedTextColor.WHITE, DisplayContext.TAB);
         WrappedChatComponent chatComponent = display == null ? null : WrappedChatComponent.fromJson(gson.serialize(display));
 
         return new PlayerInfoData(
@@ -356,7 +375,7 @@ public final class UsernameDisplayService implements Listener {
             PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.ENTITY_METADATA);
             packet.getIntegers().writeSafely(0, target.getEntityId());
             List<WrappedDataValue> values = new ArrayList<>();
-            Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE);
+            Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE, DisplayContext.GENERAL);
             WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
             values.add(new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, Optional.ofNullable(serialized.getHandle())));
             values.add(new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, true));
@@ -365,15 +384,16 @@ public final class UsernameDisplayService implements Listener {
         }
     }
 
-    private Component renderDisplayName(UsernameView preference, Player target, TextColor color) {
+    private Component renderDisplayName(UsernameView preference, Player target, TextColor color, DisplayContext context) {
         Objects.requireNonNull(target, "target");
         TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
         String base = displayName(preference, target);
         Component nameComponent = Component.text(base, resolvedColor).decoration(TextDecoration.ITALIC, false);
-        return decorateWithPvp(nameComponent, target.getUniqueId());
+        Component withPvp = decorateWithPvp(nameComponent, target.getUniqueId());
+        return decorateWithHealth(withPvp, target, context);
     }
 
-    private Component renderDisplayName(UsernameView preference, UUID targetId, String profileName, TextColor color) {
+    private Component renderDisplayName(UsernameView preference, UUID targetId, String profileName, TextColor color, DisplayContext context) {
         TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
         String base = displayName(preference, targetId, profileName);
         Component nameComponent = Component.text(base, resolvedColor).decoration(TextDecoration.ITALIC, false);
@@ -386,6 +406,41 @@ public final class UsernameDisplayService implements Listener {
         }
         Component indicator = settingsService.cachedPvpEnabled(targetId) ? PVP_ENABLED_BADGE : PVP_DISABLED_BADGE;
         return base.append(Component.space()).append(indicator);
+    }
+
+    private Component decorateWithHealth(Component base, Player target, DisplayContext context) {
+        if (context != DisplayContext.TAB || target == null) {
+            return base;
+        }
+        UUID targetId = target.getUniqueId();
+        if (settingsService.cachedPvpEnabled(targetId)) {
+            return base;
+        }
+        int health = Math.max(0, (int) Math.ceil(target.getHealth()));
+        Component heart = Component.text(health + "❤", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false);
+        return base.append(Component.space()).append(heart);
+    }
+
+    private void refreshHealthIfPeaceful(Entity entity) {
+        if (!(entity instanceof Player player)) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        if (settingsService.cachedPvpEnabled(playerId)) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = recentHealthRefresh.get(playerId);
+        if (last != null && now - last < HEALTH_REFRESH_INTERVAL_MILLIS) {
+            return;
+        }
+        recentHealthRefresh.put(playerId, now);
+        plugin.getServer().getScheduler().runTask(plugin, () -> plugin.getServer().getOnlinePlayers().forEach(this::refreshView));
+    }
+
+    private enum DisplayContext {
+        GENERAL,
+        TAB
     }
 
     private record PlayerIdentity(UUID playerId, String minecraftUsername, String osuUsername, String discordDisplayName) {

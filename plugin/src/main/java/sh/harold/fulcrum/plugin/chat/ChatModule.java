@@ -71,7 +71,7 @@ public final class ChatModule implements FulcrumModule {
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         Supplier<FormattedUsernameService> usernameServiceSupplier = () -> luckPermsModule.formattedUsernameService().orElse(null);
-        pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier), plugin);
+        pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier, usernameDisplayService), plugin);
         pluginManager.registerEvents(new ChatListener(plugin, chatFormatService, channelService, messageService, staffChatFormatter, usernameDisplayService, playerDirectoryService), plugin);
         pluginManager.registerEvents(staffChatBossBarService, plugin);
         channelService.addListener(staffChatBossBarService);
