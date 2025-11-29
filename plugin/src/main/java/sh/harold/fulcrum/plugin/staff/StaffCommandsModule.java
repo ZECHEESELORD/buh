@@ -14,6 +14,7 @@ import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 import sh.harold.fulcrum.plugin.staff.command.OpenInventoryCommand;
 import sh.harold.fulcrum.plugin.staff.VanishService;
+import sh.harold.fulcrum.plugin.staff.command.DumpDataCommand;
 import sh.harold.fulcrum.plugin.staff.command.LoopCommand;
 import sh.harold.fulcrum.plugin.staff.command.SudoCommand;
 import sh.harold.fulcrum.plugin.staff.command.VanishCommand;
@@ -69,5 +70,6 @@ public final class StaffCommandsModule implements FulcrumModule {
         registrar.register(new SudoCommand(staffGuard).build(), "sudo", java.util.List.of());
         registrar.register(new VanishCommand(plugin, staffGuard, vanishService).build(), "vanish", java.util.List.of());
         registrar.register(new OpenInventoryCommand(staffGuard, openInventoryService).build(), "openinv", java.util.List.of("openinventory"));
+        registrar.register(new DumpDataCommand(plugin, staffGuard, dataModule).build(), "dumpdata", java.util.List.of());
     }
 }
