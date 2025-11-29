@@ -123,10 +123,10 @@ public final class UnlockableService {
             .thenCompose(document -> {
                 PlayerUnlockable current = resolveUnlockable(document, definition);
                 if (!current.unlocked()) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("Unlockable is locked: " + unlockableId));
+                    return CompletableFuture.failedFuture(new UnlockableOperationException("Unlockable is locked: " + unlockableId));
                 }
                 if (!definition.toggleable()) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("Unlockable cannot be toggled: " + unlockableId));
+                    return CompletableFuture.failedFuture(new UnlockableOperationException("Unlockable cannot be toggled: " + unlockableId));
                 }
                 boolean enabled = !current.enabled();
                 return persistUnlockable(document, playerId, definition, current.tier(), enabled);
@@ -143,10 +143,10 @@ public final class UnlockableService {
             .thenCompose(document -> {
                 PlayerUnlockable current = resolveUnlockable(document, definition);
                 if (!current.unlocked()) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("Unlockable is locked: " + unlockableId));
+                    return CompletableFuture.failedFuture(new UnlockableOperationException("Unlockable is locked: " + unlockableId));
                 }
                 if (!definition.toggleable() && !enabled) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("Unlockable cannot be disabled: " + unlockableId));
+                    return CompletableFuture.failedFuture(new UnlockableOperationException("Unlockable cannot be disabled: " + unlockableId));
                 }
                 if (current.enabled() == enabled) {
                     return CompletableFuture.completedFuture(current);
@@ -204,11 +204,11 @@ public final class UnlockableService {
         }
         Optional<EconomyService> economy = economySupplier.get();
         if (economy.isEmpty()) {
-            return CompletableFuture.failedFuture(new IllegalStateException("Shard economy is snoozing; try again soon."));
+            return CompletableFuture.failedFuture(new UnlockableOperationException("Shard economy is snoozing; try again soon."));
         }
         return economy.get().withdraw(playerId, cost).thenCompose(result -> switch (result) {
             case MoneyChange.Success ignored -> CompletableFuture.completedFuture(null);
-            case MoneyChange.InsufficientFunds insufficient -> CompletableFuture.failedFuture(new IllegalStateException(
+            case MoneyChange.InsufficientFunds insufficient -> CompletableFuture.failedFuture(new UnlockableOperationException(
                 "You need " + cost + " shards to unlock this perk, but only have " + insufficient.balance().balance() + "."
             ));
         });
@@ -311,6 +311,22 @@ public final class UnlockableService {
 
     private String legacyPerkPath(UnlockableId unlockableId) {
         return LEGACY_PERKS_ROOT + "." + unlockableId.value();
+    }
+
+    private static final class UnlockableOperationException extends RuntimeException {
+        UnlockableOperationException(String message) {
+            super(message);
+        }
+
+        @Override
+        public String toString() {
+            return getMessage();
+        }
+
+        @Override
+        public synchronized Throwable fillInStackTrace() {
+            return this;
+        }
     }
 
     private CompletionStage<PlayerUnlockable> refundAndFail(UUID playerId, long cost, Throwable cause) {
