@@ -64,8 +64,7 @@ public final class StaffChatFormatter {
         if (nameColor == null) {
             nameColor = NamedTextColor.WHITE;
         }
-        String displayName = resolveDisplayName(sender, viewer);
-        Component nameComponent = Component.text(displayName, nameColor).decoration(TextDecoration.ITALIC, false);
+        Component nameComponent = resolveDisplayName(sender, viewer, nameColor);
         if (!prefixPart.equals(Component.empty())) {
             return prefixPart.append(Component.space())
                 .append(nameComponent)
@@ -77,10 +76,13 @@ public final class StaffChatFormatter {
             .append(coloredMessage);
     }
 
-    private String resolveDisplayName(Player sender, Audience viewer) {
-        if (usernameDisplayService == null || !(viewer instanceof Player viewerPlayer)) {
-            return sender.getName();
+    private Component resolveDisplayName(Player sender, Audience viewer, TextColor nameColor) {
+        if (nameColor == null) {
+            nameColor = NamedTextColor.WHITE;
         }
-        return usernameDisplayService.displayName(viewerPlayer.getUniqueId(), sender);
+        if (usernameDisplayService == null || !(viewer instanceof Player viewerPlayer)) {
+            return Component.text(sender.getName(), nameColor).decoration(TextDecoration.ITALIC, false);
+        }
+        return usernameDisplayService.displayComponent(viewerPlayer.getUniqueId(), sender, nameColor);
     }
 }
