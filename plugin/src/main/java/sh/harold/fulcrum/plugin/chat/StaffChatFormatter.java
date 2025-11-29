@@ -3,8 +3,11 @@ package sh.harold.fulcrum.plugin.chat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.audience.Audience;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 
 import java.util.Objects;
 import java.util.logging.Level;
@@ -19,16 +22,18 @@ public final class StaffChatFormatter {
     private final Plugin plugin;
     private final ChatFormatService formatService;
     private final boolean useLuckPerms;
+    private final UsernameDisplayService usernameDisplayService;
 
-    public StaffChatFormatter(Plugin plugin, ChatFormatService formatService) {
+    public StaffChatFormatter(Plugin plugin, ChatFormatService formatService, UsernameDisplayService usernameDisplayService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.formatService = formatService;
         this.useLuckPerms = formatService != null;
+        this.usernameDisplayService = usernameDisplayService;
     }
 
-    public Component format(Player sender, Component message) {
+    public Component format(Player sender, Component message, Audience viewer) {
         ChatFormatService.Format format = resolveFormat(sender);
-        return STAFF_PREFIX.append(render(format, message));
+        return STAFF_PREFIX.append(render(format, message, sender, viewer));
     }
 
     private ChatFormatService.Format resolveFormat(Player sender) {
@@ -51,18 +56,31 @@ public final class StaffChatFormatter {
         );
     }
 
-    private Component render(ChatFormatService.Format format, Component message) {
+    private Component render(ChatFormatService.Format format, Component message, Player sender, Audience viewer) {
         TextColor chatColor = format.chatColor() == null ? NamedTextColor.WHITE : format.chatColor();
         Component coloredMessage = message.color(chatColor);
         Component prefixPart = format.prefix();
+        TextColor nameColor = format.name().color();
+        if (nameColor == null) {
+            nameColor = NamedTextColor.WHITE;
+        }
+        String displayName = resolveDisplayName(sender, viewer);
+        Component nameComponent = Component.text(displayName, nameColor).decoration(TextDecoration.ITALIC, false);
         if (!prefixPart.equals(Component.empty())) {
             return prefixPart.append(Component.space())
-                .append(format.name())
+                .append(nameComponent)
                 .append(Component.text(": ", NamedTextColor.GRAY))
                 .append(coloredMessage);
         }
-        return format.name()
+        return nameComponent
             .append(Component.text(": ", NamedTextColor.GRAY))
             .append(coloredMessage);
+    }
+
+    private String resolveDisplayName(Player sender, Audience viewer) {
+        if (usernameDisplayService == null || !(viewer instanceof Player viewerPlayer)) {
+            return sender.getName();
+        }
+        return usernameDisplayService.displayName(viewerPlayer.getUniqueId(), sender);
     }
 }
