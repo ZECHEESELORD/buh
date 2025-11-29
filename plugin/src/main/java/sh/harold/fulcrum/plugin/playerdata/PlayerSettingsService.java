@@ -129,6 +129,11 @@ public final class PlayerSettingsService {
         return pvpCache.getOrDefault(playerId, DEFAULT_PVP);
     }
 
+    public boolean hasCachedPvp(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return pvpCache.containsKey(playerId);
+    }
+
     public UsernameView cachedUsernameView(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         return usernameViewCache.getOrDefault(playerId, DEFAULT_USERNAME_VIEW);

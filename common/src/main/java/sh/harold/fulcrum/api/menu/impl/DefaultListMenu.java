@@ -201,7 +201,8 @@ public class DefaultListMenu extends AbstractMenu {
         // Handle empty content
         if (contentItems.isEmpty()) {
             // Display empty message in center
-            int centerSlot = size / 2;
+            int preferredCenter = 22;
+            int centerSlot = preferredCenter < size ? preferredCenter : size / 2;
             MenuItem emptyItem = MenuDisplayItem.builder(Material.PAPER)
                     .name(emptyMessage)
                     .build();
