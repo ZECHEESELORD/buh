@@ -168,8 +168,7 @@ public final class UsernameDisplayService implements Listener {
         }
         PacketContainer packet = protocolManager.createPacket(playerInfoPacketType);
         EnumSet<EnumWrappers.PlayerInfoAction> actions = PlayerInfoActions.updateDisplayName();
-        logger.info("[username-debug] actions object class = " + actions.getClass().getName());
-        packet.getModifier().withType(EnumSet.class).write(0, actions);
+        packet.getPlayerInfoActions().write(0, actions);
         List<PlayerInfoData> entries = new ArrayList<>();
         for (Player target : plugin.getServer().getOnlinePlayers()) {
             UUID targetId = target.getUniqueId();
@@ -185,7 +184,7 @@ public final class UsernameDisplayService implements Listener {
         if (entries.isEmpty()) {
             return;
         }
-        packet.getPlayerInfoDataLists().writeSafely(1, entries);
+        packet.getPlayerInfoDataLists().write(0, entries);
         try {
             protocolManager.sendServerPacket(viewer, packet);
         } catch (RuntimeException runtimeException) {
