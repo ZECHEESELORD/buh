@@ -5,7 +5,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -25,7 +24,9 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -45,6 +46,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static sh.harold.fulcrum.plugin.osu.VerificationConstants.REGISTRATION_TAG;
 
 final class OsuVerificationService implements Listener, AutoCloseable {
     private static final Set<String> ALLOWED_COMMANDS = Set.of("linkosuaccount", "linkdiscordaccount", "skiposu", "menu", "settings", "help");
@@ -146,7 +149,13 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         if (check != null) {
             check.thenAccept(linked -> {
                 if (linked) {
-                    plugin.getServer().getScheduler().runTask(plugin, () -> releasePlayer(playerId, false));
+                    players.load(playerId.toString()).whenComplete((document, throwable) -> {
+                        if (throwable != null) {
+                            logger.log(Level.WARNING, "[login:data] verification join release load failed for " + playerId, throwable);
+                            return;
+                        }
+                        plugin.getServer().getScheduler().runTask(plugin, () -> completeIfReady(playerId, document, false));
+                    });
                 }
             });
         }
@@ -166,8 +175,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
                 logger.info(() -> "[verification] rerouting " + rootCommand + " to verification prompts for " + event.getPlayer().getUniqueId());
                 sendPromptsWithLoad(event.getPlayer());
             } else if (rootCommand.equals("skiposu")) {
-                String[] parts = root.split("\\s+");
-                handleSkipOsu(event.getPlayer(), parts.length > 1 ? parts[1] : null);
+                handleSkipOsu(event.getPlayer(), null);
             } else if (rootCommand.equals("linkosuaccount")) {
                 sendPrompts(event.getPlayer(), null); // will regenerate fresh links
             } else if (rootCommand.equals("linkdiscordaccount")) {
@@ -199,6 +207,24 @@ final class OsuVerificationService implements Listener, AutoCloseable {
             sendPromptsWithLoad(event.getPlayer());
         } else {
             logger.info(() -> "[verification] blocked interaction for " + event.getPlayer().getUniqueId() + " action=" + event.getAction());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        if (!isQuarantined(player)) {
+            return;
+        }
+        PlayerInventory inventory = player.getInventory();
+        ItemStack current = event.getCurrentItem();
+        ItemStack cursor = event.getCursor();
+        ItemStack hotbarSwap = event.getHotbarButton() >= 0 ? inventory.getItem(event.getHotbarButton()) : null;
+        if (isPlayerMenuHotkey(current) || isPlayerMenuHotkey(cursor) || isPlayerMenuHotkey(hotbarSwap)) {
+            event.setCancelled(true);
+            sendPromptsWithLoad(player);
         }
     }
 
@@ -238,8 +264,6 @@ final class OsuVerificationService implements Listener, AutoCloseable {
     public void onFlightToggle(PlayerToggleFlightEvent event) {
         if (isQuarantined(event.getPlayer())) {
             event.setCancelled(true);
-            event.getPlayer().setAllowFlight(true);
-            event.getPlayer().setFlying(true);
         }
     }
 
@@ -261,7 +285,14 @@ final class OsuVerificationService implements Listener, AutoCloseable {
             return;
         }
         event.setTo(event.getFrom());
-        plugin.getServer().getScheduler().runTask(plugin, () -> event.getPlayer().teleportAsync(verificationWorld.spawn()));
+        UUID playerId = event.getPlayer().getUniqueId();
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Player scheduledPlayer = plugin.getServer().getPlayer(playerId);
+            if (scheduledPlayer == null || !isQuarantined(playerId)) {
+                return;
+            }
+            scheduledPlayer.teleportAsync(verificationWorld.spawn());
+        });
     }
 
     @EventHandler
@@ -272,6 +303,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         snapshots.remove(playerId);
         skipOsu.remove(playerId);
         skipStages.remove(playerId);
+        event.getPlayer().removeScoreboardTag(REGISTRATION_TAG);
     }
 
     @Override
@@ -307,11 +339,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         quarantined.add(playerId);
         snapshots.put(playerId, snapshot(player));
         hideFromOthers(player);
-        player.setGameMode(GameMode.ADVENTURE);
-        player.setAllowFlight(true);
-        player.setFlying(true);
-        player.setInvulnerable(true);
-        player.setCollidable(false);
+        player.addScoreboardTag(REGISTRATION_TAG);
         player.teleportAsync(verificationWorld.spawn());
         sendPromptsWithLoad(player);
     }
@@ -325,50 +353,37 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         }
         skipStages.remove(playerId);
         skipOsu.remove(playerId);
+        player.removeScoreboardTag(REGISTRATION_TAG);
         PlayerSnapshot snapshot = snapshots.remove(playerId);
         PlayerSnapshot targetState = snapshot != null
             ? snapshot
-            : new PlayerSnapshot(player.getGameMode(), player.getAllowFlight(), player.isFlying(), player.isInvulnerable(), player.isCollidable(), player.getLocation().clone());
+            : new PlayerSnapshot(primarySpawn.clone());
         unhideFromOthers(player);
-        player.setInvulnerable(targetState.invulnerable());
-        player.setAllowFlight(targetState.allowFlight());
-        player.setFlying(targetState.flying());
-        player.setCollidable(targetState.collidable());
-        player.setGameMode(targetState.gameMode());
-        Location destination = targetState.returnLocation() != null ? targetState.returnLocation() : primarySpawn;
-        if (!destination.getWorld().equals(player.getWorld()) || player.getLocation().distanceSquared(destination) > 1.0) {
-            player.teleportAsync(destination).whenComplete((success, throwable) -> {
-                if (Boolean.TRUE.equals(success)) {
+        Location destination = targetState.returnLocation() != null ? targetState.returnLocation() : primarySpawn.clone();
+        player.teleportAsync(destination).whenComplete((success, throwable) -> {
+            if (Boolean.TRUE.equals(success)) {
+                return;
+            }
+            if (throwable != null) {
+                logger.log(Level.WARNING, "Async teleport failed for " + playerId + " back to " + destination, throwable);
+            }
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) {
                     return;
                 }
-                if (throwable != null) {
-                    logger.log(Level.WARNING, "Async teleport failed for " + playerId + " back to " + destination, throwable);
+                boolean syncSuccess = player.teleport(destination);
+                if (!syncSuccess) {
+                    logger.warning("Sync teleport failed for " + playerId + " back to " + destination);
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) {
-                        return;
-                    }
-                    boolean syncSuccess = player.teleport(destination);
-                    if (!syncSuccess) {
-                        logger.warning("Sync teleport failed for " + playerId + " back to " + destination);
-                    }
-                });
             });
-        }
+        });
         if (announce) {
             player.sendMessage(alert("LINKED!", NamedTextColor.GREEN, "Welcome to the server."));
         }
     }
 
     private PlayerSnapshot snapshot(Player player) {
-        return new PlayerSnapshot(
-            player.getGameMode(),
-            player.getAllowFlight(),
-            player.isFlying(),
-            player.isInvulnerable(),
-            player.isCollidable(),
-            player.getLocation().clone()
-        );
+        return new PlayerSnapshot(player.getLocation().clone());
     }
 
     private boolean isLinked(Document document) {
@@ -433,11 +448,12 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         }
         boolean hasDiscord = hasDiscordLink(document);
         boolean hasOsu = hasOsuLink(document);
+        boolean skippedOsu = hasOsuSkip(document) || skipOsu.contains(player.getUniqueId());
         if (!hasDiscord) {
             String url = linkService.createDiscordLink(player.getUniqueId(), player.getName());
             player.sendMessage(linkLine("Link your Discord account (required) here!", url));
         }
-        if (!hasOsu) {
+        if (!hasOsu && !skippedOsu) {
             String body = requireOsuLink
                 ? "Link your osu! account (required)."
                 : "Link your osu! account (optional).";
@@ -448,9 +464,9 @@ final class OsuVerificationService implements Listener, AutoCloseable {
                 if (current == SkipStage.NONE) {
                     player.sendMessage(skipLine("Are you sure you don't want to link your osu! account?", "/skiposu"));
                 } else if (current == SkipStage.ASK_ONE) {
-                    player.sendMessage(skipLine("Positive?", "/skiposu confirm1"));
+                    player.sendMessage(skipLine("Positive?", "/skiposu"));
                 } else if (current == SkipStage.ASK_TWO) {
-                    player.sendMessage(skipLine("Really sure?", "/skiposu confirm2"));
+                    player.sendMessage(skipLine("Really sure?", "/skiposu"));
                 }
             }
         } else {
@@ -473,7 +489,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         }
     }
 
-    private void handleSkipOsu(Player player, String stage) {
+    private void handleSkipOsu(Player player, String unused) {
         if (requireOsuLink) {
             player.sendMessage(alert("LINK!", NamedTextColor.RED, "osu! link is required; skipping is disabled."));
             return;
@@ -492,33 +508,32 @@ final class OsuVerificationService implements Listener, AutoCloseable {
                     player.sendMessage(alert("LINK!", NamedTextColor.AQUA, "Link Discord first, then you can skip osu!."));
                     return;
                 }
-                if (stage == null || stage.isBlank()) {
-                    skipStages.put(player.getUniqueId(), SkipStage.ASK_ONE);
-                    player.sendMessage(alert("SKIP!", NamedTextColor.GOLD, "Are you absolutely sure?"));
-                    player.sendMessage(skipLine("YES I'M SURE", "/skiposu confirm1"));
+                if (!hasDiscordLink(document)) {
+                    player.sendMessage(alert("LINK!", NamedTextColor.AQUA, "Link Discord first, then you can skip osu!."));
                     return;
                 }
-                switch (stage.toLowerCase()) {
-                    case "confirm1" -> {
-                        skipStages.put(player.getUniqueId(), SkipStage.ASK_TWO);
-                        player.sendMessage(alert("SKIP!", NamedTextColor.GOLD, "Positive?"));
-                        player.sendMessage(skipLine("YES I'M SURE", "/skiposu confirm2"));
-                    }
-                    case "confirm2" -> {
-                        skipStages.put(player.getUniqueId(), SkipStage.ASK_THREE);
-                        player.sendMessage(alert("SKIP!", NamedTextColor.GOLD, "Really sure?"));
-                        player.sendMessage(skipLine("YES I'M SURE", "/skiposu confirm3"));
-                    }
-                    case "confirm3" -> {
-                        skipStages.remove(player.getUniqueId());
-                        skipOsu.add(player.getUniqueId());
-                        player.sendMessage(alert("SKIP!", NamedTextColor.GOLD, "Skipping osu! link. You can still link later with /linkosuaccount."));
-                        boolean released = completeIfReady(player.getUniqueId(), document, true);
-                        if (!released) {
-                            sendPrompts(player, document);
-                        }
-                    }
-                    default -> player.sendMessage(alert("SKIP!", NamedTextColor.RED, "Unknown skip step. Click the prompts again."));
+                SkipStage currentStage = skipStages.getOrDefault(player.getUniqueId(), SkipStage.NONE);
+                if (currentStage == SkipStage.NONE) {
+                    skipStages.put(player.getUniqueId(), SkipStage.ASK_ONE);
+                    player.sendMessage(skipLine("Are you absolutely sure?", "/skiposu"));
+                    return;
+                }
+                if (currentStage == SkipStage.ASK_ONE) {
+                    skipStages.put(player.getUniqueId(), SkipStage.ASK_TWO);
+                    player.sendMessage(skipLine("Positive?", "/skiposu"));
+                    return;
+                }
+                if (currentStage == SkipStage.ASK_TWO) {
+                    skipStages.put(player.getUniqueId(), SkipStage.ASK_THREE);
+                    player.sendMessage(skipLine("Really sure?", "/skiposu"));
+                    return;
+                }
+                skipStages.remove(player.getUniqueId());
+                skipOsu.add(player.getUniqueId());
+                player.sendMessage(alert("SKIP!", NamedTextColor.GOLD, "Skipping osu! link. You can still link later with /linkosuaccount."));
+                boolean released = completeIfReady(player.getUniqueId(), document, true);
+                if (!released) {
+                    sendPrompts(player, document);
                 }
             });
         });
@@ -553,7 +568,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
     private boolean completeIfReady(UUID playerId, Document document, boolean fromSkip) {
         boolean hasDiscord = hasDiscordLink(document);
         boolean hasOsu = hasOsuLink(document);
-        boolean allowSkip = skipOsu.contains(playerId) && !requireOsuLink;
+        boolean allowSkip = (!requireOsuLink) && (skipOsu.contains(playerId) || hasOsuSkip(document));
         if (hasDiscord && (hasOsu || allowSkip)) {
             releasePlayer(playerId, true);
             return true;
@@ -612,12 +627,15 @@ final class OsuVerificationService implements Listener, AutoCloseable {
                 .orElse(false));
     }
 
+    private boolean hasOsuSkip(Document document) {
+        if (document == null || !document.exists()) {
+            return false;
+        }
+        return document.get("linking.osu.skip", Boolean.class)
+            .orElseGet(() -> document.get("osu.skip", Boolean.class).orElse(false));
+    }
+
     private record PlayerSnapshot(
-        GameMode gameMode,
-        boolean allowFlight,
-        boolean flying,
-        boolean invulnerable,
-        boolean collidable,
         Location returnLocation
     ) {
     }

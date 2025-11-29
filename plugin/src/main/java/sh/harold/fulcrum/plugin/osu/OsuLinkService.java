@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -35,6 +36,7 @@ public final class OsuLinkService {
     private final DiscordOAuthClient discordClient;
     private final Consumer<UUID> linkCompleteCallback;
     private final Logger logger;
+    private final Map<String, Object> accountLocks = new ConcurrentHashMap<>();
     private final Map<String, PendingLink> pendingLinks = new ConcurrentHashMap<>();
 
     public OsuLinkService(JavaPlugin plugin, DocumentCollection players, LinkAccountConfig config, Consumer<UUID> linkCompleteCallback) {
@@ -104,6 +106,9 @@ public final class OsuLinkService {
                 }
                 LinkResult result = persistOsuLink(pending, profile);
                 pendingLinks.remove(token);
+                if (!result.success()) {
+                    return result;
+                }
                 notifyPlayer(pending.playerId(), linkedMessage("osu!", profile.username()));
                 notifyLinkComplete(pending.playerId());
                 return result;
@@ -115,6 +120,9 @@ public final class OsuLinkService {
             }
             LinkResult result = persistDiscordLink(pending, profile);
             pendingLinks.remove(token);
+            if (!result.success()) {
+                return result;
+            }
             notifyPlayer(pending.playerId(), linkedMessage("Discord", profile.username()));
             notifyLinkComplete(pending.playerId());
             return result;
@@ -174,32 +182,43 @@ public final class OsuLinkService {
     }
 
     private LinkResult persistOsuLink(PendingLink pending, OsuOAuthClient.OsuUserProfile profile) {
-        Document document = players.load(pending.playerId().toString()).toCompletableFuture().join();
-        CompletionStage<Void> usernameStage = document.set("linking.osu.username", profile.username().trim());
-        CompletionStage<Void> idStage = document.set("linking.osu.userId", profile.userId());
-        CompletionStage<Void> rankStage = profile.globalRank() != null
-            ? document.set("linking.osu.rank", profile.globalRank())
-            : CompletableFuture.completedFuture(null);
-        CompletionStage<Void> countryStage = profile.countryCode() != null && !profile.countryCode().isBlank()
-            ? document.set("linking.osu.country", profile.countryCode())
-            : CompletableFuture.completedFuture(null);
-        CompletionStage<Void> clearLegacy = CompletableFuture.allOf(
-            document.remove("osu.username").toCompletableFuture(),
-            document.remove("osu.userId").toCompletableFuture(),
-            document.remove("osu.rank").toCompletableFuture(),
-            document.remove("osu.country").toCompletableFuture(),
-            document.remove("osu.linkedAt").toCompletableFuture()
-        );
+        String accountId = String.valueOf(profile.userId());
+        synchronized (accountLock(accountLockKey(Provider.OSU, accountId))) {
+            Optional<UUID> existingLink = findExistingOsuLink(profile, pending.playerId());
+            if (existingLink.isPresent()) {
+                return LinkResult.failure("That osu! account is already linked to another Minecraft player.");
+            }
 
-        CompletableFuture.allOf(
-            usernameStage.toCompletableFuture(),
-            idStage.toCompletableFuture(),
-            rankStage.toCompletableFuture(),
-            countryStage.toCompletableFuture(),
-            clearLegacy.toCompletableFuture()
-        ).join();
+            Document document = players.load(pending.playerId().toString()).toCompletableFuture().join();
+            if (isDifferentOsuAccount(document, profile)) {
+                return LinkResult.failure("This Minecraft account is already linked to a different osu! account.");
+            }
+            CompletionStage<Void> usernameStage = document.set("linking.osu.username", profile.username().trim());
+            CompletionStage<Void> idStage = document.set("linking.osu.userId", profile.userId());
+            CompletionStage<Void> rankStage = profile.globalRank() != null
+                ? document.set("linking.osu.rank", profile.globalRank())
+                : CompletableFuture.completedFuture(null);
+            CompletionStage<Void> countryStage = profile.countryCode() != null && !profile.countryCode().isBlank()
+                ? document.set("linking.osu.country", profile.countryCode())
+                : CompletableFuture.completedFuture(null);
+            CompletionStage<Void> clearLegacy = CompletableFuture.allOf(
+                document.remove("osu.username").toCompletableFuture(),
+                document.remove("osu.userId").toCompletableFuture(),
+                document.remove("osu.rank").toCompletableFuture(),
+                document.remove("osu.country").toCompletableFuture(),
+                document.remove("osu.linkedAt").toCompletableFuture()
+            );
 
-        return LinkResult.success(pending.username(), profile.username());
+            CompletableFuture.allOf(
+                usernameStage.toCompletableFuture(),
+                idStage.toCompletableFuture(),
+                rankStage.toCompletableFuture(),
+                countryStage.toCompletableFuture(),
+                clearLegacy.toCompletableFuture()
+            ).join();
+
+            return LinkResult.success(pending.username(), profile.username());
+        }
     }
 
     private Component linkedMessage(String provider, String username) {
@@ -230,31 +249,165 @@ public final class OsuLinkService {
     }
 
     private LinkResult persistDiscordLink(PendingLink pending, DiscordOAuthClient.DiscordUser profile) {
-        Document document = players.load(pending.playerId().toString()).toCompletableFuture().join();
-        Long discordId = parseLong(profile.id());
-        CompletionStage<Void> idStage = discordId != null
-            ? document.set("linking.discord.userId", discordId)
-            : document.set("linking.discord.userId", profile.id());
-        CompletionStage<Void> usernameStage = document.set("linking.discord.username", profile.username());
-        CompletionStage<Void> globalNameStage = profile.globalName() != null && !profile.globalName().isBlank()
-            ? document.set("linking.discord.globalName", profile.globalName())
-            : CompletableFuture.completedFuture(null);
-        CompletionStage<Void> discriminatorStage = profile.discriminator() != null && !profile.discriminator().isBlank()
-            ? document.set("linking.discord.discriminator", profile.discriminator())
-            : CompletableFuture.completedFuture(null);
-        CompletionStage<Void> rootIdStage = discordId != null
-            ? document.set("linking.discordId", discordId)
-            : document.set("linking.discordId", profile.id());
+        String accountId = profile.id();
+        synchronized (accountLock(accountLockKey(Provider.DISCORD, accountId))) {
+            Optional<UUID> existingLink = findExistingDiscordLink(profile, pending.playerId());
+            if (existingLink.isPresent()) {
+                return LinkResult.failure("That Discord account is already linked to another Minecraft player.");
+            }
 
-        CompletableFuture.allOf(
-            idStage.toCompletableFuture(),
-            usernameStage.toCompletableFuture(),
-            globalNameStage.toCompletableFuture(),
-            discriminatorStage.toCompletableFuture(),
-            rootIdStage.toCompletableFuture()
-        ).join();
+            Document document = players.load(pending.playerId().toString()).toCompletableFuture().join();
+            if (isDifferentDiscordAccount(document, profile)) {
+                return LinkResult.failure("This Minecraft account is already linked to a different Discord account.");
+            }
+            Long discordId = parseLong(profile.id());
+            CompletionStage<Void> idStage = discordId != null
+                ? document.set("linking.discord.userId", discordId)
+                : document.set("linking.discord.userId", profile.id());
+            CompletionStage<Void> usernameStage = document.set("linking.discord.username", profile.username());
+            CompletionStage<Void> globalNameStage = profile.globalName() != null && !profile.globalName().isBlank()
+                ? document.set("linking.discord.globalName", profile.globalName())
+                : CompletableFuture.completedFuture(null);
+            CompletionStage<Void> discriminatorStage = profile.discriminator() != null && !profile.discriminator().isBlank()
+                ? document.set("linking.discord.discriminator", profile.discriminator())
+                : CompletableFuture.completedFuture(null);
+            CompletionStage<Void> rootIdStage = discordId != null
+                ? document.set("linking.discordId", discordId)
+                : document.set("linking.discordId", profile.id());
 
-        return LinkResult.success(pending.username(), profile.username());
+            CompletableFuture.allOf(
+                idStage.toCompletableFuture(),
+                usernameStage.toCompletableFuture(),
+                globalNameStage.toCompletableFuture(),
+                discriminatorStage.toCompletableFuture(),
+                rootIdStage.toCompletableFuture()
+            ).join();
+
+            return LinkResult.success(pending.username(), profile.username());
+        }
+    }
+
+    private boolean isDifferentOsuAccount(Document document, OsuOAuthClient.OsuUserProfile profile) {
+        Long existingId = readLong(document, "linking.osu.userId")
+            .or(() -> readLong(document, "osu.userId"))
+            .orElse(null);
+        if (existingId != null && existingId != profile.userId()) {
+            return true;
+        }
+        String existingUsername = document.get("linking.osu.username", String.class)
+            .filter(value -> !value.isBlank())
+            .orElseGet(() -> document.get("osu.username", String.class)
+                .filter(value -> !value.isBlank())
+                .orElse(null));
+        return existingId == null
+            && existingUsername != null
+            && !existingUsername.equalsIgnoreCase(profile.username());
+    }
+
+    private boolean isDifferentDiscordAccount(Document document, DiscordOAuthClient.DiscordUser profile) {
+        Optional<String> existingId = readId(document, "linking.discord.userId", "linking.discordId");
+        if (existingId.isPresent() && !existingId.get().equals(profile.id())) {
+            return true;
+        }
+        String existingUsername = document.get("linking.discord.username", String.class)
+            .filter(value -> !value.isBlank())
+            .orElse(null);
+        return existingId.isEmpty()
+            && existingUsername != null
+            && !existingUsername.equalsIgnoreCase(profile.username());
+    }
+
+    private Optional<UUID> findExistingDiscordLink(DiscordOAuthClient.DiscordUser profile, UUID playerId) {
+        return findExistingLink(playerId, document -> matchesDiscordAccount(document, profile));
+    }
+
+    private Optional<UUID> findExistingOsuLink(OsuOAuthClient.OsuUserProfile profile, UUID playerId) {
+        return findExistingLink(playerId, document -> matchesOsuAccount(document, profile));
+    }
+
+    private Optional<UUID> findExistingLink(UUID playerId, java.util.function.Predicate<Document> predicate) {
+        return players.all()
+            .toCompletableFuture()
+            .join()
+            .stream()
+            .filter(Document::exists)
+            .filter(document -> !document.key().id().equals(playerId.toString()))
+            .filter(predicate)
+            .map(this::parsePlayerId)
+            .flatMap(Optional::stream)
+            .findFirst();
+    }
+
+    private boolean matchesDiscordAccount(Document document, DiscordOAuthClient.DiscordUser profile) {
+        Optional<String> existingId = readId(document, "linking.discord.userId", "linking.discordId");
+        if (existingId.isPresent() && existingId.get().equals(profile.id())) {
+            return true;
+        }
+        if (existingId.isPresent()) {
+            return false;
+        }
+        String existingUsername = document.get("linking.discord.username", String.class)
+            .filter(value -> !value.isBlank())
+            .orElse(null);
+        return existingUsername != null
+            && profile.username() != null
+            && existingUsername.equalsIgnoreCase(profile.username());
+    }
+
+    private boolean matchesOsuAccount(Document document, OsuOAuthClient.OsuUserProfile profile) {
+        Optional<Long> existingId = readLong(document, "linking.osu.userId")
+            .or(() -> readLong(document, "osu.userId"));
+        if (existingId.isPresent() && existingId.get() == profile.userId()) {
+            return true;
+        }
+        if (existingId.isPresent()) {
+            return false;
+        }
+        String existingUsername = document.get("linking.osu.username", String.class)
+            .filter(value -> !value.isBlank())
+            .orElseGet(() -> document.get("osu.username", String.class)
+                .filter(value -> !value.isBlank())
+                .orElse(null));
+        return existingUsername != null
+            && profile.username() != null
+            && existingUsername.equalsIgnoreCase(profile.username());
+    }
+
+    private Optional<Long> readLong(Document document, String path) {
+        return document.get(path, Number.class)
+            .map(Number::longValue)
+            .or(() -> document.get(path, String.class).map(this::parseLong).filter(Objects::nonNull));
+    }
+
+    private Optional<String> readId(Document document, String... paths) {
+        for (String path : paths) {
+            Optional<String> numberValue = document.get(path, Number.class).map(Number::toString).filter(value -> !value.isBlank());
+            if (numberValue.isPresent()) {
+                return numberValue;
+            }
+            Optional<String> stringValue = document.get(path, String.class).filter(value -> !value.isBlank());
+            if (stringValue.isPresent()) {
+                return stringValue;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Object accountLock(String key) {
+        return accountLocks.computeIfAbsent(key, ignored -> new Object());
+    }
+
+    private String accountLockKey(Provider provider, String accountId) {
+        String normalized = accountId == null ? "" : accountId.trim();
+        return provider.name() + ":" + normalized;
+    }
+
+    private Optional<UUID> parsePlayerId(Document document) {
+        try {
+            return Optional.of(UUID.fromString(document.key().id()));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
     }
 
     private Long parseLong(String raw) {
