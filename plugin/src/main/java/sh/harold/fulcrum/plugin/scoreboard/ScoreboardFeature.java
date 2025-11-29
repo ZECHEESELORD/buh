@@ -36,7 +36,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
     public static final String SCOREBOARD_ID = "default";
     private static final String DEFAULT_DATE_FORMAT = "MM/dd/yy";
-    private static final long REFRESH_PERIOD_TICKS = 40L;
+    private static final long REFRESH_PERIOD_TICKS = 80L;
 
     private final JavaPlugin plugin;
     private final ScoreboardService scoreboardService;
@@ -89,6 +89,13 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
                 .orElseThrow(() -> new IllegalStateException("EconomyService not available for scoreboard")),
             plugin.getLogger()
         );
+        economyModule.economyService()
+            .ifPresent(service -> service.addBalanceListener((playerId, balance) -> {
+                shardBalanceModule.pushBalance(playerId, balance);
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    scoreboardService.refreshPlayerScoreboard(playerId);
+                });
+            }));
 
         registerScoreboardDefinition();
 
