@@ -254,15 +254,6 @@ public final class UsernameDisplayService implements Listener {
             if (viewer == null) {
                 return;
             }
-            var actionsHandle = event.getPacket().getPlayerInfoActions();
-            if (actionsHandle != null && actionsHandle.size() > 0) {
-                var actions = actionsHandle.readSafely(0);
-                if (actions != null && !actions.isEmpty()
-                    && !actions.contains(EnumWrappers.PlayerInfoAction.ADD_PLAYER)
-                    && !actions.contains(EnumWrappers.PlayerInfoAction.UPDATE_DISPLAY_NAME)) {
-                    return;
-                }
-            }
             UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
             var dataLists = event.getPacket().getPlayerInfoDataLists();
             if (dataLists.size() == 0) {
