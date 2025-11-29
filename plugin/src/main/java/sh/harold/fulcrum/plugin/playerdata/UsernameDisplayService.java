@@ -185,7 +185,7 @@ public final class UsernameDisplayService implements Listener {
         if (entries.isEmpty()) {
             return;
         }
-        packet.getPlayerInfoDataLists().writeSafely(0, entries);
+        packet.getPlayerInfoDataLists().writeSafely(1, entries);
         try {
             protocolManager.sendServerPacket(viewer, packet);
         } catch (RuntimeException runtimeException) {
