@@ -31,7 +31,6 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +44,10 @@ public final class UsernameDisplayService implements Listener {
 
     private static final int CUSTOM_NAME_INDEX = 2;
     private static final int CUSTOM_NAME_VISIBILITY_INDEX = 3;
+    private static final Component PVP_ENABLED_BADGE = Component.text("[☠]", NamedTextColor.RED)
+        .decoration(TextDecoration.ITALIC, false);
+    private static final Component PVP_DISABLED_BADGE = Component.text("[☮]", NamedTextColor.GREEN)
+        .decoration(TextDecoration.ITALIC, false);
 
     private final Plugin plugin;
     private final Logger logger;
@@ -110,8 +113,8 @@ public final class UsernameDisplayService implements Listener {
 
     public Component displayComponent(UUID viewerId, Player target, TextColor color) {
         TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
-        String text = displayName(viewerId, target);
-        return Component.text(text, resolvedColor).decoration(TextDecoration.ITALIC, false);
+        UsernameView preference = settingsService.cachedUsernameView(viewerId);
+        return renderDisplayName(preference, target, resolvedColor);
     }
 
     public void refreshView(Player viewer) {
@@ -195,9 +198,6 @@ public final class UsernameDisplayService implements Listener {
                     return;
                 }
                 UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-                if (preference == UsernameView.MINECRAFT) {
-                    return;
-                }
                 var dataLists = event.getPacket().getPlayerInfoDataLists();
                 if (dataLists.size() == 0) {
                     return;
@@ -221,14 +221,9 @@ public final class UsernameDisplayService implements Listener {
                         continue;
                     }
                     Player target = plugin.getServer().getPlayer(targetId);
-                    if (target == null && preference == UsernameView.MINECRAFT) {
-                        continue;
-                    }
-                    String displayName = target != null
-                        ? displayName(preference, target)
-                        : displayName(preference, targetId, data.getProfile() == null ? null : data.getProfile().getName());
-                    Component display = Component.text(displayName, NamedTextColor.WHITE)
-                        .decoration(TextDecoration.ITALIC, false);
+                    Component display = target != null
+                        ? renderDisplayName(preference, target, NamedTextColor.WHITE)
+                        : renderDisplayName(preference, targetId, data.getProfile() == null ? null : data.getProfile().getName(), NamedTextColor.WHITE);
                     PlayerInfoData replacement = cloneWithDisplayName(data, display);
                     updated.set(i, replacement);
                     mutated = true;
@@ -247,9 +242,6 @@ public final class UsernameDisplayService implements Listener {
                     return;
                 }
                 UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-                if (preference == UsernameView.MINECRAFT) {
-                    return;
-                }
                 PacketContainer packet = event.getPacket();
                 Entity entity = packet.getEntityModifier(viewer.getWorld()).readSafely(0);
                 if (!(entity instanceof Player target)) {
@@ -289,8 +281,7 @@ public final class UsernameDisplayService implements Listener {
         boolean updatedName = false;
         boolean updatedVisibility = false;
 
-        Component nameComponent = Component.text(displayName(preference, target), NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false);
+        Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE);
         WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
         Optional<?> namePayload = Optional.ofNullable(serialized.getHandle());
 
@@ -341,9 +332,7 @@ public final class UsernameDisplayService implements Listener {
     private PlayerInfoData buildInfoData(Player target, UsernameView preference) {
         WrappedGameProfile profile = WrappedGameProfile.fromPlayer(target);
         WrappedRemoteChatSessionData chatSession = WrappedRemoteChatSessionData.fromPlayer(target);
-        Component display = preference == UsernameView.MINECRAFT
-            ? null
-            : Component.text(displayName(preference, target), NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false);
+        Component display = renderDisplayName(preference, target, NamedTextColor.WHITE);
         WrappedChatComponent chatComponent = display == null ? null : WrappedChatComponent.fromJson(gson.serialize(display));
 
         return new PlayerInfoData(
@@ -367,19 +356,36 @@ public final class UsernameDisplayService implements Listener {
             PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.ENTITY_METADATA);
             packet.getIntegers().writeSafely(0, target.getEntityId());
             List<WrappedDataValue> values = new ArrayList<>();
-            if (preference == UsernameView.OSU) {
-                Component nameComponent = Component.text(displayName(preference, target), NamedTextColor.WHITE)
-                    .decoration(TextDecoration.ITALIC, false);
-                WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
-                values.add(new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, Optional.ofNullable(serialized.getHandle())));
-                values.add(new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, true));
-            } else {
-                values.add(new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, Optional.empty()));
-                values.add(new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, false));
-            }
+            Component nameComponent = renderDisplayName(preference, target, NamedTextColor.WHITE);
+            WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
+            values.add(new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, Optional.ofNullable(serialized.getHandle())));
+            values.add(new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, true));
             packet.getDataValueCollectionModifier().writeSafely(0, values);
             protocolManager.sendServerPacket(viewer, packet);
         }
+    }
+
+    private Component renderDisplayName(UsernameView preference, Player target, TextColor color) {
+        Objects.requireNonNull(target, "target");
+        TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
+        String base = displayName(preference, target);
+        Component nameComponent = Component.text(base, resolvedColor).decoration(TextDecoration.ITALIC, false);
+        return decorateWithPvp(nameComponent, target.getUniqueId());
+    }
+
+    private Component renderDisplayName(UsernameView preference, UUID targetId, String profileName, TextColor color) {
+        TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
+        String base = displayName(preference, targetId, profileName);
+        Component nameComponent = Component.text(base, resolvedColor).decoration(TextDecoration.ITALIC, false);
+        return decorateWithPvp(nameComponent, targetId);
+    }
+
+    private Component decorateWithPvp(Component base, UUID targetId) {
+        if (targetId == null) {
+            return base;
+        }
+        Component indicator = settingsService.cachedPvpEnabled(targetId) ? PVP_ENABLED_BADGE : PVP_DISABLED_BADGE;
+        return base.append(Component.space()).append(indicator);
     }
 
     private record PlayerIdentity(UUID playerId, String minecraftUsername, String osuUsername, String discordDisplayName) {

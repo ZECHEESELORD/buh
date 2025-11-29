@@ -45,12 +45,8 @@ import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameView;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
-import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockable;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
-import sh.harold.fulcrum.plugin.unlockable.UnlockableDefinition;
-import sh.harold.fulcrum.plugin.unlockable.UnlockableTier;
-import sh.harold.fulcrum.plugin.unlockable.UnlockableType;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -74,6 +70,7 @@ import java.util.logging.Logger;
 import java.util.function.BiConsumer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.OptionalInt;
 
 public final class PlayerMenuService {
 
@@ -368,7 +365,7 @@ public final class PlayerMenuService {
 
     private MenuDisplayItem buildDirectoryItem(PlayerDirectoryEntry entry) {
         boolean online = plugin.getServer().getPlayer(entry.id()) != null;
-        String pvp = entry.pvpEnabled() ? "&aEnabled" : "&cDisabled";
+        String pvp = entry.pvpEnabled() ? "&aEnabled &c[☠]" : "&cDisabled &a[☮]";
 
         MenuDisplayItem item = MenuDisplayItem.builder(Material.PLAYER_HEAD)
             .name("&a" + entry.username())
@@ -378,7 +375,7 @@ public final class PlayerMenuService {
             .lore("&7First join: &b" + entry.firstJoinLabel())
             .lore("&7Last seen: &b" + entry.lastSeenLabel(online))
             .lore("")
-            .lore("&7PvP: &e" + pvp)
+            .lore("&7PvP: " + pvp)
             .lore("")
             .lore("&7osu! username: " + colorOsuValue(entry.osuUsernameLabel(), entry.hasOsuUsername()))
             .lore("&7osu! rank: " + colorOsuValue(entry.osuRankLabel(), entry.hasOsuRank()))
@@ -568,7 +565,7 @@ public final class PlayerMenuService {
             if (session.stagedItem() != null) {
                 restoreStaged(session, player);
             }
-            if (!maskSlot(player, slot, new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE))) {
+            if (!maskSlot(player, slot, maskPane())) {
                 player.sendMessage("§cCould not stage those diamonds; try again.");
                 return;
             }
@@ -710,7 +707,7 @@ public final class PlayerMenuService {
             return false;
         }
         player.getInventory().setItem(slot, null);
-        maskSlot(player, slot, new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE));
+        maskSlot(player, slot, maskPane());
         return true;
     }
 
@@ -951,7 +948,7 @@ public final class PlayerMenuService {
                     .build();
 
                 MenuButton pvpToggle = MenuButton.builder(Material.IRON_SWORD)
-                    .name(pvpEnabled ? "&aPvP: Enabled" : "&cPvP: Disabled")
+                    .name(pvpEnabled ? "&aPvP: Enabled &c[☠]" : "&cPvP: Disabled &a[☮]")
                     .secondary("Combat")
                     .description(pvpEnabled ? "Other players can spar with you." : "Keep the peace; nobody can tag you.")
                     .slot(11)
@@ -1035,6 +1032,7 @@ public final class PlayerMenuService {
         UUID playerId = player.getUniqueId();
         settingsService.setPvpEnabled(playerId, enable)
             .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getOnlinePlayers().forEach(usernameDisplayService::refreshView);
                 player.sendMessage(enable ? "§aPvP is now on; swing responsibly." : "§ePvP is snoozing; you're safe for now.");
                 openSettings(player);
             }))
@@ -1489,9 +1487,6 @@ public final class PlayerMenuService {
                 }
             }
         });
-    }
-
-    private record PerkMenuState(sh.harold.fulcrum.plugin.unlockable.PlayerUnlockableState state, long shards) {
     }
 
     private static final class BankSession {
