@@ -13,16 +13,16 @@ import java.util.Objects;
 
 import static io.papermc.paper.command.brigadier.Commands.literal;
 
-final class OsuLinkCommand {
+final class DiscordLinkCommand {
 
     private final OsuLinkService service;
 
-    OsuLinkCommand(OsuLinkService service) {
+    DiscordLinkCommand(OsuLinkService service) {
         this.service = Objects.requireNonNull(service, "service");
     }
 
     LiteralCommandNode<CommandSourceStack> build() {
-        return literal("linkosuaccount")
+        return literal("linkdiscordaccount")
             .requires(stack -> stack.getSender() instanceof Player)
             .executes(this::link)
             .build();
@@ -30,12 +30,12 @@ final class OsuLinkCommand {
 
     private int link(CommandContext<CommandSourceStack> context) {
         Player player = (Player) context.getSource().getSender();
-        if (service.hasOsuLink(player.getUniqueId())) {
-            player.sendMessage(service.errorMessage("ERROR!", "You've already linked your osu! account."));
+        if (service.hasDiscordLink(player.getUniqueId())) {
+            player.sendMessage(service.errorMessage("ERROR!", "You've already linked your Discord account."));
             return Command.SINGLE_SUCCESS;
         }
-        String url = service.createOsuLink(player.getUniqueId(), player.getName());
-        player.sendMessage(service.linkPrompt("LINK!", "Link your osu! account here!", url));
+        String url = service.createDiscordLink(player.getUniqueId(), player.getName());
+        player.sendMessage(service.linkPrompt("LINK!", "Link your Discord account here!", url));
         return Command.SINGLE_SUCCESS;
     }
 }

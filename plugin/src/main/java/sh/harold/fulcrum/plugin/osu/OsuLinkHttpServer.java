@@ -20,12 +20,12 @@ import java.util.logging.Logger;
 final class OsuLinkHttpServer implements AutoCloseable {
 
     private final OsuLinkService service;
-    private final OsuLinkConfig config;
+    private final LinkAccountConfig config;
     private final Logger logger;
     private HttpServer server;
     private ExecutorService executor;
 
-    OsuLinkHttpServer(OsuLinkService service, OsuLinkConfig config, Logger logger) {
+    OsuLinkHttpServer(OsuLinkService service, LinkAccountConfig config, Logger logger) {
         this.service = Objects.requireNonNull(service, "service");
         this.config = Objects.requireNonNull(config, "config");
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -35,13 +35,14 @@ final class OsuLinkHttpServer implements AutoCloseable {
         try {
             executor = Executors.newVirtualThreadPerTaskExecutor();
             server = HttpServer.create(new InetSocketAddress(config.bindAddress(), config.port()), 0);
-            server.createContext(config.oauth().callbackPath(), new CallbackHandler());
+            server.createContext(config.osu().callbackPath(), new CallbackHandler(OsuLinkService.Provider.OSU));
+            server.createContext(config.discord().callbackPath(), new CallbackHandler(OsuLinkService.Provider.DISCORD));
             server.setExecutor(executor);
             server.start();
-            logger.info("osu! link server listening on " + config.bindAddress() + ":" + config.port()
-                + " (callback " + config.oauth().callbackPath() + ")");
+            logger.info("link account server listening on " + config.bindAddress() + ":" + config.port()
+                + " (callbacks osu=" + config.osu().callbackPath() + ", discord=" + config.discord().callbackPath() + ")");
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to start osu link server", exception);
+            throw new IllegalStateException("Failed to start link account server", exception);
         }
     }
 
@@ -59,6 +60,12 @@ final class OsuLinkHttpServer implements AutoCloseable {
 
     private final class CallbackHandler implements HttpHandler {
 
+        private final OsuLinkService.Provider provider;
+
+        private CallbackHandler(OsuLinkService.Provider provider) {
+            this.provider = provider;
+        }
+
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             try {
@@ -68,22 +75,24 @@ final class OsuLinkHttpServer implements AutoCloseable {
                 }
                 Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
                 if (query.containsKey("error")) {
-                    String message = query.getOrDefault("error_description", "osu! login was cancelled.");
-                    respondWithPage(exchange, OsuLinkService.LinkResult.failure("osu! login failed: " + message));
+                    String message = query.getOrDefault("error_description", "Login was cancelled.");
+                    respondWithPage(exchange, OsuLinkService.LinkResult.failure("Login failed: " + message));
                     return;
                 }
 
                 String state = query.get("state");
                 String code = query.get("code");
                 if (state == null || state.isBlank() || code == null || code.isBlank()) {
-                    respondWithPage(exchange, OsuLinkService.LinkResult.failure("Missing code or state. Run /linkosuaccount again."));
+                    respondWithPage(exchange, OsuLinkService.LinkResult.failure("Missing code or state. Run the link command again."));
                     return;
                 }
 
-                OsuLinkService.LinkResult result = service.completeLink(urlDecode(state), code);
+                OsuLinkService.LinkResult result = provider == OsuLinkService.Provider.OSU
+                    ? service.completeOsuLink(urlDecode(state), code)
+                    : service.completeDiscordLink(urlDecode(state), code);
                 respondWithPage(exchange, result);
             } catch (Exception exception) {
-                logger.log(Level.WARNING, "osu link handler failed", exception);
+                logger.log(Level.WARNING, "link handler failed", exception);
                 respond(exchange, 500, "Internal error. Try again.");
             } finally {
                 exchange.close();
@@ -113,10 +122,10 @@ final class OsuLinkHttpServer implements AutoCloseable {
 
         private void respondWithPage(HttpExchange exchange, OsuLinkService.LinkResult result) throws IOException {
             int status = result.success() ? 200 : 400;
-            String title = result.success() ? "osu! account linked" : "osu! link failed";
+            String title = result.success() ? "Account linked" : "Account link failed";
             String detail = result.success()
-                ? "Linked osu! account <strong>%s</strong> to Minecraft user <strong>%s</strong>. You can close this tab and head back to the server."
-                .formatted(escape(result.osuUsername()), escape(result.playerUsername()))
+                ? "Linked account <strong>%s</strong> to Minecraft user <strong>%s</strong>. You can close this tab and head back to the server."
+                .formatted(escape(result.accountUsername()), escape(result.playerUsername()))
                 : escape(result.message());
             String body = """
                 <html>
