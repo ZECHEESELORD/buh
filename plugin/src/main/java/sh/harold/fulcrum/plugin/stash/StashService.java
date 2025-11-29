@@ -1,14 +1,12 @@
 package sh.harold.fulcrum.plugin.stash;
 
 import net.kyori.adventure.text.Component;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
-import sh.harold.fulcrum.plugin.beacon.BeaconStripper;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -47,14 +45,12 @@ public final class StashService implements AutoCloseable {
     private final ExecutorService executor;
     private final Map<UUID, Lock> locks = new java.util.concurrent.ConcurrentHashMap<>();
     private final Logger logger;
-    private final NamespacedKey beaconWhitelistKey;
 
     StashService(JavaPlugin plugin, DataApi dataApi) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.players = Objects.requireNonNull(dataApi, "dataApi").collection("players");
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.logger = plugin.getLogger();
-        this.beaconWhitelistKey = new NamespacedKey(plugin, "beacon_whitelist");
     }
 
     public CompletionStage<StashView> view(UUID playerId) {
@@ -152,27 +148,6 @@ public final class StashService implements AutoCloseable {
         }).thenApply(result -> {
             notifyDeposit(player, result.stashedItems());
             return result;
-        });
-    }
-
-    public CompletionStage<Integer> purgeBeacons(UUID playerId) {
-        Objects.requireNonNull(playerId, "playerId");
-        return runLocked(playerId, () -> {
-            Document document = loadDocument(playerId);
-            List<ItemStack> stash = readItems(document);
-            List<ItemStack> filtered = new ArrayList<>();
-            int removed = 0;
-            for (ItemStack item : stash) {
-                BeaconStripper.StripResult result = BeaconStripper.stripItem(item, beaconWhitelistKey);
-                removed += result.removed();
-                if (result.item() != null && !result.item().getType().isAir()) {
-                    filtered.add(result.item());
-                }
-            }
-            if (removed > 0 || filtered.size() != stash.size()) {
-                persist(document, filtered);
-            }
-            return removed;
         });
     }
 
@@ -285,10 +260,10 @@ public final class StashService implements AutoCloseable {
         }
         List<ItemStack> sanitized = new ArrayList<>();
         for (ItemStack item : items) {
-            BeaconStripper.StripResult result = BeaconStripper.stripItem(item, beaconWhitelistKey);
-            if (result.item() != null && result.item().getAmount() > 0 && !result.item().getType().isAir()) {
-                sanitized.add(result.item());
+            if (item == null || item.getAmount() <= 0 || item.getType().isAir()) {
+                continue;
             }
+            sanitized.add(item.clone());
         }
         return sanitized;
     }
