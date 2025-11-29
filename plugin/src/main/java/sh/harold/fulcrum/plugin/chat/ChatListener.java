@@ -125,9 +125,7 @@ final class ChatListener implements Listener {
         if (nameColor == null) {
             nameColor = NamedTextColor.WHITE;
         }
-        String name = resolveDisplayName(source, viewer);
-        Component nameComponent = Component.text(name, nameColor)
-            .decoration(TextDecoration.ITALIC, false);
+        Component nameComponent = resolveDisplayName(source, viewer, nameColor);
         if (tooltip != null) {
             nameComponent = nameComponent.hoverEvent(HoverEvent.showText(tooltip));
         }
@@ -174,8 +172,7 @@ final class ChatListener implements Listener {
         builder.append(labelledValue("Last seen", Component.text(entry.lastSeenLabel(online), NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
         builder.append(newline);
         builder.append(newline);
-        builder.append(labelledValue("PvP", Component.text(entry.pvpEnabled() ? "Enabled" : "Disabled", entry.pvpEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED)
-            .decoration(TextDecoration.ITALIC, false)));
+        builder.append(labelledValue("PvP", pvpLabel(entry.pvpEnabled())));
         builder.append(newline);
         builder.append(newline);
         builder.append(labelledValue("osu! username", osuValue(entry.osuUsernameLabel(), entry.hasOsuUsername())));
@@ -194,6 +191,14 @@ final class ChatListener implements Listener {
             .append(Component.text(label + ": ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
             .append(value)
             .build();
+    }
+
+    private Component pvpLabel(boolean enabled) {
+        Component status = Component.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED)
+            .decoration(TextDecoration.ITALIC, false);
+        Component badge = Component.text(enabled ? "[☠]" : "[☮]", enabled ? NamedTextColor.RED : NamedTextColor.GREEN)
+            .decoration(TextDecoration.ITALIC, false);
+        return status.append(Component.space()).append(badge);
     }
 
     private Component osuValue(String value, boolean linked) {
@@ -224,10 +229,13 @@ final class ChatListener implements Listener {
         return builder.build().decoration(TextDecoration.ITALIC, false);
     }
 
-    private String resolveDisplayName(org.bukkit.entity.Player source, Audience viewer) {
-        if (usernameDisplayService == null || !(viewer instanceof org.bukkit.entity.Player playerViewer)) {
-            return source.getName();
+    private Component resolveDisplayName(org.bukkit.entity.Player source, Audience viewer, TextColor nameColor) {
+        if (nameColor == null) {
+            nameColor = NamedTextColor.WHITE;
         }
-        return usernameDisplayService.displayName(playerViewer.getUniqueId(), source);
+        if (usernameDisplayService == null || !(viewer instanceof org.bukkit.entity.Player playerViewer)) {
+            return Component.text(source.getName(), nameColor).decoration(TextDecoration.ITALIC, false);
+        }
+        return usernameDisplayService.displayComponent(playerViewer.getUniqueId(), source, nameColor);
     }
 }
