@@ -208,6 +208,15 @@ public interface ListMenuBuilder {
     ListMenuBuilder closeOnOutsideClick(boolean closeOnOutsideClick);
 
     /**
+     * Controls whether the page indicator is shown when pagination is not needed.
+     * Defaults to true.
+     *
+     * @param showIndicator true to show the page indicator, false to hide it
+     * @return this builder
+     */
+    ListMenuBuilder showPageIndicator(boolean showIndicator);
+
+    /**
      * Fills all empty slots with the specified material.
      * Empty slots are those not occupied by border, buttons, or content items.
      *
