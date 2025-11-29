@@ -37,6 +37,7 @@ import sh.harold.fulcrum.plugin.playermenu.PlayerMenuModule;
 import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
+import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
 import sh.harold.fulcrum.plugin.version.PluginVersionService;
 import sh.harold.fulcrum.plugin.version.VersionService;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
@@ -147,6 +148,10 @@ public final class BuhPlugin extends JavaPlugin {
 
     public Optional<UnlockableService> unlockableService() {
         return unlockableModule == null ? Optional.empty() : Optional.ofNullable(unlockableModule.unlockableService());
+    }
+
+    public Optional<CosmeticRegistry> cosmeticRegistry() {
+        return unlockableModule == null ? Optional.empty() : Optional.ofNullable(unlockableModule.cosmeticRegistry());
     }
 
     public StatsModule statsModule() {
