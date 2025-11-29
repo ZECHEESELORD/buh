@@ -16,6 +16,7 @@ import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
+import sh.harold.fulcrum.plugin.economy.EconomyModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
@@ -42,32 +43,36 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private final VersionService versionService;
     private final PlayerDataModule playerDataModule;
     private final ShutdownModule shutdownModule;
+    private final EconomyModule economyModule;
 
     private FeatureConfigService configService;
     private ScoreboardConfig config;
     private BukkitTask refreshTask;
     private final FeatureVoteResultScoreboardModule voteResultModule = new FeatureVoteResultScoreboardModule();
     private PlayerSettingsService playerSettingsService;
+    private ShardBalanceScoreboardModule shardBalanceModule;
 
     public ScoreboardFeature(
         JavaPlugin plugin,
         ScoreboardService scoreboardService,
         VersionService versionService,
         PlayerDataModule playerDataModule,
-        ShutdownModule shutdownModule
+        ShutdownModule shutdownModule,
+        EconomyModule economyModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.versionService = Objects.requireNonNull(versionService, "versionService");
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
         this.shutdownModule = Objects.requireNonNull(shutdownModule, "shutdownModule");
+        this.economyModule = Objects.requireNonNull(economyModule, "economyModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("scoreboard"),
-            Set.of(ModuleId.of("player-data"), ModuleId.of("shutdown")),
+            Set.of(ModuleId.of("player-data"), ModuleId.of("shutdown"), ModuleId.of("economy")),
             ModuleCategory.HUD
         );
     }
@@ -79,6 +84,11 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
         playerSettingsService = playerDataModule.playerSettingsService()
             .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available for scoreboard"));
+        shardBalanceModule = new ShardBalanceScoreboardModule(
+            economyModule.economyService()
+                .orElseThrow(() -> new IllegalStateException("EconomyService not available for scoreboard")),
+            plugin.getLogger()
+        );
 
         registerScoreboardDefinition();
 
@@ -98,7 +108,12 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         }
         HandlerList.unregisterAll(this);
         plugin.getServer().getOnlinePlayers()
-            .forEach(player -> scoreboardService.hideScoreboard(player.getUniqueId()));
+            .forEach(player -> {
+                scoreboardService.hideScoreboard(player.getUniqueId());
+                if (shardBalanceModule != null) {
+                    shardBalanceModule.clear(player.getUniqueId());
+                }
+            });
         scoreboardService.unregisterScoreboard(SCOREBOARD_ID);
         if (configService != null) {
             configService.close();
@@ -130,12 +145,14 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         scoreboardService.hideScoreboard(event.getPlayer().getUniqueId());
+        shardBalanceModule.clear(event.getPlayer().getUniqueId());
     }
 
     private ScoreboardDefinition buildDefinition() {
         ScoreboardBuilder builder = new ScoreboardBuilder(SCOREBOARD_ID)
             .title(config.title())
             .headerSupplier(this::headerLine)
+            .module(shardBalanceModule)
             .module(voteResultModule);
 
         if (config.footer() != null && !config.footer().isBlank()) {
