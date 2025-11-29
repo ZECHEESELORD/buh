@@ -13,8 +13,12 @@ import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.menu.MenuModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
+import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.paper.command.brigadier.Commands;
@@ -32,6 +36,7 @@ public final class PlayerMenuModule implements FulcrumModule {
     private final MenuModule menuModule;
     private final PlayerDataModule playerDataModule;
     private final ScoreboardService scoreboardService;
+    private final UnlockableModule unlockableModule;
     private PlayerMenuService playerMenuService;
 
     public PlayerMenuModule(
@@ -40,7 +45,8 @@ public final class PlayerMenuModule implements FulcrumModule {
         StashModule stashModule,
         MenuModule menuModule,
         PlayerDataModule playerDataModule,
-        ScoreboardService scoreboardService
+        ScoreboardService scoreboardService,
+        UnlockableModule unlockableModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
@@ -48,13 +54,14 @@ public final class PlayerMenuModule implements FulcrumModule {
         this.menuModule = Objects.requireNonNull(menuModule, "menuModule");
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
+        this.unlockableModule = Objects.requireNonNull(unlockableModule, "unlockableModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("player-menu"),
-            Set.of(ModuleId.of("data"), ModuleId.of("stash"), ModuleId.of("player-data"), ModuleId.of("menu")),
+            Set.of(ModuleId.of("data"), ModuleId.of("stash"), ModuleId.of("player-data"), ModuleId.of("menu"), ModuleId.of("perks")),
             ModuleCategory.HUD
         );
     }
@@ -66,9 +73,26 @@ public final class PlayerMenuModule implements FulcrumModule {
         MenuService menuService = menuModule.menuService().orElseThrow(() -> new IllegalStateException("MenuService not available"));
         PlayerSettingsService settingsService = playerDataModule.playerSettingsService()
             .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available"));
+        UsernameDisplayService usernameDisplayService = playerDataModule.usernameDisplayService()
+            .orElseThrow(() -> new IllegalStateException("UsernameDisplayService not available"));
+        UnlockableService unlockableService = java.util.Objects.requireNonNull(
+            unlockableModule.unlockableService(),
+            "UnlockableService not available"
+        );
+        UnlockableRegistry unlockableRegistry = unlockableModule.registry();
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
-        playerMenuService = new PlayerMenuService(plugin, dataApi, stashService, menuService, settingsService, scoreboardService);
+        playerMenuService = new PlayerMenuService(
+            plugin,
+            dataApi,
+            stashService,
+            menuService,
+            settingsService,
+            usernameDisplayService,
+            scoreboardService,
+            unlockableService,
+            unlockableRegistry
+        );
 
         pluginManager.registerEvents(new PlayerMenuListener(playerMenuService), plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
