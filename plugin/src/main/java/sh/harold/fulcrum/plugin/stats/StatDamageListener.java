@@ -1,9 +1,8 @@
 package sh.harold.fulcrum.plugin.stats;
 
-import org.bukkit.attribute.Attribute;
-import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -32,26 +31,22 @@ public final class StatDamageListener implements Listener {
             return;
         }
 
-        StatContainer defenderContainer = statService.getContainer(EntityKey.fromUuid(defender.getUniqueId()));
-        syncArmorStat(defender, defenderContainer);
-
         LivingEntity attacker = resolveAttacker(event);
+        if (defender instanceof Player && attacker instanceof Player) {
+            return; // PvP remains vanilla
+        }
+
+        StatContainer defenderContainer = statService.getContainer(EntityKey.fromUuid(defender.getUniqueId()));
+
         double baseDamage = event.getDamage();
         if (attacker != null) {
             StatContainer attackerContainer = statService.getContainer(EntityKey.fromUuid(attacker.getUniqueId()));
-            attackerContainer.setBase(StatIds.ATTACK_DAMAGE, baseDamage);
             baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE);
         }
 
         double armor = defenderContainer.getStat(StatIds.ARMOR);
         double finalDamage = applyArmor(baseDamage, armor);
         applyFinalDamage(event, Math.max(0.0, finalDamage));
-    }
-
-    private void syncArmorStat(LivingEntity defender, StatContainer container) {
-        AttributeInstance armor = defender.getAttribute(Attribute.ARMOR);
-        double armorValue = armor == null ? 0.0 : armor.getValue();
-        container.setBase(StatIds.ARMOR, Math.max(0.0, armorValue));
     }
 
     private LivingEntity resolveAttacker(EntityDamageEvent event) {
