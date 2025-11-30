@@ -7,5 +7,7 @@ dependencies {
     implementation 'org.dizitart:nitrite:4.2.0'
     implementation 'org.dizitart:nitrite-mvstore-adapter:4.2.0'
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    implementation 'com.mysql:mysql-connector-j:8.4.0'
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
 }

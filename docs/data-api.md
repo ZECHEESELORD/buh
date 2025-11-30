@@ -51,6 +51,22 @@ playerDoc.remove("inventory").toCompletableFuture().join();
 
 // Overwrite the entire document
 playerDoc.overwrite(Map.of("settings", Map.of("hud", "minimal"))).toCompletableFuture().join();
+
+// Apply multiple changes in one go to avoid extra I/O
+playerDoc.update(snapshot -> {
+    snapshot.put("meta.lastSeen", Instant.now().toString());
+    snapshot.put("statistics.playtimeSeconds", ((Number) snapshot.getOrDefault("statistics.playtimeSeconds", 0L)).longValue() + 120);
+    return snapshot;
+}).toCompletableFuture().join();
+
+// Or use the built-in patch helper to set/remove paths in one write
+playerDoc.patch(
+    Map.of(
+        "meta.lastSeen", Instant.now().toString(),
+        "meta.username", "NewName"
+    ),
+    List.of("legacy.osu.username", "legacy.osu.userId")
+).toCompletableFuture().join();
 ```
 
 Async usage:
@@ -63,4 +79,12 @@ players.load("abcd-1234")
 ```
 
 Backend swapping:
-The plugin currently builds `DataApi.using(new JsonDocumentStore(dataPath, executor))`. To switch backends, construct another `DocumentStore` implementation and feed it to `DataApi.using(...)` inside `DataModule`. No feature code changes required.
+The plugin currently builds `DataApi.using(new MySqlDocumentStore(...))` by default. To switch backends, construct another `DocumentStore` implementation and feed it to `DataApi.using(...)` inside `DataModule`. No feature code changes required.
+
+Best practices for hot paths:
+- Batch writes: prefer `Document.patch(...)`, `Document.update(...)`, or a `DocumentPatch` helper to apply multiple changes in one call instead of chaining `set`/`remove`.
+- Coalesce per-player mutations: load once, stage changes in memory, flush once (e.g., join/quit, link flows).
+- Bulk operations: use `DocumentCollection.loadAll(...)`/`updateAll(...)` when touching many documents (e.g., mass flush on shutdown).
+- Keep writes off the main thread: the API already returns async stages; avoid `.join()` on the server thread unless you know the call is fast or preloaded.
+- Watch document size: large JSON blobs slow writes; keep hot data lean or split into dedicated tables if you need heavy querying (e.g., leaderboards).
+- Metrics: `DataApi.metrics()` exposes per-operation counts/timing; surface these to your logs/telemetry to spot regressions.
