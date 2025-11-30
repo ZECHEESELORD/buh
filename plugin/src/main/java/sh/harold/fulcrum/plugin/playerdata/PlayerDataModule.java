@@ -38,10 +38,10 @@ public final class PlayerDataModule implements FulcrumModule {
     public CompletionStage<Void> enable() {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         PlayerBiomeAggregator biomeAggregator = new PlayerBiomeAggregator(plugin.getLogger(), dataApi);
-        PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi, biomeAggregator);
+        directoryService = new PlayerDirectoryService(dataApi, plugin.getLogger());
+        PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi, biomeAggregator, directoryService);
         sessionListener = listener;
         settingsService = new PlayerSettingsService(dataApi);
-        directoryService = new PlayerDirectoryService(dataApi, plugin.getLogger());
         usernameDisplayService = new UsernameDisplayService(plugin, dataApi, settingsService);
         PvpSettingsListener pvpSettingsListener = new PvpSettingsListener(settingsService, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();

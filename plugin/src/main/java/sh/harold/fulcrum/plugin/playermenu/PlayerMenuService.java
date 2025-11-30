@@ -35,6 +35,7 @@ import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryEntry;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettings;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
@@ -86,6 +87,7 @@ public final class PlayerMenuService {
     private final MenuService menuService;
     private final StashService stashService;
     private final PlayerSettingsService settingsService;
+    private final PlayerDirectoryService playerDirectoryService;
     private final ScoreboardService scoreboardService;
     private final UsernameDisplayService usernameDisplayService;
     private final UnlockableService unlockableService;
@@ -103,6 +105,7 @@ public final class PlayerMenuService {
         MenuService menuService,
         PlayerSettingsService settingsService,
         UsernameDisplayService usernameDisplayService,
+        PlayerDirectoryService playerDirectoryService,
         ScoreboardService scoreboardService,
         UnlockableService unlockableService,
         UnlockableRegistry unlockableRegistry
@@ -115,6 +118,7 @@ public final class PlayerMenuService {
         this.menuService = Objects.requireNonNull(menuService, "menuService");
         this.settingsService = Objects.requireNonNull(settingsService, "settingsService");
         this.usernameDisplayService = Objects.requireNonNull(usernameDisplayService, "usernameDisplayService");
+        this.playerDirectoryService = Objects.requireNonNull(playerDirectoryService, "playerDirectoryService");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.unlockableRegistry = Objects.requireNonNull(unlockableRegistry, "unlockableRegistry");
@@ -240,10 +244,8 @@ public final class PlayerMenuService {
     private void openPlayerDirectory(Player player) {
         UUID viewerId = player.getUniqueId();
         renderDirectoryLoading(player);
-        players.all()
-            .thenApply(documents -> documents.stream()
-                .map(this::toDirectoryEntry)
-                .filter(Objects::nonNull)
+        playerDirectoryService.loadRoster()
+            .thenApply(entries -> entries.stream()
                 .sorted(Comparator.comparing(PlayerDirectoryEntry::username, String.CASE_INSENSITIVE_ORDER))
                 .toList())
             .whenComplete((entries, throwable) -> {
@@ -414,10 +416,6 @@ public final class PlayerMenuService {
             builder.append("&8(").append("&b").append(entry.discordUsername().trim()).append("&8)");
         }
         return builder.toString();
-    }
-
-    private PlayerDirectoryEntry toDirectoryEntry(Document document) {
-        return PlayerDirectoryEntry.fromDocument(document).orElse(null);
     }
 
 

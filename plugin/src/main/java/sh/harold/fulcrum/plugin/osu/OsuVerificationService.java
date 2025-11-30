@@ -359,7 +359,7 @@ final class OsuVerificationService implements Listener, AutoCloseable {
             ? snapshot
             : new PlayerSnapshot(primarySpawn.clone());
         unhideFromOthers(player);
-        Location destination = targetState.returnLocation() != null ? targetState.returnLocation() : primarySpawn.clone();
+        Location destination = resolveDestination(player, targetState);
         player.teleportAsync(destination).whenComplete((success, throwable) -> {
             if (Boolean.TRUE.equals(success)) {
                 return;
@@ -380,6 +380,17 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         if (announce) {
             player.sendMessage(alert("LINKED!", NamedTextColor.GREEN, "Welcome to the server."));
         }
+    }
+
+    private Location resolveDestination(Player player, PlayerSnapshot snapshot) {
+        if (snapshot.returnLocation() != null) {
+            return snapshot.returnLocation().clone();
+        }
+        Location bedSpawn = player.getBedSpawnLocation();
+        if (bedSpawn != null) {
+            return bedSpawn.clone();
+        }
+        return primarySpawn.clone();
     }
 
     private PlayerSnapshot snapshot(Player player) {

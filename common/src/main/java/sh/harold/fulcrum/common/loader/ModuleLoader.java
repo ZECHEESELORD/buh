@@ -12,12 +12,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class ModuleLoader {
 
+    private static final Logger LOGGER = Logger.getLogger(ModuleLoader.class.getName());
     private final Map<ModuleId, FulcrumModule> modules;
     private final List<ModuleId> loadOrder;
     private final ModuleGraph moduleGraph;
@@ -113,7 +117,19 @@ public final class ModuleLoader {
         CompletableFuture<Void> pipeline = CompletableFuture.completedFuture(null);
         for (ModuleId moduleId : reverseOrder) {
             FulcrumModule module = modules.get(moduleId);
-            pipeline = pipeline.thenCompose(ignored -> module.disable());
+            pipeline = pipeline.thenCompose(ignored -> {
+                LOGGER.info(() -> "Disabling module " + moduleId);
+                return module.disable()
+                    .toCompletableFuture()
+                    .orTimeout(15, TimeUnit.SECONDS)
+                    .whenComplete((ignoredResult, throwable) -> {
+                        if (throwable == null) {
+                            LOGGER.info(() -> "Disabled module " + moduleId);
+                        } else {
+                            LOGGER.log(Level.WARNING, "Module " + moduleId + " disable failed", throwable);
+                        }
+                    });
+            });
         }
         return pipeline;
     }
