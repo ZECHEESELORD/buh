@@ -177,39 +177,14 @@ public final class MySqlDocumentStore implements DocumentStore {
         if (removePaths != null) {
             removePaths.forEach(removals::add);
         }
-        return CompletableFuture.runAsync(() -> {
-            long startedAt = System.nanoTime();
-            try (Connection connection = dataSource.getConnection()) {
-                boolean previousAutoCommit = connection.getAutoCommit();
-                connection.setAutoCommit(false);
-                try {
-                    int affected = applyPatch(connection, key, sets, removals);
-                    if (affected == 0) {
-                        Map<String, Object> seed = new java.util.LinkedHashMap<>();
-                        sets.forEach((path, value) -> MapPath.write(seed, path, value));
-                        for (String path : removals) {
-                            MapPath.remove(seed, path);
-                        }
-                        writeInternal(connection, key, seed);
-                        affected = 1;
-                    }
-                    connection.commit();
-                    if (affected == 0) {
-                        throw new IllegalStateException("Patch failed to affect document " + key);
-                    }
-                } catch (Exception exception) {
-                    connection.rollback();
-                    throw exception;
-                } finally {
-                    connection.setAutoCommit(previousAutoCommit);
-                }
-            } catch (SQLException exception) {
-                logger.log(Level.WARNING, "[data] patch failed for " + key.collection() + "/" + key.id(), exception);
-                throw new IllegalStateException("Failed to patch document " + key, exception);
-            } finally {
-                logIfSlow("patch", key, startedAt);
+        return update(key, current -> {
+            Map<String, Object> working = MapPath.deepCopy(current);
+            sets.forEach((path, value) -> MapPath.write(working, path, value));
+            for (String path : removals) {
+                MapPath.remove(working, path);
             }
-        }, executor);
+            return working;
+        }).thenApply(snapshot -> null);
     }
 
     @Override
@@ -317,7 +292,7 @@ public final class MySqlDocumentStore implements DocumentStore {
                 .map(entry -> {
                     parameters.add(pathParam(entry.getKey()));
                     parameters.add(toJsonValue(entry.getValue()));
-                    return ", ?, ?";
+                    return ", ?, JSON_EXTRACT(?, '$')";
                 })
                 .collect(Collectors.joining("", "JSON_SET(" + dataExpression, ")"));
             dataExpression = setExpr;
@@ -346,13 +321,32 @@ public final class MySqlDocumentStore implements DocumentStore {
             for (Object param : parameters) {
                 statement.setObject(index++, param);
             }
-            return statement.executeUpdate();
+            try {
+                return statement.executeUpdate();
+            } catch (SQLException exception) {
+                logger.log(Level.WARNING, "[data] mysql json patch failed sql=" + sql + " params=" + parameters, exception);
+                throw exception;
+            }
         }
     }
 
     private String pathParam(String path) {
-        String normalized = path == null || path.isBlank() ? "$" : "$." + path.replace("\"", "\\\"");
-        return normalized;
+        if (path == null || path.isBlank()) {
+            return "$";
+        }
+        String[] parts = path.split("\\.");
+        StringBuilder builder = new StringBuilder("$");
+        for (String part : parts) {
+            if (part.matches("[A-Za-z0-9_]+")) {
+                builder.append(".").append(part);
+            } else {
+                String escaped = part
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"");
+                builder.append(".\"").append(escaped).append("\"");
+            }
+        }
+        return builder.toString();
     }
 
     private void logIfSlow(String operation, DocumentKey key, long startedAtNanos) {

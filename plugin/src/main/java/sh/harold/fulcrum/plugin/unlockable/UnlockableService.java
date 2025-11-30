@@ -21,15 +21,24 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
+import sh.harold.fulcrum.common.cooldown.CooldownAcquisition;
+import sh.harold.fulcrum.common.cooldown.CooldownKey;
+import sh.harold.fulcrum.common.cooldown.CooldownRegistry;
+import sh.harold.fulcrum.common.cooldown.CooldownSpec;
+
+import java.time.Duration;
+
 public final class UnlockableService {
 
     private static final String UNLOCKABLES_ROOT = "progression.unlockables";
     private static final String COSMETICS_ROOT = "progression.cosmetics";
+    private static final Duration TOGGLE_COOLDOWN = Duration.ofSeconds(2);
 
     private final UnlockableRegistry registry;
     private final CosmeticRegistry cosmeticRegistry;
     private final DocumentCollection players;
     private final Map<UUID, PlayerUnlockableState> stateCache = new ConcurrentHashMap<>();
+    private final CooldownRegistry cooldownRegistry;
     private final Supplier<Optional<EconomyService>> economySupplier;
     private final Logger logger;
 
@@ -37,12 +46,14 @@ public final class UnlockableService {
         DataApi dataApi,
         UnlockableRegistry registry,
         CosmeticRegistry cosmeticRegistry,
+        CooldownRegistry cooldownRegistry,
         Supplier<Optional<EconomyService>> economySupplier,
         Logger logger
     ) {
         Objects.requireNonNull(dataApi, "dataApi");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
+        this.cooldownRegistry = Objects.requireNonNull(cooldownRegistry, "cooldownRegistry");
         this.economySupplier = Objects.requireNonNull(economySupplier, "economySupplier");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.players = dataApi.collection("players");
@@ -75,7 +86,9 @@ public final class UnlockableService {
     }
 
     public void evict(UUID playerId) {
-        stateCache.remove(Objects.requireNonNull(playerId, "playerId"));
+        UUID target = Objects.requireNonNull(playerId, "playerId");
+        stateCache.remove(target);
+        cooldownRegistry.clear(toggleCooldownKey(target));
     }
 
     public CompletionStage<Boolean> isUnlocked(UUID playerId, UnlockableId unlockableId) {
@@ -135,7 +148,8 @@ public final class UnlockableService {
     public CompletionStage<PlayerUnlockable> toggle(UUID playerId, UnlockableId unlockableId) {
         Objects.requireNonNull(playerId, "playerId");
         UnlockableDefinition definition = requireDefinition(unlockableId);
-        return players.load(playerId.toString())
+        return enforceToggleCooldown(playerId)
+            .thenCompose(ignored -> players.load(playerId.toString()))
             .thenCompose(document -> {
                 PlayerUnlockable current = resolveUnlockable(document, definition);
                 if (!current.unlocked()) {
@@ -155,7 +169,8 @@ public final class UnlockableService {
     public CompletionStage<PlayerUnlockable> setEnabled(UUID playerId, UnlockableId unlockableId, boolean enabled) {
         Objects.requireNonNull(playerId, "playerId");
         UnlockableDefinition definition = requireDefinition(unlockableId);
-        return players.load(playerId.toString())
+        return enforceToggleCooldown(playerId)
+            .thenCompose(ignored -> players.load(playerId.toString()))
             .thenCompose(document -> {
                 PlayerUnlockable current = resolveUnlockable(document, definition);
                 if (!current.unlocked()) {
@@ -471,6 +486,21 @@ public final class UnlockableService {
 
     private String cosmeticPath(CosmeticSection section) {
         return COSMETICS_ROOT + "." + section.dataKey();
+    }
+
+    private CompletionStage<Void> enforceToggleCooldown(UUID playerId) {
+        CooldownKey key = toggleCooldownKey(playerId);
+        return cooldownRegistry.acquire(key, CooldownSpec.rejecting(TOGGLE_COOLDOWN))
+            .thenCompose(acquisition -> switch (acquisition) {
+                case CooldownAcquisition.Accepted ignored -> CompletableFuture.completedFuture(null);
+                case CooldownAcquisition.Rejected rejected -> CompletableFuture.failedFuture(new UnlockableOperationException(
+                    "You are toggling too fast. Please wait " + rejected.remaining().toSecondsPart() + "s."
+                ));
+            });
+    }
+
+    private CooldownKey toggleCooldownKey(UUID playerId) {
+        return new CooldownKey("unlockables", "toggle", playerId, null);
     }
 
     private static final class UnlockableOperationException extends RuntimeException {

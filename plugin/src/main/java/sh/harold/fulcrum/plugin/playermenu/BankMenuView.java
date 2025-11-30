@@ -74,6 +74,11 @@ final class BankMenuView {
     void open(Player player, Consumer<Player> backAction) {
         UUID playerId = player.getUniqueId();
         BankSession session = sessions.computeIfAbsent(playerId, ignored -> new BankSession());
+        Consumer<Player> resolvedBackAction = backAction != null ? backAction : session.backAction();
+        if (resolvedBackAction != null) {
+            session.backAction(resolvedBackAction);
+        }
+        Consumer<Player> menuBackAction = session.backAction();
 
         players.load(playerId.toString())
             .thenApply(document -> document.get("bank.shards", Number.class).map(Number::longValue).orElse(0L))
@@ -104,15 +109,15 @@ final class BankMenuView {
                     .onClick(viewer -> viewer.sendMessage(Component.text("Ledger synced for your account.", NamedTextColor.GRAY)))
                     .build();
 
-                int closeSlot = MenuButton.getCloseSlot(ROWS);
                 MenuButton backButton = MenuButton.builder(Material.ARROW)
                     .name("&7Back")
+                    .secondary("Player Menu")
                     .description("Return to the player menu.")
                     .slot(MenuButton.getBackSlot(ROWS))
                     .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(viewer -> plugin.getServer().getScheduler().runTask(plugin, () -> {
-                        if (backAction != null) {
-                            backAction.accept(viewer);
+                        if (menuBackAction != null) {
+                            menuBackAction.accept(viewer);
                         } else {
                             viewer.closeInventory();
                         }
@@ -224,9 +229,13 @@ final class BankMenuView {
             session.stage(staged, slot);
             session.clearConfirmation();
             player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f);
-            open(player, ignored -> {
-            });
+            reopen(player);
         });
+    }
+
+    private void reopen(Player player) {
+        BankSession session = getSession(player.getUniqueId());
+        open(player, session.backAction());
     }
 
     private void depositStaged(Player player) {
@@ -247,8 +256,7 @@ final class BankMenuView {
         if (!verifyAndRemoveStagedFromInventory(player, session)) {
             player.sendMessage("§cThose diamonds moved; restage them.");
             session.clear();
-            open(player, __ -> {
-            });
+            reopen(player);
             return;
         }
         players.load(playerId.toString())
@@ -266,16 +274,14 @@ final class BankMenuView {
                     logger.log(Level.SEVERE, "Failed to deposit diamonds for " + playerId, throwable);
                     player.sendMessage("§cDeposit failed; your diamonds were returned.");
                     refund(session, player);
-                    open(player, __ -> {
-                    });
+                    reopen(player);
                     return;
                 }
                 session.clear();
                 session.clearConfirmation();
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.4f);
                 player.sendMessage("§aShattered into §b" + shardGain + " shards§a.");
-                open(player, __ -> {
-                });
+                reopen(player);
             });
     }
 
@@ -546,6 +552,7 @@ final class BankMenuView {
         private ItemStack stagedItem;
         private boolean confirmPending;
         private int stagedSlot = -1;
+        private Consumer<Player> backAction;
 
         ItemStack stagedItem() {
             return stagedItem;
@@ -576,6 +583,14 @@ final class BankMenuView {
 
         int stagedSlot() {
             return stagedSlot;
+        }
+
+        Consumer<Player> backAction() {
+            return backAction;
+        }
+
+        void backAction(Consumer<Player> backAction) {
+            this.backAction = backAction;
         }
     }
 
