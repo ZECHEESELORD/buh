@@ -7,10 +7,12 @@ import sh.harold.fulcrum.plugin.economy.EconomyService;
 import sh.harold.fulcrum.plugin.economy.MoneyChange;
 
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -22,7 +24,6 @@ import java.util.logging.Logger;
 public final class UnlockableService {
 
     private static final String UNLOCKABLES_ROOT = "progression.unlockables";
-    private static final String LEGACY_PERKS_ROOT = "progression.perks";
     private static final String COSMETICS_ROOT = "progression.cosmetics";
 
     private final UnlockableRegistry registry;
@@ -273,12 +274,11 @@ public final class UnlockableService {
         boolean enabled
     ) {
         PlayerUnlockable updated = new PlayerUnlockable(definition, tier, enabled);
-        String basePath = unlockablePath(definition.id());
-        CompletableFuture<Void> tierUpdate = document.set(basePath + ".tier", updated.tier()).toCompletableFuture();
-        CompletableFuture<Void> enabledUpdate = document.set(basePath + ".enabled", updated.enabled()).toCompletableFuture();
-        CompletableFuture<Void> legacyTierUpdate = document.set(legacyPerkPath(definition.id()) + ".tier", updated.tier()).toCompletableFuture();
-        CompletableFuture<Void> legacyEnabledUpdate = document.set(legacyPerkPath(definition.id()) + ".enabled", updated.enabled()).toCompletableFuture();
-        return CompletableFuture.allOf(tierUpdate, enabledUpdate, legacyTierUpdate, legacyEnabledUpdate)
+        String basePath = unlockablePath(definition);
+        sh.harold.fulcrum.plugin.data.DocumentPatch patch = new sh.harold.fulcrum.plugin.data.DocumentPatch()
+            .set(basePath + ".tier", updated.tier())
+            .set(basePath + ".enabled", updated.enabled());
+        return patch.apply(document)
             .thenApply(ignored -> cacheState(playerId, document).unlockable(definition.id()).orElse(updated));
     }
 
@@ -288,29 +288,32 @@ public final class UnlockableService {
         CosmeticSection section,
         Optional<UnlockableId> cosmeticId
     ) {
-        CompletableFuture<Void> update = cosmeticId
-            .map(id -> document.set(cosmeticPath(section), id.value()).toCompletableFuture())
-            .orElseGet(() -> document.remove(cosmeticPath(section)).toCompletableFuture());
-        return update.thenApply(ignored -> cacheState(playerId, document));
+        sh.harold.fulcrum.plugin.data.DocumentPatch patch = new sh.harold.fulcrum.plugin.data.DocumentPatch();
+        if (cosmeticId.isPresent()) {
+            patch.set(cosmeticPath(section), cosmeticId.get().value());
+        } else {
+            patch.remove(cosmeticPath(section));
+        }
+        return patch.apply(document).thenApply(ignored -> cacheState(playerId, document));
     }
 
     private PlayerUnlockableState buildState(Document document) {
         Map<UnlockableId, PlayerUnlockable> unlockables = new LinkedHashMap<>();
         Map<CosmeticSection, UnlockableId> cosmetics = new EnumMap<>(CosmeticSection.class);
         Map<?, ?> raw = document.get(UNLOCKABLES_ROOT, Map.class).orElse(Map.of());
-        Map<?, ?> legacyRaw = document.get(LEGACY_PERKS_ROOT, Map.class).orElse(Map.of());
         Map<?, ?> cosmeticsRaw = document.get(COSMETICS_ROOT, Map.class).orElse(Map.of());
 
         for (UnlockableDefinition definition : registry.definitions()) {
-            String basePath = unlockablePath(definition.id());
-            PlayerUnlockable unlockable = parseUnlockable(raw, basePath, document, definition);
-            if (!unlockable.unlocked()) {
-                unlockable = parseUnlockable(legacyRaw, legacyPerkPath(definition.id()), document, definition);
-            }
+            Map<?, ?> typeRaw = typeSection(raw, definition.type());
+            Map<?, ?> source = typeRaw.containsKey(definition.id().value()) ? typeRaw : raw;
+            String basePath = unlockablePath(definition);
+            PlayerUnlockable unlockable = parseUnlockable(source, basePath, document, definition);
             unlockables.put(definition.id(), unlockable);
         }
-        logUnknown(raw);
-        logUnknown(legacyRaw);
+        logUnknownCategories(raw);
+        for (UnlockableType type : UnlockableType.values()) {
+            logUnknownUnlockables(typeSection(raw, type), type);
+        }
         parseCosmetics(cosmeticsRaw, cosmetics, unlockables);
         return new PlayerUnlockableState(unlockables, new PlayerCosmeticLoadout(cosmetics));
     }
@@ -366,18 +369,25 @@ public final class UnlockableService {
                 enabled = true;
             }
         } else {
-            tier = document.get(basePath + ".tier", Number.class).map(Number::intValue).orElse(0);
-            enabled = document.get(basePath + ".enabled", Boolean.class).orElse(tier > 0);
+            tier = document.get(basePath + ".tier", Number.class)
+                .map(Number::intValue)
+                .or(() -> document.get(legacyUnlockablePath(definition) + ".tier", Number.class).map(Number::intValue))
+                .orElse(0);
+            enabled = document.get(basePath + ".enabled", Boolean.class)
+                .or(() -> document.get(legacyUnlockablePath(definition) + ".enabled", Boolean.class))
+                .orElse(tier > 0);
         }
         return new PlayerUnlockable(definition, tier, enabled);
     }
 
     private PlayerUnlockable resolveUnlockable(Document document, UnlockableDefinition definition) {
-        String basePath = unlockablePath(definition.id());
+        String basePath = unlockablePath(definition);
         int tier = document.get(basePath + ".tier", Number.class)
             .map(Number::intValue)
+            .or(() -> document.get(legacyUnlockablePath(definition) + ".tier", Number.class).map(Number::intValue))
             .orElse(0);
         boolean enabled = document.get(basePath + ".enabled", Boolean.class)
+            .or(() -> document.get(legacyUnlockablePath(definition) + ".enabled", Boolean.class))
             .orElse(tier > 0);
         return new PlayerUnlockable(definition, tier, enabled);
     }
@@ -388,30 +398,75 @@ public final class UnlockableService {
         return state;
     }
 
-    private void logUnknown(Map<?, ?> raw) {
+    private void logUnknownCategories(Map<?, ?> raw) {
         if (raw.isEmpty()) {
             return;
         }
+        Set<String> knownCategories = new HashSet<>();
+        for (UnlockableType type : UnlockableType.values()) {
+            knownCategories.add(typePath(type));
+        }
         for (Object key : raw.keySet()) {
-            if (key instanceof String unlockableKey) {
-                try {
-                    UnlockableId unlockableId = new UnlockableId(unlockableKey);
-                    if (registry.definition(unlockableId).isEmpty()) {
-                        logger.fine(() -> "Ignoring unknown unlockable entry in data: " + unlockableKey);
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    logger.fine(() -> "Ignoring malformed unlockable entry in data: " + unlockableKey);
+            if (!(key instanceof String category)) {
+                continue;
+            }
+            if (knownCategories.contains(category)) {
+                continue;
+            }
+            try {
+                boolean matchesLegacyUnlockable = registry.definition(new UnlockableId(category)).isPresent();
+                if (!matchesLegacyUnlockable) {
+                    logger.fine(() -> "Ignoring unknown unlockable category in data: " + category);
                 }
+            } catch (IllegalArgumentException ignored) {
+                logger.fine(() -> "Ignoring malformed unlockable category in data: " + category);
             }
         }
     }
 
-    private String unlockablePath(UnlockableId unlockableId) {
-        return UNLOCKABLES_ROOT + "." + unlockableId.value();
+    private void logUnknownUnlockables(Map<?, ?> raw, UnlockableType type) {
+        if (raw.isEmpty()) {
+            return;
+        }
+        for (Object key : raw.keySet()) {
+            if (!(key instanceof String unlockableKey)) {
+                continue;
+            }
+            try {
+                UnlockableId unlockableId = new UnlockableId(unlockableKey);
+                Optional<UnlockableDefinition> definition = registry.definition(unlockableId);
+                if (definition.isEmpty()) {
+                    logger.fine(() -> "Ignoring unknown unlockable entry in data: " + unlockableKey);
+                } else if (definition.get().type() != type) {
+                    logger.fine(() -> "Ignoring unlockable in mismatched category: " + unlockableKey + " expected " + definition.get().type() + " entry under " + type);
+                }
+            } catch (IllegalArgumentException ignored) {
+                logger.fine(() -> "Ignoring malformed unlockable entry in data: " + unlockableKey);
+            }
+        }
     }
 
-    private String legacyPerkPath(UnlockableId unlockableId) {
-        return LEGACY_PERKS_ROOT + "." + unlockableId.value();
+    private Map<?, ?> typeSection(Map<?, ?> root, UnlockableType type) {
+        Object typeMap = root.get(typePath(type));
+        if (typeMap instanceof Map<?, ?> map) {
+            return map;
+        }
+        return Map.of();
+    }
+
+    private String unlockablePath(UnlockableDefinition definition) {
+        return UNLOCKABLES_ROOT + "." + typePath(definition.type()) + "." + definition.id().value();
+    }
+
+    private String legacyUnlockablePath(UnlockableDefinition definition) {
+        return UNLOCKABLES_ROOT + "." + definition.id().value();
+    }
+
+    private String typePath(UnlockableType type) {
+        return switch (type) {
+            case PERK -> "perks";
+            case COSMETIC -> "cosmetics";
+        };
     }
 
     private String cosmeticPath(CosmeticSection section) {
