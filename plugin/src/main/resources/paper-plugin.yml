@@ -13,5 +13,7 @@ dependencies:
     required: true
     bootstrap: false
     load: AFTER
+libraries:
+  - 'com.mysql:mysql-connector-j:8.4.0'
 authors: [ Harold, ZECHEESELORD ]
 website: https://harold.sh
