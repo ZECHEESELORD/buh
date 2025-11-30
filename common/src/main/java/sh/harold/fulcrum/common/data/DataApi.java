@@ -23,6 +23,10 @@ public interface DataApi extends AutoCloseable {
 
     java.util.Optional<sh.harold.fulcrum.common.data.ledger.LedgerRepository> ledger();
 
+    default sh.harold.fulcrum.common.data.metrics.DataMetrics metrics() {
+        return sh.harold.fulcrum.common.data.metrics.DataMetrics.noop();
+    }
+
     @Override
     void close();
 }

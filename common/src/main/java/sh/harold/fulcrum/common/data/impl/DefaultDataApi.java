@@ -4,6 +4,7 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.common.data.DocumentStore;
 import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
+import sh.harold.fulcrum.common.data.metrics.DataMetrics;
 
 import java.util.Map;
 import java.util.Objects;
@@ -20,6 +21,7 @@ public final class DefaultDataApi implements DataApi {
     private final Map<String, DocumentCollection> collections = new ConcurrentHashMap<>();
     private final ExecutorService ownedExecutor;
     private final LedgerRepository ledgerRepository;
+    private final DataMetrics metrics;
 
     public DefaultDataApi(DocumentStore store, Executor executor, LedgerRepository ledgerRepository) {
         this.store = Objects.requireNonNull(store, "store");
@@ -31,17 +33,23 @@ public final class DefaultDataApi implements DataApi {
             this.ownedExecutor = null;
         }
         this.ledgerRepository = ledgerRepository;
+        this.metrics = new DataMetrics();
     }
 
     @Override
     public DocumentCollection collection(String name) {
         Objects.requireNonNull(name, "name");
-        return collections.computeIfAbsent(name, value -> new DefaultDocumentCollection(value, store, executor));
+        return collections.computeIfAbsent(name, value -> new DefaultDocumentCollection(value, store, executor, metrics));
     }
 
     @Override
     public Optional<LedgerRepository> ledger() {
         return Optional.ofNullable(ledgerRepository);
+    }
+
+    @Override
+    public DataMetrics metrics() {
+        return metrics;
     }
 
     @Override
