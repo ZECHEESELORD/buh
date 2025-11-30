@@ -4,8 +4,7 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -156,20 +155,20 @@ public final class PlayerSettingsService {
             .map(UsernameView::fromConfig)
             .orElse(DEFAULT_USERNAME_VIEW);
 
-        List<CompletionStage<Void>> updates = new ArrayList<>();
+        Map<String, Object> defaults = new LinkedHashMap<>();
         if (scoreboardStored.isEmpty()) {
-            updates.add(document.set(SCOREBOARD_PATH, scoreboardEnabled));
+            defaults.put(SCOREBOARD_PATH, scoreboardEnabled);
         }
         if (pvpStored.isEmpty()) {
-            updates.add(document.set(PVP_PATH, pvpEnabled));
+            defaults.put(PVP_PATH, pvpEnabled);
         }
         if (usernameViewStored.isEmpty()) {
-            updates.add(document.set(USERNAME_VIEW_PATH, usernameView.name()));
+            defaults.put(USERNAME_VIEW_PATH, usernameView.name());
         }
 
-        CompletionStage<Void> persist = updates.isEmpty()
+        CompletionStage<Void> persist = defaults.isEmpty()
             ? CompletableFuture.completedFuture(null)
-            : CompletableFuture.allOf(updates.stream().map(CompletionStage::toCompletableFuture).toArray(CompletableFuture[]::new));
+            : document.patch(defaults, java.util.List.of());
 
         return persist.thenApply(ignored -> {
             cachePvp(playerId, pvpEnabled);

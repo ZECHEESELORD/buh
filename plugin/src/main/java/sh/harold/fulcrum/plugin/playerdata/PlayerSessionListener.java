@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -99,68 +100,21 @@ final class PlayerSessionListener implements Listener {
 
     private CompletableFuture<Void> ensureJoinMetadata(Document document, Instant now, String username) {
         String timestamp = now.toString();
-        CompletionStage<Void> firstJoinStage = ensureFirstJoin(document, timestamp);
-        CompletionStage<Void> lastJoinStage = document.set("meta.lastJoin", timestamp);
-        CompletionStage<Void> usernameStage = ensureUsername(document, username);
-        CompletionStage<Void> playtimeStage = ensurePlaytimeCounter(document);
-        CompletionStage<Void> menuStage = ensureMenuItemConfig(document);
-
-        return CompletableFuture.allOf(
-            firstJoinStage.toCompletableFuture(),
-            lastJoinStage.toCompletableFuture(),
-            usernameStage.toCompletableFuture(),
-            playtimeStage.toCompletableFuture(),
-            menuStage.toCompletableFuture()
-        );
-    }
-
-    private CompletableFuture<Void> ensureFirstJoin(Document document, String timestamp) {
-        Optional<String> firstJoin = document.get("meta.firstJoin", String.class);
-        if (firstJoin.isEmpty()) {
-            return document.set("meta.firstJoin", timestamp).toCompletableFuture();
+        Map<String, Object> updates = new LinkedHashMap<>();
+        if (document.get("meta.firstJoin", String.class).isEmpty()) {
+            updates.put("meta.firstJoin", timestamp);
         }
-        return CompletableFuture.completedFuture(null);
-    }
-
-    private CompletableFuture<Void> ensurePlaytimeCounter(Document document) {
-        Optional<Number> playtime = document.get("statistics.playtimeSeconds", Number.class);
-        if (playtime.isEmpty()) {
-            return document.set("statistics.playtimeSeconds", 0L).toCompletableFuture();
+        updates.put("meta.lastJoin", timestamp);
+        if (document.get("meta.username", String.class).filter(username::equals).isEmpty()) {
+            updates.put("meta.username", username);
         }
-        return CompletableFuture.completedFuture(null);
-    }
-
-    private CompletableFuture<Void> ensureUsername(Document document, String username) {
-        Optional<String> stored = document.get("meta.username", String.class);
-        if (stored.isPresent() && stored.get().equals(username)) {
-            return CompletableFuture.completedFuture(null);
+        if (document.get("statistics.playtimeSeconds", Number.class).isEmpty()) {
+            updates.put("statistics.playtimeSeconds", 0L);
         }
-        return document.set("meta.username", username).toCompletableFuture();
-    }
-
-    private CompletableFuture<Void> ensureMenuItemConfig(Document document) {
-        Optional<String> materialName = document.get(PlayerMenuItemConfig.MATERIAL_PATH, String.class);
-        Optional<Integer> slotValue = document.get(PlayerMenuItemConfig.SLOT_PATH, Integer.class);
-        Optional<Boolean> enabledValue = document.get(PlayerMenuItemConfig.ENABLED_PATH, Boolean.class);
-
-        Material material = materialName
-            .map(this::parseMaterial)
-            .filter(candidate -> candidate != null && !candidate.isAir())
-            .orElse(PlayerMenuItemConfig.DEFAULT.material());
-        int slot = slotValue.orElse(PlayerMenuItemConfig.DEFAULT.slot());
-        boolean enabled = enabledValue.orElse(true);
-
-        CompletionStage<Void> materialStage = materialName.isPresent()
+        seedMenuItemDefaults(document, updates);
+        return updates.isEmpty()
             ? CompletableFuture.completedFuture(null)
-            : document.set(PlayerMenuItemConfig.MATERIAL_PATH, material.name()).toCompletableFuture();
-        CompletionStage<Void> slotStage = slotValue.isPresent()
-            ? CompletableFuture.completedFuture(null)
-            : document.set(PlayerMenuItemConfig.SLOT_PATH, slot).toCompletableFuture();
-        CompletionStage<Void> enabledStage = enabledValue.isPresent()
-            ? CompletableFuture.completedFuture(null)
-            : document.set(PlayerMenuItemConfig.ENABLED_PATH, enabled).toCompletableFuture();
-
-        return CompletableFuture.allOf(materialStage.toCompletableFuture(), slotStage.toCompletableFuture(), enabledStage.toCompletableFuture());
+            : document.patch(updates, java.util.List.of()).toCompletableFuture();
     }
 
     private CompletableFuture<Void> updatePlaytime(Document document, Instant sessionStart, Instant logoutTime, String username) {
@@ -174,22 +128,28 @@ final class PlayerSessionListener implements Listener {
         String logoutTimestamp = logoutTime.toString();
 
         Instant fallbackJoin = effectiveStart == null ? logoutTime : effectiveStart;
-        CompletionStage<Void> firstJoinStage = ensureFirstJoin(document, fallbackJoin.toString());
-        CompletionStage<Void> lastJoinStage = document.set("meta.lastJoin", fallbackJoin.toString());
-        CompletionStage<Void> lastLeaveStage = document.set("meta.lastLeave", logoutTimestamp);
-        CompletionStage<Void> usernameStage = ensureUsername(document, username);
-        CompletionStage<Void> playtimeStage = ensurePlaytimeCounter(document)
-            .thenCompose(ignored -> incrementPlaytime(document, sessionSeconds));
-        CompletionStage<Void> menuStage = ensureMenuItemConfig(document);
+        Map<String, Object> updates = new LinkedHashMap<>();
+        if (document.get("meta.firstJoin", String.class).isEmpty()) {
+            updates.put("meta.firstJoin", fallbackJoin.toString());
+        }
+        updates.put("meta.lastJoin", fallbackJoin.toString());
+        updates.put("meta.lastLeave", logoutTimestamp);
+        if (document.get("meta.username", String.class).filter(username::equals).isEmpty()) {
+            updates.put("meta.username", username);
+        }
 
-        return CompletableFuture.allOf(
-            firstJoinStage.toCompletableFuture(),
-            lastJoinStage.toCompletableFuture(),
-            lastLeaveStage.toCompletableFuture(),
-            usernameStage.toCompletableFuture(),
-            playtimeStage.toCompletableFuture(),
-            menuStage.toCompletableFuture()
-        );
+        Optional<Number> playtime = document.get("statistics.playtimeSeconds", Number.class);
+        long current = playtime.map(Number::longValue).orElse(0L);
+        if (sessionSeconds > 0 || playtime.isEmpty()) {
+            long updated = current + sessionSeconds;
+            updates.put("statistics.playtimeSeconds", updated);
+        }
+
+        seedMenuItemDefaults(document, updates);
+
+        return updates.isEmpty()
+            ? CompletableFuture.completedFuture(null)
+            : document.patch(updates, java.util.List.of()).toCompletableFuture();
     }
 
     private long computeSessionSeconds(Instant start, Instant end) {
@@ -200,15 +160,24 @@ final class PlayerSessionListener implements Listener {
         return Math.max(seconds, 0L);
     }
 
-    private CompletableFuture<Void> incrementPlaytime(Document document, long sessionSeconds) {
-        if (sessionSeconds <= 0L) {
-            return CompletableFuture.completedFuture(null);
+    private void seedMenuItemDefaults(Document document, Map<String, Object> updates) {
+        Optional<String> materialName = document.get(PlayerMenuItemConfig.MATERIAL_PATH, String.class);
+        Optional<Integer> slotValue = document.get(PlayerMenuItemConfig.SLOT_PATH, Integer.class);
+        Optional<Boolean> enabledValue = document.get(PlayerMenuItemConfig.ENABLED_PATH, Boolean.class);
+
+        Material material = materialName
+            .map(this::parseMaterial)
+            .filter(candidate -> candidate != null && !candidate.isAir())
+            .orElse(PlayerMenuItemConfig.DEFAULT.material());
+        if (materialName.isEmpty()) {
+            updates.put(PlayerMenuItemConfig.MATERIAL_PATH, material.name());
         }
-        long current = document.get("statistics.playtimeSeconds", Number.class)
-            .map(Number::longValue)
-            .orElse(0L);
-        long updated = current + sessionSeconds;
-        return document.set("statistics.playtimeSeconds", updated).toCompletableFuture();
+        if (slotValue.isEmpty()) {
+            updates.put(PlayerMenuItemConfig.SLOT_PATH, PlayerMenuItemConfig.DEFAULT.slot());
+        }
+        if (enabledValue.isEmpty()) {
+            updates.put(PlayerMenuItemConfig.ENABLED_PATH, true);
+        }
     }
 
     private Instant parseInstant(String raw) {

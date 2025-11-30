@@ -8,6 +8,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -75,24 +76,40 @@ final class PlayerMenuListener implements Listener {
         boolean cursorIsMenuItem = menuService.isMenuItem(cursor);
         boolean hotbarSwapIsMenuItem = menuService.isMenuItem(hotbarSwap);
 
-        if (!currentIsMenuItem && !cursorIsMenuItem && !hotbarSwapIsMenuItem) {
+        boolean interactingWithMenuItem = currentIsMenuItem || cursorIsMenuItem;
+        boolean swappingIntoMenuSlot = hotbarSwapIsMenuItem;
+
+        if (!interactingWithMenuItem && !swappingIntoMenuSlot) {
+            return;
+        }
+
+        boolean creativePickupIntoMenuSlot = swappingIntoMenuSlot
+            && event.getView().getType() == InventoryType.CREATIVE;
+
+        if (interactingWithMenuItem) {
+            event.setCancelled(true);
+
+            if (isRegistrationLocked(player)) {
+                return;
+            }
+
+            ClickType click = event.getClick();
+            if ((click == ClickType.LEFT || click == ClickType.RIGHT) && (currentIsMenuItem || cursorIsMenuItem)) {
+                menuService.openMenu(player)
+                    .exceptionally(throwable -> {
+                        player.sendMessage("§cFailed to open the player menu; try again soon.");
+                        return null;
+                    });
+            }
+            return;
+        }
+
+        if (creativePickupIntoMenuSlot) {
+            menuService.distribute(player);
             return;
         }
 
         event.setCancelled(true);
-
-        if (isRegistrationLocked(player)) {
-            return;
-        }
-
-        ClickType click = event.getClick();
-        if ((click == ClickType.LEFT || click == ClickType.RIGHT) && (currentIsMenuItem || cursorIsMenuItem)) {
-            menuService.openMenu(player)
-                .exceptionally(throwable -> {
-                    player.sendMessage("§cFailed to open the player menu; try again soon.");
-                    return null;
-                });
-        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -101,7 +118,10 @@ final class PlayerMenuListener implements Listener {
             return;
         }
         PlayerInventory inventory = player.getInventory();
+        int topSize = event.getView().getTopInventory().getSize();
         boolean touchesMenuSlot = event.getRawSlots().stream()
+            .filter(slot -> slot >= topSize)
+            .map(slot -> slot - topSize)
             .anyMatch(slot -> slot >= 0 && slot < inventory.getSize() && menuService.isMenuItem(inventory.getItem(slot)));
         if (touchesMenuSlot || menuService.isMenuItem(event.getCursor())) {
             event.setCancelled(true);

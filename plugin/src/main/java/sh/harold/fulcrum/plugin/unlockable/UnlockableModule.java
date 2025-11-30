@@ -10,6 +10,8 @@ import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
+import sh.harold.fulcrum.common.cooldown.CooldownRegistry;
+import sh.harold.fulcrum.common.cooldown.InMemoryCooldownRegistry;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.economy.EconomyModule;
 import sh.harold.fulcrum.plugin.perk.PerkCommand;
@@ -28,6 +30,7 @@ public final class UnlockableModule implements FulcrumModule {
     private UnlockableRegistry registry;
     private CosmeticRegistry cosmeticRegistry;
     private UnlockableService unlockableService;
+    private CooldownRegistry cooldownRegistry;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -50,10 +53,12 @@ public final class UnlockableModule implements FulcrumModule {
         registry = new UnlockableRegistry();
         cosmeticRegistry = new CosmeticRegistry();
         UnlockableCatalog.registerDefaults(registry, cosmeticRegistry);
+        cooldownRegistry = new InMemoryCooldownRegistry();
         unlockableService = new UnlockableService(
             dataApi,
             registry,
             cosmeticRegistry,
+            cooldownRegistry,
             economyModule::economyService,
             plugin.getLogger()
         );
@@ -61,6 +66,14 @@ public final class UnlockableModule implements FulcrumModule {
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletionStage<Void> disable() {
+        if (cooldownRegistry != null) {
+            cooldownRegistry.close();
+        }
+        return FulcrumModule.super.disable();
     }
 
     public UnlockableService unlockableService() {
