@@ -81,6 +81,7 @@ public final class BuhPlugin extends JavaPlugin {
     private ShutdownModule shutdownModule;
     private OsuLinkModule osuLinkModule;
     private UnlockableModule unlockableModule;
+    private sh.harold.fulcrum.plugin.item.ItemModule itemModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -162,6 +163,10 @@ public final class BuhPlugin extends JavaPlugin {
         return featureVoteModule == null ? Optional.empty() : Optional.ofNullable(featureVoteModule.voteService());
     }
 
+    public sh.harold.fulcrum.plugin.item.ItemModule itemModule() {
+        return itemModule;
+    }
+
     private void createModules() {
         versionService = new PluginVersionService(this);
         scoreboardService = new SimpleScoreboardService(
@@ -191,6 +196,7 @@ public final class BuhPlugin extends JavaPlugin {
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         statsModule = new StatsModule(this);
+        itemModule = new sh.harold.fulcrum.plugin.item.ItemModule(this, statsModule);
         shutdownModule = new ShutdownModule(this, scoreboardService);
         tabFeature = new TabFeature(this);
         scoreboardFeature = new ScoreboardFeature(
@@ -219,6 +225,7 @@ public final class BuhPlugin extends JavaPlugin {
             funModule,
             staffCommandsModule,
             statsModule,
+            itemModule,
             tabFeature,
             scoreboardFeature
         );

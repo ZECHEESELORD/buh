@@ -1,8 +1,4 @@
-# Fulcrum Item Engine — Architecture Specification
-
-**Status:** Draft (Converged Design)  
-**Target:** Paper 1.21+  
-**Dependencies:** ProtocolLib or PacketEvents, Fulcrum Stat Engine, Adventure
+# Item Engine  Architecture Specification
 
 ---
 
@@ -15,6 +11,7 @@ The Fulcrum Item Engine provides a unified, data‑driven system for custom and 
 - Tooltips are rendered via a **lore component pipeline**, allowing rich, per‑player views.  
 - Vanilla items are automatically wrapped so they participate in the same pipeline.  
 - The server view of an item remains clean; complex lore is rendered at packet time.
+- Stage one skips sockets and gemming; abilities stay in.
 
 Core principles:
 
@@ -37,7 +34,7 @@ Immutable description of what an item *is*:
 - `components: Map<ComponentType, ItemComponent>` — pluggable data modules:  
   - `StatsComponent`  
   - `AbilityComponent`  
-  - `SocketComponent`  
+  - `SocketComponent` (future phase; not implemented in stage one)  
   - `VisualComponent` config, etc.  
 - `loreLayout: List<LoreSectionId>` — ordered sections for tooltip composition.  
 - `rarity: ItemRarity` — controls colors and banner framing, if relevant.
@@ -55,7 +52,7 @@ Lightweight wrapper over a Bukkit `ItemStack` that provides a typed view of its 
 - `stack: ItemStack` (underlying item).  
 - `uuid: UUID` (optional stable identity for tracking).  
 - Runtime state, stored in PDC, for example:  
-  - selected gems / enrichments;  
+  - selected gems / enrichments (reserved for a later phase);  
   - upgrade level;  
   - soulbinding flags;  
   - any other mutable item‑specific data.
@@ -68,7 +65,6 @@ Key responsibilities:
 - **State accessors:** strongly typed getters/setters for PDC fields.  
 - **Stat aggregation:** `computeFinalStats()` that merges:
   - base stats from `StatsComponent`,  
-  - gem/socket contributions from PDC,  
   - migrated vanilla enchants.
 
 `ItemInstance` does *not* talk to the stat engine directly; it only returns data structures used by bridges.
@@ -96,7 +92,7 @@ Enum for capability flags used by systems instead of ad‑hoc whitelists, for ex
 
 - `MELEE_ENCHANTABLE` — can receive vanilla Sharpness/Smite.  
 - `RANGED_ENCHANTABLE` — can receive Power/Infinity.  
-- `GEM_SLOTTABLE` — accepts gems/sockets.  
+- `GEM_SLOTTABLE` — accepts gems/sockets (reserved for a later phase).  
 - `SOULBOUNDABLE`, `UNSALVAGEABLE`, etc.
 
 Systems like the Enchantment Service or Gem Service consult traits instead of item IDs.
@@ -151,14 +147,9 @@ Stores immutable base attributes of the item type, for example:
 
 It does *not* perform any calculations; it is pure data.
 
-### 4.2 SocketComponent (optional)
+### 4.2 SocketComponent (deferred)
 
-Defines socket/enrichment capacity and rules, for example:
-
-- `maxSockets` per type (e.g. Oak, Stone, etc.).  
-- which gem categories are valid for this item category.
-
-Runtime gem data lives on `ItemInstance` via PDC; this component only describes allowed configuration.
+Socket and gem capacity is intentionally skipped in stage one. Keep the type reserved so we can add it later without breaking definitions, but do not implement runtime behavior yet.
 
 ### 4.3 AbilityComponent
 
@@ -191,7 +182,7 @@ Configuration for extra visual details; at a minimum:
 
 - Rarity banner text and color.  
 - Optional flavor text.  
-- Layout presets or flags that influence lore rendering (e.g. showing sockets as bullets).
+- Layout presets or flags that influence lore rendering (e.g. showing sockets as bullets in a later phase).
 
 ### 4.5 LoreProvider
 
@@ -232,7 +223,6 @@ loreLayout:
   - HEADER
   - TAGS
   - PRIMARY_STATS
-  - SOCKETS
   - ABILITIES
   - FOOTER
 ```
@@ -257,7 +247,7 @@ This makes lore per‑player, dynamic, and always up‑to‑date without ItemMet
 
 ## 6. Visual Engine (Packet Interceptor)
 
-The visual engine is implemented via ProtocolLib or PacketEvents and never mutates the actual inventory items on the server.
+The visual engine is implemented via ProtocolLib (preferred here) and never mutates the actual inventory items on the server.
 
 ### 6.1 Intercepted Packets
 
@@ -305,7 +295,6 @@ The item engine does not perform combat math. It only produces stat contribution
 `ItemInstance.computeFinalStats()` returns a `Map<StatId, Double>` representing the item’s total contribution in isolation:
 
 - Start with base stats from `StatsComponent`.  
-- Add socket/gem modifiers stored in PDC.  
 - Migrate vanilla enchantments to internal stats (e.g. Sharpness → `ATTACK_DAMAGE`, Protection → `ARMOR`).
 
 No knowledge of curves or diminishing returns lives here.
@@ -329,6 +318,8 @@ Flow on slot change:
    - `item:helmet`
 
 5. Before applying new values, clear any existing modifiers for that `StatSourceId` to avoid accumulation.
+
+Armor and attack must be kept current through this bridge. Nothing else updates armor now that per-hit syncing is gone, so equipping adds the slot’s contribution and unequipping removes it using the same id. Apply the same pattern for attack damage and any future item stats.
 
 The stat engine remains the single source of truth for:
 
@@ -423,21 +414,21 @@ Recommended implementation order:
 
 2. **Core Registry**
    - Implement `CustomItem` and `ItemRegistry`.  
-   - Load definitions from configuration and validate.  
+   - Load definitions from configuration and validate. YAML lives under `plugins/buh/config/items/*.yml`; class-based providers register at module init.  
    - Implement `VanillaWrapper` generation, `MigrationMap`, and `FallbackItem`.
 
 3. **ItemInstance & Persistence**
    - Implement `ItemInstance` with PDC read/write helpers.  
-   - Add `computeFinalStats()` that merges base stats, gems, and vanilla enchants.
+   - Add `computeFinalStats()` that merges base stats and vanilla enchants; leave sockets for a later phase.
 
 4. **Stat Bridge**
    - Implement `EquipmentListener`.  
-   - Use `StatService` to apply modifiers under deterministic `StatSourceId`s.  
+   - Use `StatService` to apply modifiers under deterministic `StatSourceId`s. Armor and other item stats must flow only through this bridge because per-hit syncing was removed.  
    - Verify stat changes by equipping/unequipping test items.
 
 5. **Lore Components and Layout**
    - Implement `LoreContext` and `LoreProvider`.  
-   - Implement core providers: header, tag list, `StatBlockComponent`, sockets, flavor/footer.  
+   - Implement core providers: header, tag list, `StatBlockComponent`, flavor/footer.  
    - Wire up `loreLayout` on `CustomItem` and verify server‑side rendering logic.
 
 6. **Packet Visual Engine**
@@ -454,4 +445,4 @@ Recommended implementation order:
    - Add configuration validators for item and ability definitions.  
    - Add debug commands for inspecting `ItemInstance`s, computed stats, and rendered lore.
 
-Once these steps are complete, both vanilla and custom items will behave as full citizens in the Fulcrum ecosystem: they will feed into the stat engine, render rich tooltips client‑side, and act as carriers for abilities, sockets, and other modular behaviors.
+Once these steps are complete, both vanilla and custom items will behave as full citizens in the Fulcrum ecosystem: they will feed into the stat engine, render rich tooltips client‑side, and act as carriers for abilities and other modular behaviors. Socketing remains reserved for a later phase.
