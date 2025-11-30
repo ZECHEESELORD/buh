@@ -43,7 +43,6 @@ public final class StatRegistry {
         registry.register(new StatDefinition(StatIds.ATTACK_SPEED, 1.0, 0.0, Double.MAX_VALUE, StackingModel.DEFAULT, new StatVisual("AS", "#ffd966")));
         registry.register(new StatDefinition(StatIds.MOVEMENT_SPEED, 0.1, 0.0, Double.MAX_VALUE, StackingModel.DEFAULT, new StatVisual("SPD", "#55ffff")));
         registry.register(new StatDefinition(StatIds.ARMOR, 0.0, 0.0, Double.MAX_VALUE, StackingModel.DEFAULT, new StatVisual("ARM", "#c0c0c0")));
-        registry.register(new StatDefinition(StatIds.ARMOR_TOUGHNESS, 0.0, 0.0, Double.MAX_VALUE, StackingModel.DEFAULT, new StatVisual("TGH", "#a0522d")));
         return registry;
     }
 }
