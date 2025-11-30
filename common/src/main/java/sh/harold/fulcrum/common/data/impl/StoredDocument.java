@@ -5,18 +5,19 @@ import sh.harold.fulcrum.common.data.DocumentKey;
 import sh.harold.fulcrum.common.data.DocumentSnapshot;
 import sh.harold.fulcrum.common.data.DocumentStore;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
+import java.util.function.UnaryOperator;
+import java.util.WeakHashMap;
 
 final class StoredDocument implements Document {
 
-    private static final ConcurrentHashMap<DocumentKey, Object> KEY_LOCKS = new ConcurrentHashMap<>();
+    private static final Map<DocumentKey, Object> KEY_LOCKS = Collections.synchronizedMap(new WeakHashMap<>());
 
     private final DocumentKey key;
     private final DocumentStore store;
@@ -61,49 +62,52 @@ final class StoredDocument implements Document {
     @Override
     public CompletionStage<Void> set(String path, Object value) {
         Objects.requireNonNull(path, "path");
-        return CompletableFuture.runAsync(() -> {
-            synchronized (keyLock()) {
-                DocumentSnapshot snapshot = store.read(key).toCompletableFuture().join();
-                Map<String, Object> working = MapPath.deepCopy(snapshot.data());
-                MapPath.write(working, path, value);
-                store.write(key, working).toCompletableFuture().join();
-                synchronized (lock) {
-                    data = MapPath.deepCopy(working);
-                    exists = true;
-                }
-            }
-        }, executor());
+        return mutate(working -> {
+            MapPath.write(working, path, value);
+            return working;
+        });
     }
 
     @Override
     public CompletionStage<Void> remove(String path) {
         Objects.requireNonNull(path, "path");
-        return CompletableFuture.runAsync(() -> {
-            synchronized (keyLock()) {
-                DocumentSnapshot snapshot = store.read(key).toCompletableFuture().join();
-                Map<String, Object> working = MapPath.deepCopy(snapshot.data());
-                MapPath.remove(working, path);
-                store.write(key, working).toCompletableFuture().join();
-                synchronized (lock) {
-                    data = MapPath.deepCopy(working);
-                    exists = true;
-                }
-            }
-        }, executor());
+        return mutate(working -> {
+            MapPath.remove(working, path);
+            return working;
+        });
     }
 
     @Override
     public CompletionStage<Void> overwrite(Map<String, Object> data) {
         Map<String, Object> snapshot = MapPath.deepCopy(data);
-        return CompletableFuture.runAsync(() -> {
-            synchronized (keyLock()) {
-                store.write(key, snapshot).toCompletableFuture().join();
+        return mutate(ignored -> snapshot);
+    }
+
+    @Override
+    public CompletionStage<Void> update(UnaryOperator<Map<String, Object>> mutator) {
+        Objects.requireNonNull(mutator, "mutator");
+        return mutate(current -> Objects.requireNonNull(mutator.apply(current), "mutation result"));
+    }
+
+    @Override
+    public CompletionStage<Void> patch(Map<String, Object> setValues, Iterable<String> removePaths) {
+        Map<String, Object> copy = MapPath.deepCopy(setValues);
+        java.util.List<String> removals = new java.util.ArrayList<>();
+        if (removePaths != null) {
+            removePaths.forEach(removals::add);
+        }
+        return store.patch(key, copy, removals)
+            .thenRun(() -> {
                 synchronized (lock) {
-                    this.data = MapPath.deepCopy(snapshot);
+                    Map<String, Object> working = MapPath.deepCopy(data);
+                    copy.forEach((path, value) -> MapPath.write(working, path, value));
+                    for (String path : removals) {
+                        MapPath.remove(working, path);
+                    }
+                    this.data = MapPath.deepCopy(working);
                     this.exists = true;
                 }
-            }
-        }, executor());
+            });
     }
 
     @Override
@@ -119,11 +123,26 @@ final class StoredDocument implements Document {
         return CompletableFuture.supplyAsync(this::snapshot, targetExecutor);
     }
 
-    private Object keyLock() {
-        return KEY_LOCKS.computeIfAbsent(key, ignored -> new Object());
+    private CompletionStage<Void> mutate(UnaryOperator<Map<String, Object>> mutation) {
+        Object keyLock = keyLock();
+        return store.update(key, current -> {
+            synchronized (keyLock) {
+                Map<String, Object> working = MapPath.deepCopy(current);
+                Map<String, Object> mutated = Objects.requireNonNull(mutation.apply(working), "mutation result");
+                return MapPath.deepCopy(mutated);
+            }
+        }).thenAccept(snapshot -> {
+            synchronized (lock) {
+                data = MapPath.deepCopy(snapshot.data());
+                exists = snapshot.exists();
+            }
+        });
     }
 
-    private Executor executor() {
-        return executor != null ? executor : ForkJoinPool.commonPool();
+    private Object keyLock() {
+        synchronized (KEY_LOCKS) {
+            return KEY_LOCKS.computeIfAbsent(key, ignored -> new Object());
+        }
     }
+
 }

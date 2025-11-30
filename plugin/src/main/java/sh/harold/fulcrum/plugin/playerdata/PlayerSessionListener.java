@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -31,12 +32,14 @@ final class PlayerSessionListener implements Listener {
     private final Logger logger;
     private final DocumentCollection players;
     private final PlayerBiomeAggregator biomeAggregator;
+    private final PlayerDirectoryService directoryService;
     private final Map<UUID, Instant> sessionStarts = new ConcurrentHashMap<>();
 
-    PlayerSessionListener(Logger logger, DataApi dataApi, PlayerBiomeAggregator biomeAggregator) {
+    PlayerSessionListener(Logger logger, DataApi dataApi, PlayerBiomeAggregator biomeAggregator, PlayerDirectoryService directoryService) {
         this.logger = logger;
         this.players = dataApi.collection("players");
         this.biomeAggregator = biomeAggregator;
+        this.directoryService = Objects.requireNonNull(directoryService, "directoryService");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -52,6 +55,7 @@ final class PlayerSessionListener implements Listener {
             .thenCompose(document -> ensureJoinMetadata(document, now, username)
                 .thenCompose(ignored -> biomeAggregator.recordInitialVisit(document, playerId, event.getPlayer().getLocation(), now)))
             .whenComplete((ignored, throwable) -> {
+                directoryService.invalidateRoster();
                 long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
                 if (throwable != null) {
                     logger.log(Level.SEVERE, "[login:data] join metadata update failed for " + playerId + " after " + elapsedMillis + "ms", throwable);

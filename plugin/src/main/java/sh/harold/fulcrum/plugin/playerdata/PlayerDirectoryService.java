@@ -5,8 +5,10 @@ import sh.harold.fulcrum.common.data.DocumentCollection;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -21,6 +23,7 @@ public final class PlayerDirectoryService {
     private final DocumentCollection players;
     private final Logger logger;
     private final Map<UUID, CachedEntry> cache = new ConcurrentHashMap<>();
+    private volatile CachedRoster cachedRoster;
 
     public PlayerDirectoryService(DataApi dataApi, Logger logger) {
         this.players = Objects.requireNonNull(dataApi, "dataApi").collection("players");
@@ -45,11 +48,43 @@ public final class PlayerDirectoryService {
             });
     }
 
+    public CompletionStage<List<PlayerDirectoryEntry>> loadRoster() {
+        CachedRoster roster = cachedRoster;
+        if (roster != null && !roster.isExpired()) {
+            return CompletableFuture.completedFuture(roster.entries());
+        }
+        return players.all()
+            .thenApply(documents -> documents.stream()
+                .map(PlayerDirectoryEntry::fromDocument)
+                .flatMap(Optional::stream)
+                .toList())
+            .thenApply(entries -> {
+                CachedRoster refreshed = new CachedRoster(List.copyOf(entries), Instant.now());
+                cachedRoster = refreshed;
+                return refreshed.entries();
+            })
+            .whenComplete((entries, throwable) -> {
+                if (throwable != null) {
+                    logger.log(Level.WARNING, "Failed to load player directory roster", throwable);
+                }
+            });
+    }
+
     public void evict(UUID playerId) {
         cache.remove(Objects.requireNonNull(playerId, "playerId"));
     }
 
+    public void invalidateRoster() {
+        cachedRoster = null;
+    }
+
     private record CachedEntry(PlayerDirectoryEntry entry, Instant fetchedAt) {
+        boolean isExpired() {
+            return fetchedAt.plus(CACHE_TTL).isBefore(Instant.now());
+        }
+    }
+
+    private record CachedRoster(List<PlayerDirectoryEntry> entries, Instant fetchedAt) {
         boolean isExpired() {
             return fetchedAt.plus(CACHE_TTL).isBefore(Instant.now());
         }

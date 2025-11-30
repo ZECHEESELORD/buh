@@ -109,6 +109,29 @@ public final class NitriteDocumentStore implements DocumentStore {
         return CompletableFuture.supplyAsync(() -> collection(collection).size(), executor());
     }
 
+    @Override
+    public CompletionStage<DocumentSnapshot> update(DocumentKey key, java.util.function.UnaryOperator<Map<String, Object>> mutator) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(mutator, "mutator");
+        return CompletableFuture.supplyAsync(() -> {
+            NitriteCollection collection = collection(key.collection());
+            Document existing = collection.find(FluentFilter.where(ID_FIELD).eq(key.id())).firstOrNull();
+            Map<String, Object> current = existing == null
+                ? Map.of()
+                : toMap(fromNitriteValue(existing.get(DATA_FIELD)));
+
+            Map<String, Object> working = MapPath.deepCopy(current);
+            Map<String, Object> mutated = mutator.apply(working);
+            if (mutated == null) {
+                throw new IllegalStateException("Mutator returned null for " + key);
+            }
+            Map<String, Object> normalized = MapPath.deepCopy(mutated);
+            Document document = createDocument(key.id(), normalized);
+            collection.update(FluentFilter.where(ID_FIELD).eq(key.id()), document, UpdateOptions.updateOptions(true));
+            return new DocumentSnapshot(key, normalized, true);
+        }, executor());
+    }
+
     public CompletionStage<Set<String>> collections() {
         return CompletableFuture.supplyAsync(() -> Set.copyOf(database.listCollectionNames()), executor());
     }
