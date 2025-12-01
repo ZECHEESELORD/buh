@@ -9,6 +9,7 @@ import com.comphenix.protocol.events.PacketEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import sh.harold.fulcrum.api.menu.impl.MenuInventoryHolder;
 
 import java.util.List;
 
@@ -35,6 +36,9 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     @Override
     public void onPacketSending(PacketEvent event) {
         Player viewer = event.getPlayer();
+        if (MenuInventoryHolder.isMenu(viewer.getOpenInventory().getTopInventory())) {
+            return;
+        }
         PacketContainer packet = event.getPacket();
         if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
             ItemStack item = packet.getItemModifier().read(0);
