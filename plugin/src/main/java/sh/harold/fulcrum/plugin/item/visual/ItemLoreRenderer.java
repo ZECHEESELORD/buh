@@ -50,6 +50,7 @@ public final class ItemLoreRenderer {
         Component name = visual != null && visual.hasDisplayName()
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
+        name = rarityColorize(name, visual);
         meta.displayName(noItalics(name));
 
         List<Component> lore = new ArrayList<>();
@@ -137,5 +138,18 @@ public final class ItemLoreRenderer {
 
     private Component noItalics(Component component) {
         return component.decoration(TextDecoration.ITALIC, false);
+    }
+
+    private Component rarityColorize(Component component, VisualComponent visual) {
+        if (visual == null) {
+            return component;
+        }
+        return switch (visual.rarity()) {
+            case COMMON -> component.color(NamedTextColor.WHITE);
+            case UNCOMMON -> component.color(NamedTextColor.GREEN);
+            case RARE -> component.color(NamedTextColor.BLUE);
+            case EPIC -> component.color(NamedTextColor.DARK_PURPLE);
+            case LEGENDARY -> component.color(NamedTextColor.GOLD);
+        };
     }
 }
