@@ -118,22 +118,20 @@ public final class ItemLoreRenderer {
         if (visual == null) {
             return;
         }
-        NamedTextColor color = rarityColor(visual.rarity());
-        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY)
-            .append(Component.text(visual.rarity().name().toLowerCase(Locale.ROOT), color)));
+        lore.add(rarityComponent(visual.rarity()));
     }
 
     private String formatTrigger(AbilityTrigger trigger) {
         return trigger.name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 
-    private NamedTextColor rarityColor(sh.harold.fulcrum.plugin.item.model.ItemRarity rarity) {
+    private Component rarityComponent(sh.harold.fulcrum.plugin.item.model.ItemRarity rarity) {
         return switch (rarity) {
-            case COMMON -> NamedTextColor.WHITE;
-            case UNCOMMON -> NamedTextColor.GREEN;
-            case RARE -> NamedTextColor.AQUA;
-            case EPIC -> NamedTextColor.LIGHT_PURPLE;
-            case LEGENDARY -> NamedTextColor.GOLD;
+            case COMMON -> Component.text("COMMON", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true);
+            case UNCOMMON -> Component.text("UNCOMMON", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true);
+            case RARE -> Component.text("RARE", NamedTextColor.BLUE).decoration(TextDecoration.BOLD, true);
+            case EPIC -> Component.text("EPIC", NamedTextColor.DARK_PURPLE).decoration(TextDecoration.BOLD, true);
+            case LEGENDARY -> Component.text("LEGENDARY", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true);
         };
     }
 
