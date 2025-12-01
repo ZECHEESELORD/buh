@@ -27,26 +27,31 @@ public final class ItemEquipListener implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        sanitize(event.getPlayer());
         statBridge.refreshPlayer(event.getPlayer());
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
+        sanitize(event.getPlayer());
         statBridge.refreshPlayer(event.getPlayer());
     }
 
     @EventHandler
     public void onHeld(PlayerItemHeldEvent event) {
+        sanitize(event.getPlayer());
         statBridge.refreshPlayer(event.getPlayer());
     }
 
     @EventHandler
     public void onSwap(PlayerSwapHandItemsEvent event) {
+        sanitize(event.getPlayer());
         statBridge.refreshPlayer(event.getPlayer());
     }
 
     @EventHandler
     public void onDrop(PlayerDropItemEvent event) {
+        sanitize(event.getPlayer());
         statBridge.refreshPlayer(event.getPlayer());
     }
 
@@ -67,5 +72,15 @@ public final class ItemEquipListener implements Listener {
             return;
         }
         plugin.getServer().getScheduler().runTask(plugin, () -> statBridge.refreshPlayer(player));
+    }
+
+    private void sanitize(Player player) {
+        var inventory = player.getInventory();
+        inventory.setItemInMainHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getItemInMainHand()));
+        inventory.setItemInOffHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getItemInOffHand()));
+        inventory.setHelmet(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getHelmet()));
+        inventory.setChestplate(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getChestplate()));
+        inventory.setLeggings(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getLeggings()));
+        inventory.setBoots(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getBoots()));
     }
 }
