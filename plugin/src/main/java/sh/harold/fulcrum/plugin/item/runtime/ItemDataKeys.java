@@ -7,10 +7,14 @@ final class ItemDataKeys {
 
     private final NamespacedKey itemId;
     private final NamespacedKey version;
+    private final NamespacedKey stats;
+    private final NamespacedKey enchants;
 
     ItemDataKeys(Plugin plugin) {
         this.itemId = new NamespacedKey(plugin, "item-id");
         this.version = new NamespacedKey(plugin, "item-version");
+        this.stats = new NamespacedKey(plugin, "item-stats");
+        this.enchants = new NamespacedKey(plugin, "item-enchants");
     }
 
     NamespacedKey itemId() {
@@ -19,5 +23,13 @@ final class ItemDataKeys {
 
     NamespacedKey version() {
         return version;
+    }
+
+    NamespacedKey stats() {
+        return stats;
+    }
+
+    NamespacedKey enchants() {
+        return enchants;
     }
 }

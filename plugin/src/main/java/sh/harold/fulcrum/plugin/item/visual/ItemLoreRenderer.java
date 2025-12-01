@@ -3,8 +3,7 @@ package sh.harold.fulcrum.plugin.item.visual;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.attribute.Attribute;
-import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -19,12 +18,13 @@ import sh.harold.fulcrum.plugin.item.model.LoreSection;
 import sh.harold.fulcrum.plugin.item.model.VisualComponent;
 import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
+import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
+import sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,9 +34,11 @@ public final class ItemLoreRenderer {
 
     private static final DecimalFormat STAT_FORMAT = new DecimalFormat("#.##");
     private final ItemResolver resolver;
+    private final EnchantRegistry enchantRegistry;
 
-    public ItemLoreRenderer(ItemResolver resolver) {
+    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry) {
         this.resolver = resolver;
+        this.enchantRegistry = enchantRegistry;
     }
 
     public ItemStack render(ItemStack stack, Player viewer) {
@@ -50,7 +52,7 @@ public final class ItemLoreRenderer {
             return clone;
         }
         meta.setAttributeModifiers(null);
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
 
         CustomItem definition = instance.definition();
         VisualComponent visual = definition.component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
@@ -59,8 +61,9 @@ public final class ItemLoreRenderer {
             : Component.text(definition.id(), NamedTextColor.WHITE);
         name = rarityColorize(name, visual);
         meta.displayName(noItalics(name));
+        ensureGlint(meta, instance);
 
-        StatSnapshot stats = buildStats(instance, meta);
+        StatSnapshot stats = buildStats(instance);
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
             switch (section) {
@@ -69,15 +72,20 @@ public final class ItemLoreRenderer {
                 }
                 case RARITY -> addRarity(lore, visual);
                 case TAGS -> addTags(lore, definition, stats);
+                case ENCHANTS -> addEnchants(lore, instance);
                 case PRIMARY_STATS -> addStats(lore, stats);
                 case ABILITIES -> addAbilities(lore, instance);
                 case FOOTER -> addFlavor(lore, visual);
             }
         }
+        trimTrailingEmptyLines(lore);
         if (!lore.isEmpty()) {
             lore.add(noItalics(Component.empty()));
         }
-        lore.add(noItalics(Component.text("ID: " + definition.id(), NamedTextColor.DARK_GRAY)));
+        String idLabel = definition.id().startsWith("vanilla:")
+            ? definition.material().name()
+            : definition.id();
+        lore.add(noItalics(Component.text("ID: " + idLabel, NamedTextColor.DARK_GRAY)));
         meta.lore(lore.stream().map(this::noItalics).toList());
         clone.setItemMeta(meta);
         return clone;
@@ -97,17 +105,22 @@ public final class ItemLoreRenderer {
         if (tags.isEmpty()) {
             return;
         }
-        lore.add(Component.text(String.join(" • ", tags), NamedTextColor.GRAY));
+        lore.add(Component.text(String.join(", ", tags), NamedTextColor.DARK_GRAY));
         lore.add(Component.empty());
     }
 
     private void addStats(List<Component> lore, StatSnapshot stats) {
-        if (!stats.hasValues()) {
+        List<Component> lines = new ArrayList<>();
+        addStatLine(lines, "Damage", stats.damage());
+        addStatLine(lines, "Attack Speed", stats.attackSpeed());
+        addStatLine(lines, "Armor", stats.armor());
+        addStatLine(lines, "Max Health", stats.maxHealth());
+        addStatLine(lines, "Movement Speed", stats.movementSpeed());
+        addStatLine(lines, "Crit Damage", stats.critDamage() * 100.0, "%");
+        if (lines.isEmpty()) {
             return;
         }
-        String damage = "Damage: +" + STAT_FORMAT.format(stats.damage());
-        String defense = "Defense: +" + STAT_FORMAT.format(stats.armor());
-        lore.add(Component.text(damage + ", " + defense, NamedTextColor.AQUA));
+        lore.addAll(lines);
         lore.add(Component.empty());
     }
 
@@ -123,6 +136,44 @@ public final class ItemLoreRenderer {
                 lore.add(Component.text("  ").append(line));
             }
         }
+    }
+
+    private void addEnchants(List<Component> lore, ItemInstance instance) {
+        Map<String, Integer> enchants = instance.enchants();
+        if (enchants.isEmpty()) {
+            return;
+        }
+        List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchants.entrySet());
+        entries.sort(Map.Entry.comparingByKey());
+        for (Map.Entry<String, Integer> entry : entries) {
+            EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+            if (definition == null) {
+                continue;
+            }
+            int level = entry.getValue();
+            String levelLabel = roman(level);
+            String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(definition.displayName());
+            NamedTextColor color = level > definition.maxLevel() ? NamedTextColor.GOLD : NamedTextColor.BLUE;
+            Component line = Component.text(name + " " + levelLabel, color);
+            lore.add(line);
+        }
+        lore.add(Component.empty());
+    }
+
+    private String roman(int value) {
+        return switch (value) {
+            case 1 -> "I";
+            case 2 -> "II";
+            case 3 -> "III";
+            case 4 -> "IV";
+            case 5 -> "V";
+            case 6 -> "VI";
+            case 7 -> "VII";
+            case 8 -> "VIII";
+            case 9 -> "IX";
+            case 10 -> "X";
+            default -> String.valueOf(value);
+        };
     }
 
     private void addFlavor(List<Component> lore, VisualComponent visual) {
@@ -171,20 +222,15 @@ public final class ItemLoreRenderer {
         };
     }
 
-    private StatSnapshot buildStats(ItemInstance instance, ItemMeta meta) {
+    private StatSnapshot buildStats(ItemInstance instance) {
         Map<StatId, Double> stats = instance.computeFinalStats();
-        double damage = stats.getOrDefault(StatIds.ATTACK_DAMAGE, readAttribute(meta, Attribute.ATTACK_DAMAGE));
-        double armor = stats.getOrDefault(StatIds.ARMOR, readAttribute(meta, Attribute.ARMOR));
-        return new StatSnapshot(damage, armor, !stats.isEmpty());
-    }
-
-    private double readAttribute(ItemMeta meta, Attribute attribute) {
-        if (meta == null || attribute == null || meta.getAttributeModifiers(attribute) == null) {
-            return 0.0;
-        }
-        return meta.getAttributeModifiers(attribute).stream()
-            .mapToDouble(AttributeModifier::getAmount)
-            .sum();
+        double damage = stats.getOrDefault(StatIds.ATTACK_DAMAGE, 0.0);
+        double armor = stats.getOrDefault(StatIds.ARMOR, 0.0);
+        double attackSpeed = stats.getOrDefault(StatIds.ATTACK_SPEED, 0.0);
+        double movementSpeed = stats.getOrDefault(StatIds.MOVEMENT_SPEED, 0.0);
+        double maxHealth = stats.getOrDefault(StatIds.MAX_HEALTH, 0.0);
+        double critDamage = stats.getOrDefault(StatIds.CRIT_DAMAGE, 0.0);
+        return new StatSnapshot(damage, armor, attackSpeed, movementSpeed, maxHealth, critDamage);
     }
 
     private boolean isTool(ItemCategory category) {
@@ -202,9 +248,40 @@ public final class ItemLoreRenderer {
             || category == ItemCategory.TRIDENT;
     }
 
-    private record StatSnapshot(double damage, double armor, boolean hasStats) {
-        boolean hasValues() {
-            return hasStats || damage > 0.0 || armor > 0.0;
+    private void addStatLine(List<Component> lore, String label, double value) {
+        if (Double.compare(value, 0.0) == 0) {
+            return;
+        }
+        lore.add(Component.text(label + ": ", NamedTextColor.GRAY)
+            .append(Component.text("+" + STAT_FORMAT.format(value), NamedTextColor.RED)));
+    }
+
+    private void addStatLine(List<Component> lore, String label, double value, String suffix) {
+        if (Double.compare(value, 0.0) == 0) {
+            return;
+        }
+        lore.add(Component.text(label + ": ", NamedTextColor.GRAY)
+            .append(Component.text("+" + STAT_FORMAT.format(value) + suffix, NamedTextColor.RED)));
+    }
+
+    private record StatSnapshot(double damage, double armor, double attackSpeed, double movementSpeed, double maxHealth, double critDamage) {
+    }
+
+    private void trimTrailingEmptyLines(List<Component> lore) {
+        while (!lore.isEmpty() && lore.get(lore.size() - 1).equals(Component.empty())) {
+            lore.remove(lore.size() - 1);
+        }
+    }
+
+    private void ensureGlint(ItemMeta meta, ItemInstance instance) {
+        if (meta == null) {
+            return;
+        }
+        if (!meta.getEnchants().isEmpty()) {
+            return;
+        }
+        if (!instance.enchants().isEmpty()) {
+            meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
         }
     }
 }

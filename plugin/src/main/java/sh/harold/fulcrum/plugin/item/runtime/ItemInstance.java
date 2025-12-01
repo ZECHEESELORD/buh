@@ -4,10 +4,10 @@ import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.model.AbilityComponent;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
-import sh.harold.fulcrum.plugin.item.model.StatsComponent;
+import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
+import sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry;
 import sh.harold.fulcrum.stats.core.StatId;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -16,10 +16,16 @@ public final class ItemInstance {
 
     private final CustomItem definition;
     private final ItemStack stack;
+    private final Map<StatId, Double> baseStats;
+    private final Map<String, Integer> enchants;
+    private final EnchantRegistry enchantRegistry;
 
-    public ItemInstance(CustomItem definition, ItemStack stack) {
+    public ItemInstance(CustomItem definition, ItemStack stack, Map<StatId, Double> baseStats, Map<String, Integer> enchants, EnchantRegistry enchantRegistry) {
         this.definition = Objects.requireNonNull(definition, "definition");
         this.stack = Objects.requireNonNull(stack, "stack");
+        this.baseStats = baseStats == null ? Map.of() : Map.copyOf(baseStats);
+        this.enchants = enchants == null ? Map.of() : Map.copyOf(enchants);
+        this.enchantRegistry = Objects.requireNonNull(enchantRegistry, "enchantRegistry");
     }
 
     public CustomItem definition() {
@@ -31,15 +37,23 @@ public final class ItemInstance {
     }
 
     public Map<StatId, Double> computeFinalStats() {
-        Map<StatId, Double> stats = new HashMap<>();
-        StatsComponent statsComponent = definition.component(ComponentType.STATS, StatsComponent.class).orElse(null);
-        if (statsComponent != null) {
-            stats.putAll(statsComponent.baseStats());
+        Map<StatId, Double> result = new HashMap<>(baseStats);
+        for (Map.Entry<String, Integer> entry : enchants.entrySet()) {
+            EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+            if (definition == null) {
+                continue;
+            }
+            Map<StatId, Double> bonuses = definition.bonusForLevel(entry.getValue());
+            bonuses.forEach((statId, value) -> result.merge(statId, value, Double::sum));
         }
-        return Collections.unmodifiableMap(stats);
+        return Map.copyOf(result);
     }
 
     public boolean hasAbilities() {
         return definition.component(ComponentType.ABILITY, AbilityComponent.class).isPresent();
+    }
+
+    public Map<String, Integer> enchants() {
+        return enchants;
     }
 }

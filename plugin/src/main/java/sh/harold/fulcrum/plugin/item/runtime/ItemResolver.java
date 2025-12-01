@@ -1,51 +1,208 @@
 package sh.harold.fulcrum.plugin.item.runtime;
 
 import org.bukkit.Material;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.Plugin;
-import sh.harold.fulcrum.plugin.item.ItemKeys;
+import sh.harold.fulcrum.plugin.item.model.ComponentType;
+import sh.harold.fulcrum.plugin.item.model.CustomItem;
+import sh.harold.fulcrum.plugin.item.model.StatsComponent;
 import sh.harold.fulcrum.plugin.item.registry.ItemRegistry;
 import sh.harold.fulcrum.plugin.item.registry.VanillaWrapperFactory;
+import sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry;
+import sh.harold.fulcrum.stats.core.StatId;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.meta.ItemMeta;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 public final class ItemResolver {
 
+    private static final Map<Enchantment, String> ENCHANT_IDS = Map.ofEntries(
+        Map.entry(Enchantment.SHARPNESS, "fulcrum:sharpness"),
+        Map.entry(Enchantment.SMITE, "fulcrum:smite"),
+        Map.entry(Enchantment.BANE_OF_ARTHROPODS, "fulcrum:bane_of_arthropods"),
+        Map.entry(Enchantment.PROTECTION, "fulcrum:protection"),
+        Map.entry(Enchantment.FIRE_PROTECTION, "fulcrum:fire_protection"),
+        Map.entry(Enchantment.PROJECTILE_PROTECTION, "fulcrum:projectile_protection"),
+        Map.entry(Enchantment.BLAST_PROTECTION, "fulcrum:blast_protection"),
+        Map.entry(Enchantment.FEATHER_FALLING, "fulcrum:feather_falling"),
+        Map.entry(Enchantment.POWER, "fulcrum:power"),
+        Map.entry(Enchantment.PUNCH, "fulcrum:punch"),
+        Map.entry(Enchantment.KNOCKBACK, "fulcrum:knockback"),
+        Map.entry(Enchantment.LOOTING, "fulcrum:looting"),
+        Map.entry(Enchantment.SWEEPING_EDGE, "fulcrum:sweeping_edge"),
+        Map.entry(Enchantment.FIRE_ASPECT, "fulcrum:fire_aspect"),
+        Map.entry(Enchantment.FLAME, "fulcrum:flame"),
+        Map.entry(Enchantment.INFINITY, "fulcrum:infinity"),
+        Map.entry(Enchantment.LOYALTY, "fulcrum:loyalty"),
+        Map.entry(Enchantment.CHANNELING, "fulcrum:channeling"),
+        Map.entry(Enchantment.RIPTIDE, "fulcrum:riptide"),
+        Map.entry(Enchantment.IMPALING, "fulcrum:impaling"),
+        Map.entry(Enchantment.MULTISHOT, "fulcrum:multishot"),
+        Map.entry(Enchantment.PIERCING, "fulcrum:piercing"),
+        Map.entry(Enchantment.QUICK_CHARGE, "fulcrum:quick_charge"),
+        Map.entry(Enchantment.DEPTH_STRIDER, "fulcrum:depth_strider"),
+        Map.entry(Enchantment.FROST_WALKER, "fulcrum:frost_walker"),
+        Map.entry(Enchantment.SOUL_SPEED, "fulcrum:soul_speed"),
+        Map.entry(Enchantment.SWIFT_SNEAK, "fulcrum:swift_sneak"),
+        Map.entry(Enchantment.AQUA_AFFINITY, "fulcrum:aqua_affinity"),
+        Map.entry(Enchantment.RESPIRATION, "fulcrum:respiration"),
+        Map.entry(Enchantment.UNBREAKING, "fulcrum:unbreaking"),
+        Map.entry(Enchantment.MENDING, "fulcrum:mending"),
+        Map.entry(Enchantment.SILK_TOUCH, "fulcrum:silk_touch"),
+        Map.entry(Enchantment.FORTUNE, "fulcrum:fortune"),
+        Map.entry(Enchantment.LURE, "fulcrum:lure"),
+        Map.entry(Enchantment.LUCK_OF_THE_SEA, "fulcrum:luck_of_the_sea"),
+        Map.entry(Enchantment.THORNS, "fulcrum:thorns"),
+        Map.entry(Enchantment.BINDING_CURSE, "fulcrum:curse_of_binding"),
+        Map.entry(Enchantment.VANISHING_CURSE, "fulcrum:curse_of_vanishing"),
+        Map.entry(Enchantment.EFFICIENCY, "fulcrum:efficiency")
+    );
+
+    private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = Set.of(
+        Enchantment.SHARPNESS,
+        Enchantment.SMITE,
+        Enchantment.BANE_OF_ARTHROPODS,
+        Enchantment.PROTECTION,
+        Enchantment.FIRE_PROTECTION,
+        Enchantment.PROJECTILE_PROTECTION,
+        Enchantment.BLAST_PROTECTION,
+        Enchantment.FEATHER_FALLING,
+        Enchantment.POWER,
+        Enchantment.PUNCH
+    );
+
     private final ItemRegistry registry;
     private final VanillaWrapperFactory wrapperFactory;
-    private final NamespacedKey idKey;
     private final ItemPdc itemPdc;
+    private final VanillaStatResolver vanillaStatResolver;
+    private final EnchantRegistry enchantRegistry;
 
-    public ItemResolver(Plugin plugin, ItemRegistry registry, VanillaWrapperFactory wrapperFactory, ItemPdc itemPdc) {
+    public ItemResolver(ItemRegistry registry, VanillaWrapperFactory wrapperFactory, ItemPdc itemPdc, VanillaStatResolver vanillaStatResolver, EnchantRegistry enchantRegistry) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.wrapperFactory = Objects.requireNonNull(wrapperFactory, "wrapperFactory");
         this.itemPdc = Objects.requireNonNull(itemPdc, "itemPdc");
-        this.idKey = new ItemKeys(plugin).idKey();
+        this.vanillaStatResolver = Objects.requireNonNull(vanillaStatResolver, "vanillaStatResolver");
+        this.enchantRegistry = Objects.requireNonNull(enchantRegistry, "enchantRegistry");
     }
 
     public Optional<ItemInstance> resolve(ItemStack stack) {
         if (stack == null || stack.getType() == Material.AIR) {
             return Optional.empty();
         }
-        String id = readId(stack);
-        if (id != null) {
-            return registry.get(id)
-                .map(definition -> new ItemInstance(definition, stack));
+        ItemStack working = stack;
+        String id = readId(working);
+        CustomItem definition = id == null ? null : registry.get(id).orElse(null);
+        if (definition == null) {
+            definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
+            working = itemPdc.setIdInPlace(working, definition.id());
         }
-        return Optional.of(new ItemInstance(registry.getOrCreateVanilla(stack.getType(), wrapperFactory), stack));
+        Map<StatId, Double> stats = itemPdc.readStats(working).orElse(null);
+        if (stats == null || stats.isEmpty()) {
+            stats = computeDefinitionStats(definition);
+            working = itemPdc.writeStats(working, stats);
+        }
+        Map<String, Integer> enchants = mergeEnchants(working);
+        working = itemPdc.writeEnchants(working, enchants);
+        working = mirrorAttributes(working, definition, stats);
+        working = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(working);
+        return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry));
     }
 
     public ItemStack applyId(ItemStack stack, String id) {
         return itemPdc.setId(stack, id);
     }
 
+    public ItemStack initializeItem(CustomItem definition) {
+        ItemStack base = new ItemStack(definition.material());
+        ItemStack withId = itemPdc.setId(base, definition.id());
+        Map<StatId, Double> stats = computeDefinitionStats(definition);
+        withId = itemPdc.writeStats(withId, stats);
+        return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(withId);
+    }
+
     private String readId(ItemStack stack) {
         return itemPdc.readId(stack).orElse(null);
+    }
+
+    private Map<StatId, Double> computeDefinitionStats(CustomItem definition) {
+        Map<StatId, Double> stats = new HashMap<>();
+        definition.component(ComponentType.STATS, StatsComponent.class).ifPresent(component -> stats.putAll(component.baseStats()));
+        if (stats.isEmpty() && definition.id().startsWith("vanilla:")) {
+            stats.putAll(vanillaStatResolver.statsFor(definition.material()));
+        }
+        return Map.copyOf(stats);
+    }
+
+    private Map<String, Integer> mergeEnchants(ItemStack stack) {
+        Map<String, Integer> enchants = new HashMap<>(itemPdc.readEnchants(stack).orElse(Map.of()));
+        var meta = stack.getItemMeta();
+        if (meta != null && !meta.getEnchants().isEmpty()) {
+            boolean metaChanged = false;
+            for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                String customId = ENCHANT_IDS.get(entry.getKey());
+                if (customId == null) {
+                    continue;
+                }
+                int level = entry.getValue();
+                enchants.merge(customId, level, Math::max);
+                if (OVERRIDDEN_ENCHANTS.contains(entry.getKey())) {
+                    meta.removeEnchant(entry.getKey());
+                    metaChanged = true;
+                }
+            }
+            if (metaChanged) {
+                stack.setItemMeta(meta);
+            }
+        }
+        return Map.copyOf(enchants);
+    }
+
+    private ItemStack mirrorAttributes(ItemStack stack, CustomItem definition, Map<StatId, Double> stats) {
+        if (stack == null) {
+            return null;
+        }
+        var meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        meta.setAttributeModifiers(null);
+        double attackDamage = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
+        double attackSpeed = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, 0.0);
+        double armor = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ARMOR, 0.0);
+
+        switch (definition.category()) {
+            case HELMET -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.HEAD);
+            case CHESTPLATE -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.CHEST);
+            case LEGGINGS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.LEGS);
+            case BOOTS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.FEET);
+            default -> {
+                addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
+                addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
+            }
+        }
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private void addAttribute(ItemMeta meta, Attribute attribute, double value, EquipmentSlot slot) {
+        if (attribute == null || meta == null) {
+            return;
+        }
+        AttributeModifier modifier = new AttributeModifier(
+            UUID.nameUUIDFromBytes((attribute.getKey().getKey() + ":" + slot.name()).getBytes()),
+            "fulcrum-" + attribute.getKey().getKey(),
+            value,
+            AttributeModifier.Operation.ADD_NUMBER,
+            slot
+        );
+        meta.addAttributeModifier(attribute, modifier);
     }
 }

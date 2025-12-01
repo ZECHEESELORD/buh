@@ -6,6 +6,8 @@ import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.wrappers.EnumWrappers;
+import com.comphenix.protocol.wrappers.Pair;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -18,7 +20,7 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     private final ItemLoreRenderer renderer;
 
     private ProtocolLoreAdapter(Plugin plugin, ItemLoreRenderer renderer) {
-        super(plugin, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS);
+        super(plugin, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS, PacketType.Play.Server.ENTITY_EQUIPMENT);
         this.renderer = renderer;
     }
 
@@ -51,6 +53,14 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
                 items.set(i, rendered);
             }
             packet.getItemListModifier().write(0, items);
+        } else if (packet.getType() == PacketType.Play.Server.ENTITY_EQUIPMENT) {
+            List<Pair<EnumWrappers.ItemSlot, ItemStack>> list = packet.getSlotStackPairLists().read(0);
+            for (int i = 0; i < list.size(); i++) {
+                Pair<EnumWrappers.ItemSlot, ItemStack> pair = list.get(i);
+                ItemStack rendered = renderer.render(pair.getSecond(), viewer);
+                list.set(i, new Pair<>(pair.getFirst(), rendered));
+            }
+            packet.getSlotStackPairLists().write(0, list);
         }
     }
 

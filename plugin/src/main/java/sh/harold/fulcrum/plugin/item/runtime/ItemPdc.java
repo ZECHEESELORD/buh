@@ -6,12 +6,16 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import sh.harold.fulcrum.stats.core.StatId;
 
+import java.util.Map;
 import java.util.Optional;
 
 public final class ItemPdc {
 
     private final ItemDataKeys keys;
+    private final StatPdcCodec statCodec = new StatPdcCodec();
+    private final EnchantPdcCodec enchantCodec = new EnchantPdcCodec();
 
     public ItemPdc(Plugin plugin) {
         this.keys = new ItemDataKeys(plugin);
@@ -31,8 +35,49 @@ public final class ItemPdc {
         return clone;
     }
 
+    public ItemStack setIdInPlace(ItemStack stack, String id) {
+        if (stack == null || id == null) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer().set(keys.itemId(), PersistentDataType.STRING, id);
+            meta.getPersistentDataContainer().set(keys.version(), PersistentDataType.INTEGER, 1);
+            stack.setItemMeta(meta);
+        }
+        return stack;
+    }
+
     public Optional<String> readId(ItemStack stack) {
         return read(stack, keys.itemId(), PersistentDataType.STRING);
+    }
+
+    public ItemStack writeStats(ItemStack stack, Map<StatId, Double> stats) {
+        if (stack == null || stats == null || stats.isEmpty()) {
+            return stack;
+        }
+        String encoded = statCodec.encode(stats);
+        return write(stack, keys.stats(), PersistentDataType.STRING, encoded);
+    }
+
+    public Optional<Map<StatId, Double>> readStats(ItemStack stack) {
+        return read(stack, keys.stats(), PersistentDataType.STRING).map(statCodec::decode);
+    }
+
+    public ItemStack writeEnchants(ItemStack stack, Map<String, Integer> enchants) {
+        if (stack == null || enchants == null) {
+            return stack;
+        }
+        String encoded = enchantCodec.encode(enchants);
+        return write(stack, keys.enchants(), PersistentDataType.STRING, encoded);
+    }
+
+    public Optional<Map<String, Integer>> readEnchants(ItemStack stack) {
+        return read(stack, keys.enchants(), PersistentDataType.STRING).map(enchantCodec::decode);
+    }
+
+    public ItemStack clearEnchants(ItemStack stack) {
+        return clear(stack, keys.enchants());
     }
 
     public ItemStack setInt(ItemStack stack, NamespacedKey key, int value) {
