@@ -103,8 +103,9 @@ Central service that owns all `CustomItem` definitions:
 
 - `Map<String, CustomItem>` from ID to definition.  
 - Load custom definitions from disk on startup (YAML/JSON/HOCON).  
-- Apply validation and log configuration issues.  
-- Provide lookups by both ID and underlying `Material`/metadata for vanilla wrapping.
+   - Apply validation and log configuration issues.  
+   - Provide lookups by both ID and underlying `Material`/metadata for vanilla wrapping.
+   - PDC helper lives in the engine to store item IDs (and future state) under namespaced keys; avoid ad‑hoc PDC writes elsewhere.
 
 Responsibilities:
 
