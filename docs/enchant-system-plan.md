@@ -16,7 +16,7 @@ Engine integration:
 - Stat aggregation: convert custom enchants into stat contributions (e.g., Sharpness -> flat `attack_damage`, Protection -> `armor`). Apply via the stat bridge as modifiers.
 - Vanilla mirror (optional):
   - For PvP/compat, map selected custom enchants to vanilla enchants and write to ItemMeta when creating/refreshing stacks (server-side stacks), and/or ensure packet lore hides vanilla lines.
-  - Keep custom PDC as the source of truth; mirrors are derived.
+  - Keep custom PDC as the source of truth; mirrors are derived. When custom levels exceed vanilla caps, either clamp to the cap for visibility or skip mirroring entirely—custom effects still apply via stats.
 
 Lore rendering:
 - Add an EnchantLore section: list custom enchants with levels using the canonical IDs/display names.
