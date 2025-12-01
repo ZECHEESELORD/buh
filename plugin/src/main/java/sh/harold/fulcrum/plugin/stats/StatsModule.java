@@ -95,6 +95,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         bindingManager = new StatBindingManager();
         StatEntityResolver entityResolver = new StatEntityResolver(plugin.getServer());
         bindingManager.registerBinding(new MaxHealthStatBinding(entityResolver));
+        bindingManager.registerBinding(new sh.harold.fulcrum.plugin.stats.binding.AttackSpeedStatBinding(entityResolver));
         if (mappingConfig.mirrorArmorAttributes()) {
             bindingManager.registerBinding(new ArmorVisualStatBinding(entityResolver));
         }

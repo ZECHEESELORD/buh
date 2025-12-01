@@ -50,6 +50,11 @@ public final class StatEntityListener implements Listener {
             container.setBase(StatIds.ARMOR, armor.getValue());
         }
 
+        AttributeInstance attackSpeed = living.getAttribute(Attribute.ATTACK_SPEED);
+        if (attackSpeed != null) {
+            container.setBase(StatIds.ATTACK_SPEED, attackSpeed.getValue());
+        }
+
         AttributeInstance attackDamage = living.getAttribute(Attribute.ATTACK_DAMAGE);
         if (attackDamage != null) {
             container.setBase(StatIds.ATTACK_DAMAGE, attackDamage.getValue());
