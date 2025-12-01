@@ -71,7 +71,14 @@ public final class CustomItem {
     }
 
     private static List<LoreSection> defaultLoreLayout() {
-        return List.of(LoreSection.HEADER, LoreSection.TAGS, LoreSection.PRIMARY_STATS, LoreSection.ABILITIES, LoreSection.FOOTER);
+        return List.of(
+            LoreSection.HEADER,
+            LoreSection.RARITY,
+            LoreSection.TAGS,
+            LoreSection.PRIMARY_STATS,
+            LoreSection.ABILITIES,
+            LoreSection.FOOTER
+        );
     }
 
     public static final class Builder {
