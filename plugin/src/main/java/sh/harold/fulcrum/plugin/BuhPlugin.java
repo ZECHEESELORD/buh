@@ -259,6 +259,17 @@ public final class BuhPlugin extends JavaPlugin {
         PingCommand pingCommand = new PingCommand();
         registrar.register(getPluginMeta(), pingCommand.build(), "ping", java.util.List.of());
         registrar.register(getPluginMeta(), modulesCommand.build(), "module", java.util.List.of("modules"));
+        if (itemModule != null && itemModule.engine() != null && luckPermsModule != null) {
+            sh.harold.fulcrum.plugin.permissions.StaffGuard staffGuard = new sh.harold.fulcrum.plugin.permissions.StaffGuard(luckPermsModule);
+            sh.harold.fulcrum.plugin.item.command.EnchantCommand enchantCommand = new sh.harold.fulcrum.plugin.item.command.EnchantCommand(itemModule.engine(), staffGuard);
+            registrar.register(getPluginMeta(), enchantCommand.build(), "enchant", java.util.List.of());
+            sh.harold.fulcrum.plugin.item.command.DebugItemDataCommand debugItemDataCommand = new sh.harold.fulcrum.plugin.item.command.DebugItemDataCommand(staffGuard, itemModule.engine().resolver(), itemModule.engine().itemPdc());
+            registrar.register(getPluginMeta(), debugItemDataCommand.build(), "debugitemdata", java.util.List.of("did"));
+            sh.harold.fulcrum.plugin.item.command.DebugItemStatsCommand debugItemStatsCommand = new sh.harold.fulcrum.plugin.item.command.DebugItemStatsCommand(staffGuard, itemModule.engine().resolver());
+            registrar.register(getPluginMeta(), debugItemStatsCommand.build(), "debugitemstats", java.util.List.of("dis"));
+            sh.harold.fulcrum.plugin.stats.command.DebugStatsCommand debugStatsCommand = new sh.harold.fulcrum.plugin.stats.command.DebugStatsCommand(staffGuard, statsModule.statService());
+            registrar.register(getPluginMeta(), debugStatsCommand.build(), "debugstats", java.util.List.of("ds"));
+        }
     }
 
     private FormattedUsernameService noopFormattedUsernameService() {

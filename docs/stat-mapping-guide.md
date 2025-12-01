@@ -1,77 +1,50 @@
-# Stat Mapping & Integration Guide
+# Stat Mapping and Integration Guide
 
-Fulcrum’s stat engine powers every RPG layer: items feed modifiers, mobs expose container values, and combat runs through a custom damage curve before touching vanilla health. This guide shows how to wire consumers and reminds you which knobs live in config.
+Fulcrum’s stat engine now owns all combat. Items publish stat maps into PDC, the bridge feeds containers, and both PvE and PvP run through the same custom curve before vanilla health drops. These notes keep consumers aligned.
 
-## Quick recap: what the engine exposes
+Stat surface:
+- Stat ids: `max_health`, `attack_damage`, `attack_speed`, `movement_speed`, `armor`.
+- Services: `StatService` (entity to `StatContainer`), `StatRegistry` (definitions), `StatBindingManager` (fan out to platform bindings).
+- Defaults: registry baselines only; we no longer seed from live attributes.
 
-- Stat ids (vanilla-aligned): `max_health`, `attack_damage`, `attack_speed`, `movement_speed`, `armor`.
-- Core services: `StatService` (entity -> `StatContainer`), `StatRegistry` (definitions), `StatBindingManager` (fan-out to platform bindings).
-- Default mappings already registered in the plugin:
-  - `max_health` mirrors to vanilla `Attribute.MAX_HEALTH` and clamps current health when max drops.
-  - Armor mirrors to vanilla attributes for visuals when enabled (config flag), but damage reduction always uses the custom armor stat; armor toughness is ignored and zeroed for vanilla display parity.
-  - Damage listener overwrites incoming event damage with the custom curve and zeroes vanilla modifiers.
+Config (plugins/buh/config/stats/config.yml):
+- Module toggle: `modules.yml` at `modules.gameplay.rpg-stats`.
+- `damage.defense_scale` (default 16.0) controls how quickly armor ramps.
+- `damage.max_reduction` (default 0.90) caps reduction.
+- `visuals.mirror_armor_attributes` (default true) pushes custom armor to vanilla attributes for display flavor; the push never feeds the stat container.
 
-## Config knobs (plugins/buh/config/stats/config.yml)
-
-- Module toggle lives in `modules.yml` at `modules.gameplay.rpg-stats`.
-- `damage.defense_scale` (default 16.0): larger means slower armor ramp.
-- `damage.max_reduction` (default 0.90): cap on armor’s percent reduction.
-- `visuals.mirror_armor_attributes` (default true): copy armor into vanilla attributes for UI flavor only.
-
-## Consumer playbook
-
-### 1) Resolve containers
+Consumer playbook:
+1) Resolve containers
 ```java
 StatService statService = plugin.statsModule().statService();
-StatRegistry statRegistry = plugin.statsModule().statRegistry();
 EntityKey key = EntityKey.fromUuid(entity.getUniqueId());
 StatContainer container = statService.getContainer(key);
 ```
 
-### 2) Items: add/remove modifiers with stable sources
-```java
-StatSourceId mainhand = new StatSourceId("item:mainhand");
-container.addModifier(new StatModifier(StatIds.ATTACK_DAMAGE, mainhand, ModifierOp.FLAT, 3.0));
-container.addModifier(new StatModifier(StatIds.ARMOR, mainhand, ModifierOp.FLAT, 5.0));
-// On unequip
-container.removeModifier(StatIds.ATTACK_DAMAGE, mainhand);
-container.removeModifier(StatIds.ARMOR, mainhand);
-```
-Use deterministic source ids per slot/buff so you can clear them precisely.
+2) Items and modifiers
+- ItemResolver writes authoritative stat maps into PDC (`item-stats`) on creation/wrap. ItemStatBridge reads those maps and applies flat modifiers per slot source id (`item:main_hand`, etc.).
+- If you add temporary buffs, use stable `StatSourceId`s so you can clear them cleanly.
+- Do not rely on vanilla ItemMeta attributes; they are cleared and hidden at creation time.
 
-Custom items:
-* Let your item system be the single source of armor and other stats; equip and unequip should add or remove `StatModifier`s with stable `StatSourceId`s such as `item:mainhand` or `item:helmet`.
-* If you want the vanilla armor bar to reflect custom values, keep `mirror_armor_attributes` enabled. It now only mirrors outward; it no longer pulls vanilla values back into the stat container.
-* Attack damage is still set from the event’s raw damage each swing. If you want item-defined damage as the true base, either treat the event damage as just another modifier or set the vanilla attack attribute to your desired base so the event aligns with the stat.
-* On spawn, the stats module seeds bases from vanilla attributes. For PDC-driven mobs with “no armor,” set your intended bases right after spawn or before the entity joins the world so the seed is replaced with your values.
-
-### 3) Mobs: seed base stats on spawn
+3) Mobs and bases
+- Set bases directly on spawn if a mob needs non-default stats:
 ```java
 container.setBase(StatIds.MAX_HEALTH, 40.0);
 container.setBase(StatIds.ATTACK_DAMAGE, 6.0);
 container.setBase(StatIds.ARMOR, 12.0);
-// On despawn
-statService.removeContainer(key);
 ```
-The mapping layer clamps current health if max drops, keeping vanilla HP honest.
+- Remove the container on despawn with `statService.removeContainer(key)`.
 
-### 4) Combat: read/write around the damage hook
-- The damage listener reads attacker `attack_damage` from the stat container and applies the armor curve on the defender. Keep attacker stats up to date via your item/power systems.
-- To override, set base or add modifiers before the event fires (e.g., custom skills), using a distinct `StatSourceId`.
-- Vanilla armor math is neutralized; only the custom pipeline applies.
-- Armor is no longer read back from vanilla attributes during damage resolution—what you set in the container (bases, modifiers) is what the curve uses. If you still want the vanilla armor bar for flavor, leave `mirror_armor_attributes` on so the binding pushes stat values outward without pulling them back in.
-- PvP stays vanilla: if both attacker and defender are players, the custom damage hook bails out. Player-vs-mob and mob-vs-player still use the custom stat pipeline.
+4) Combat path
+- Damage listener always reads attacker `attack_damage` from the stat container and applies the armor curve on the defender; vanilla modifiers are zeroed. This applies in PvE and PvP.
+- Armor and other combat stats come only from the container (bases plus modifiers). Vanilla armor math is ignored.
+- Bindings for health, attack speed, attack damage, and armor stay active for all entities; they keep vanilla attributes in sync for client visuals without feeding back into the stat math.
 
-### 5) Visuals / UI
-- `max_health` is mirrored 1:1 to vanilla so hearts and boss bars stay correct.
-- If `mirror_armor_attributes` is true, vanilla armor values reflect the stat for display; they do not affect damage.
-- Access `StatDefinition.visual()` for icon/color if you need to render HUD elements.
+5) Visuals
+- `max_health` mirrors to vanilla attributes so hearts and boss bars stay honest.
+- If `mirror_armor_attributes` is true, armor is mirrored outward for UI flavor only.
+- Lore rendering reads the stat map directly; ItemMeta attributes are not consulted.
 
-## Lifecycle notes
-- The RPG stats module bootstraps containers for all living entities and cleans them up on removal.
-- Health clamps immediately when max health shrinks.
-- All calculations use doubles; armor is clamped to >= 0 before applying the exponential curve.
-
-## When to extend
-- Need more bindings (e.g., movement speed)? Implement `StatBinding`, register with `StatBindingManager`, and subscribe it to `StatService`.
-- Want different armor feel? Tune `defense_scale` and `max_reduction` in config without code changes.
+When to extend:
+- Add new bindings (for example movement speed) by implementing `StatBinding`, registering it with `StatBindingManager`, and subscribing it to `StatService`.
+- Tune the armor curve with `defense_scale` and `max_reduction` without code changes.

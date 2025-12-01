@@ -32,9 +32,6 @@ public final class StatDamageListener implements Listener {
         }
 
         LivingEntity attacker = resolveAttacker(event);
-        if (defender instanceof Player && attacker instanceof Player) {
-            return; // PvP remains vanilla
-        }
 
         StatContainer defenderContainer = statService.getContainer(EntityKey.fromUuid(defender.getUniqueId()));
 
@@ -42,11 +39,27 @@ public final class StatDamageListener implements Listener {
         if (attacker != null) {
             StatContainer attackerContainer = statService.getContainer(EntityKey.fromUuid(attacker.getUniqueId()));
             baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE);
+            double critMultiplier = 1.0 + attackerContainer.getStat(StatIds.CRIT_DAMAGE);
+            if (attacker instanceof Player player && isCritical(player)) {
+                baseDamage *= critMultiplier;
+            }
         }
 
         double armor = defenderContainer.getStat(StatIds.ARMOR);
         double finalDamage = applyArmor(baseDamage, armor);
         applyFinalDamage(event, Math.max(0.0, finalDamage));
+
+        if (event instanceof EntityDamageByEntityEvent byEntity && attacker != null) {
+            attacker.getServer().getLogger().info(
+                "[debug] damage=" + baseDamage
+                    + " attacker=" + attacker.getType()
+                    + " defender=" + defender.getType()
+                    + " armor=" + armor
+                    + " final=" + finalDamage
+                    + " cause=" + byEntity.getCause()
+                    + " critical=" + (attacker instanceof Player player && isCritical(player))
+            );
+        }
     }
 
     private LivingEntity resolveAttacker(EntityDamageEvent event) {
@@ -95,5 +108,16 @@ public final class StatDamageListener implements Listener {
                 event.setDamage(modifier, 0.0);
             }
         }
+    }
+
+    private boolean isCritical(Player player) {
+        return !player.isOnGround()
+            && !player.isSprinting()
+            && !player.isSwimming()
+            && !player.isInsideVehicle()
+            && !player.isInWater()
+            && player.getFallDistance() > 0.0f
+            && player.getAttackCooldown() >= 0.9f
+            && !player.hasPotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS);
     }
 }

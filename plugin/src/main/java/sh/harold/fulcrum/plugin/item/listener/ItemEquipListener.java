@@ -10,6 +10,7 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
@@ -28,31 +29,31 @@ public final class ItemEquipListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         sanitize(event.getPlayer());
-        statBridge.refreshPlayer(event.getPlayer());
+        refreshLater(event.getPlayer());
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
         sanitize(event.getPlayer());
-        statBridge.refreshPlayer(event.getPlayer());
+        refreshLater(event.getPlayer());
     }
 
     @EventHandler
     public void onHeld(PlayerItemHeldEvent event) {
         sanitize(event.getPlayer());
-        statBridge.refreshPlayer(event.getPlayer());
+        refreshLater(event.getPlayer());
     }
 
     @EventHandler
     public void onSwap(PlayerSwapHandItemsEvent event) {
         sanitize(event.getPlayer());
-        statBridge.refreshPlayer(event.getPlayer());
+        refreshLater(event.getPlayer());
     }
 
     @EventHandler
     public void onDrop(PlayerDropItemEvent event) {
         sanitize(event.getPlayer());
-        statBridge.refreshPlayer(event.getPlayer());
+        refreshLater(event.getPlayer());
     }
 
     @EventHandler
@@ -60,10 +61,7 @@ public final class ItemEquipListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getInventory().getType() != InventoryType.PLAYER) {
-            return;
-        }
-        plugin.getServer().getScheduler().runTask(plugin, () -> statBridge.refreshPlayer(player));
+        refreshLater(player);
     }
 
     @EventHandler
@@ -71,16 +69,28 @@ public final class ItemEquipListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> statBridge.refreshPlayer(player));
+        refreshLater(player);
+    }
+
+    @EventHandler
+    public void onPickup(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        refreshLater(player);
     }
 
     private void sanitize(Player player) {
         var inventory = player.getInventory();
-        inventory.setItemInMainHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getItemInMainHand()));
-        inventory.setItemInOffHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getItemInOffHand()));
-        inventory.setHelmet(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getHelmet()));
-        inventory.setChestplate(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getChestplate()));
-        inventory.setLeggings(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getLeggings()));
-        inventory.setBoots(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(inventory.getBoots()));
+        inventory.setItemInMainHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getItemInMainHand()));
+        inventory.setItemInOffHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getItemInOffHand()));
+        inventory.setHelmet(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getHelmet()));
+        inventory.setChestplate(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getChestplate()));
+        inventory.setLeggings(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getLeggings()));
+        inventory.setBoots(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getBoots()));
+    }
+
+    private void refreshLater(Player player) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> statBridge.refreshPlayer(player));
     }
 }

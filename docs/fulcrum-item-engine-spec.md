@@ -64,8 +64,8 @@ Key responsibilities:
   - If absent → use a generated `VanillaWrapper` (see §3).  
 - **State accessors:** strongly typed getters/setters for PDC fields.  
 - **Stat aggregation:** `computeFinalStats()` that merges:
-  - base stats from `StatsComponent`,  
-  - migrated vanilla enchants.
+  - stat map stored in PDC (seeded from `StatsComponent` or vanilla stat table),  
+  - enchant-driven modifiers (when implemented).
 
 `ItemInstance` does *not* talk to the stat engine directly; it only returns data structures used by bridges.
 
@@ -114,7 +114,7 @@ Responsibilities:
 
    - Category derived from `Material` (e.g. diamond sword → `SWORD`).  
    - Traits derived from defaults (e.g. tools get `MELEE_ENCHANTABLE`).  
-   - `StatsComponent` may be empty or minimal; actual power can be provided via a migration layer.
+   - `StatsComponent` may be empty or minimal; a vanilla stat table seeds PDC stats for uncustomized items so they participate in the unified pipeline.
 
    This ensures every item in the game has a valid definition.
 
@@ -147,6 +147,11 @@ Stores immutable base attributes of the item type, for example:
   - `CRIT_CHANCE: 10`
 
 It does *not* perform any calculations; it is pure data.
+
+Runtime stat flow:
+- ItemResolver seeds a PDC stat map from `StatsComponent`; vanilla items fall back to the material stat table.
+- ItemInstance exposes that map via `computeFinalStats()`.
+- ItemStatBridge applies the map as flat modifiers per slot.
 
 ### 4.2 SocketComponent (deferred)
 
