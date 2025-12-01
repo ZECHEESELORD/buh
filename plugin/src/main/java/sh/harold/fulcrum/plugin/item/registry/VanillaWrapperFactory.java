@@ -6,15 +6,15 @@ import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
 import sh.harold.fulcrum.plugin.item.model.ItemCategory;
-import sh.harold.fulcrum.plugin.item.model.VisualComponent;
 import sh.harold.fulcrum.plugin.item.model.ItemRarity;
+import sh.harold.fulcrum.plugin.item.model.VisualComponent;
 
 import java.util.Map;
 
 public final class VanillaWrapperFactory {
 
     public CustomItem wrap(Material material, String id) {
-        VisualComponent visual = new VisualComponent(Component.text(material.translationKey()), null, rarityFor(material));
+        VisualComponent visual = new VisualComponent(Component.translatable(material.translationKey()), null, rarityFor(material));
         return CustomItem.builder(id)
             .material(material)
             .category(ItemCategory.fromMaterial(material))
