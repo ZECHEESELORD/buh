@@ -57,6 +57,7 @@ public final class ItemLoreRenderer {
                 case HEADER -> {
                     // header handled via display name
                 }
+                case RARITY -> addRarity(lore, visual);
                 case TAGS -> addTags(lore, definition);
                 case PRIMARY_STATS -> addStats(lore, instance);
                 case ABILITIES -> addAbilities(lore, instance);
@@ -112,7 +113,26 @@ public final class ItemLoreRenderer {
         lore.addAll(visual.flavor());
     }
 
+    private void addRarity(List<Component> lore, VisualComponent visual) {
+        if (visual == null) {
+            return;
+        }
+        NamedTextColor color = rarityColor(visual.rarity());
+        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY)
+            .append(Component.text(visual.rarity().name().toLowerCase(Locale.ROOT), color)));
+    }
+
     private String formatTrigger(AbilityTrigger trigger) {
         return trigger.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+    }
+
+    private NamedTextColor rarityColor(sh.harold.fulcrum.plugin.item.model.ItemRarity rarity) {
+        return switch (rarity) {
+            case COMMON -> NamedTextColor.WHITE;
+            case UNCOMMON -> NamedTextColor.GREEN;
+            case RARE -> NamedTextColor.AQUA;
+            case EPIC -> NamedTextColor.LIGHT_PURPLE;
+            case LEGENDARY -> NamedTextColor.GOLD;
+        };
     }
 }
