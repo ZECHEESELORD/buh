@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.fulcrum.plugin.item.ability.AbilityDefinition;
@@ -44,6 +45,8 @@ public final class ItemLoreRenderer {
         if (meta == null) {
             return clone;
         }
+        meta.setAttributeModifiers(null);
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
 
         CustomItem definition = instance.definition();
         VisualComponent visual = definition.component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
