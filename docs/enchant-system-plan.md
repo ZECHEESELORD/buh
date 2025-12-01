@@ -21,6 +21,7 @@ Engine integration:
 Lore rendering:
 - Add an EnchantLore section: list custom enchants with levels using the canonical IDs/display names.
 - Hide vanilla enchant lines in packet lore (HIDE_ENCHANTS flag) while keeping glint; render custom lines instead.
+- Vanilla-named enchants get custom effects: treat Sharpness/Smite/Protection/etc. as entries in the registry that map to explicit stat bonuses (e.g., Sharpness -> flat `attack_damage`, Protection -> `armor`/reduction). PvE uses these custom mappings; vanilla enchant behavior is not relied on for effects, only mirrored for PvP/compat visibility if enabled.
 
 Application paths:
 - Enchant Table/Anvil analogue writes to PDC via ItemPdc, updates ItemMeta vanilla enchants if mirroring is enabled.
