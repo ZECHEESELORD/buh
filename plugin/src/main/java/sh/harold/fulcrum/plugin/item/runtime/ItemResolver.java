@@ -46,6 +46,7 @@ public final class ItemResolver {
         ItemMeta meta = clone.getItemMeta();
         if (meta != null) {
             meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, id);
+            meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES);
             clone.setItemMeta(meta);
         }
         return clone;

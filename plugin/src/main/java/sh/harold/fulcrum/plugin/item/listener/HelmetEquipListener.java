@@ -44,6 +44,7 @@ public final class HelmetEquipListener implements Listener {
 
             ItemStack toEquip = stack.clone();
             toEquip.setAmount(1);
+            sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.hideAttributes(toEquip);
             player.getInventory().setHelmet(toEquip);
 
             if (stack.getAmount() > 1) {
