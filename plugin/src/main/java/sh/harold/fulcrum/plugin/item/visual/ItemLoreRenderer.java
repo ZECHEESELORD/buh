@@ -2,6 +2,7 @@ package sh.harold.fulcrum.plugin.item.visual;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -49,7 +50,7 @@ public final class ItemLoreRenderer {
         Component name = visual != null && visual.hasDisplayName()
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
-        meta.displayName(name);
+        meta.displayName(noItalics(name));
 
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
@@ -64,7 +65,7 @@ public final class ItemLoreRenderer {
                 case FOOTER -> addFlavor(lore, visual);
             }
         }
-        meta.lore(lore);
+        meta.lore(lore.stream().map(this::noItalics).toList());
         clone.setItemMeta(meta);
         return clone;
     }
@@ -134,5 +135,9 @@ public final class ItemLoreRenderer {
             case EPIC -> NamedTextColor.LIGHT_PURPLE;
             case LEGENDARY -> NamedTextColor.GOLD;
         };
+    }
+
+    private Component noItalics(Component component) {
+        return component.decoration(TextDecoration.ITALIC, false);
     }
 }

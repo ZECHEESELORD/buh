@@ -33,6 +33,9 @@ public final class AbilityListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
+        if (player.getGameMode() == org.bukkit.GameMode.CREATIVE) {
+            return;
+        }
         resolver.resolve(player.getInventory().getItemInMainHand()).ifPresent(instance -> {
             AbilityComponent abilityComponent = instance.definition().component(ComponentType.ABILITY, AbilityComponent.class).orElse(null);
             if (abilityComponent == null) {
