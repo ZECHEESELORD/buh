@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.item.runtime;
 
 import org.bukkit.Material;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -19,10 +20,12 @@ public final class ItemResolver {
     private final ItemRegistry registry;
     private final VanillaWrapperFactory wrapperFactory;
     private final NamespacedKey idKey;
+    private final ItemPdc itemPdc;
 
-    public ItemResolver(Plugin plugin, ItemRegistry registry, VanillaWrapperFactory wrapperFactory) {
+    public ItemResolver(Plugin plugin, ItemRegistry registry, VanillaWrapperFactory wrapperFactory, ItemPdc itemPdc) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.wrapperFactory = Objects.requireNonNull(wrapperFactory, "wrapperFactory");
+        this.itemPdc = Objects.requireNonNull(itemPdc, "itemPdc");
         this.idKey = new ItemKeys(plugin).idKey();
     }
 
@@ -39,25 +42,10 @@ public final class ItemResolver {
     }
 
     public ItemStack applyId(ItemStack stack, String id) {
-        if (stack == null || id == null) {
-            return stack;
-        }
-        ItemStack clone = stack.clone();
-        ItemMeta meta = clone.getItemMeta();
-        if (meta != null) {
-            meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, id);
-            meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES);
-            clone.setItemMeta(meta);
-        }
-        return clone;
+        return itemPdc.setId(stack, id);
     }
 
     private String readId(ItemStack stack) {
-        ItemMeta meta = stack.getItemMeta();
-        if (meta == null) {
-            return null;
-        }
-        PersistentDataContainer container = meta.getPersistentDataContainer();
-        return container.get(idKey, PersistentDataType.STRING);
+        return itemPdc.readId(stack).orElse(null);
     }
 }

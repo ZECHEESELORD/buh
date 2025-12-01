@@ -8,6 +8,7 @@ import sh.harold.fulcrum.plugin.item.registry.ItemRegistry;
 import sh.harold.fulcrum.plugin.item.registry.VanillaWrapperFactory;
 import sh.harold.fulcrum.plugin.item.registry.YamlItemDefinitionLoader;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
+import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.stat.ItemStatBridge;
 import sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer;
 import sh.harold.fulcrum.plugin.item.visual.ProtocolLoreAdapter;
@@ -27,6 +28,7 @@ public final class ItemEngine {
     private final ItemRegistry registry;
     private final VanillaWrapperFactory wrapperFactory;
     private final ItemResolver resolver;
+    private final ItemPdc itemPdc;
     private final AbilityService abilityService;
     private final ItemStatBridge statBridge;
     private ProtocolLoreAdapter loreAdapter;
@@ -36,7 +38,8 @@ public final class ItemEngine {
         this.statsModule = statsModule;
         this.registry = new ItemRegistry();
         this.wrapperFactory = new VanillaWrapperFactory();
-        this.resolver = new ItemResolver(plugin, registry, wrapperFactory);
+        this.itemPdc = new ItemPdc(plugin);
+        this.resolver = new ItemResolver(plugin, registry, wrapperFactory, itemPdc);
         this.abilityService = new AbilityService();
         this.statBridge = new ItemStatBridge(resolver, statsModule.statService());
         loadDefinitions(providers);
