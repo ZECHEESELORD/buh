@@ -3,6 +3,8 @@ package sh.harold.fulcrum.plugin.item.visual;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -12,11 +14,13 @@ import sh.harold.fulcrum.plugin.item.ability.AbilityTrigger;
 import sh.harold.fulcrum.plugin.item.model.AbilityComponent;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
+import sh.harold.fulcrum.plugin.item.model.ItemCategory;
 import sh.harold.fulcrum.plugin.item.model.LoreSection;
 import sh.harold.fulcrum.plugin.item.model.VisualComponent;
 import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.stats.core.StatId;
+import sh.harold.fulcrum.stats.core.StatIds;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -56,6 +60,7 @@ public final class ItemLoreRenderer {
         name = rarityColorize(name, visual);
         meta.displayName(noItalics(name));
 
+        StatSnapshot stats = buildStats(instance, meta);
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
             switch (section) {
@@ -63,38 +68,47 @@ public final class ItemLoreRenderer {
                     // header handled via display name
                 }
                 case RARITY -> addRarity(lore, visual);
-                case TAGS -> addTags(lore, definition);
-                case PRIMARY_STATS -> addStats(lore, instance);
+                case TAGS -> addTags(lore, definition, stats);
+                case PRIMARY_STATS -> addStats(lore, stats);
                 case ABILITIES -> addAbilities(lore, instance);
                 case FOOTER -> addFlavor(lore, visual);
             }
         }
+        if (!lore.isEmpty()) {
+            lore.add(noItalics(Component.empty()));
+        }
+        lore.add(noItalics(Component.text("ID: " + definition.id(), NamedTextColor.DARK_GRAY)));
         meta.lore(lore.stream().map(this::noItalics).toList());
         clone.setItemMeta(meta);
         return clone;
     }
 
-    private void addTags(List<Component> lore, CustomItem definition) {
-        if (definition.traits().isEmpty()) {
+    private void addTags(List<Component> lore, CustomItem definition, StatSnapshot stats) {
+        List<String> tags = new ArrayList<>();
+        if (definition.id().startsWith("vanilla:")) {
+            tags.add("Vanilla");
+        }
+        if (isTool(definition.category())) {
+            tags.add("Tool");
+        }
+        if (isMelee(definition.category())) {
+            tags.add("Melee");
+        }
+        if (tags.isEmpty()) {
             return;
         }
-        Component tags = Component.text("Traits: ", NamedTextColor.GRAY)
-            .append(Component.text(String.join(", ",
-                definition.traits().stream().map(Enum::name).toList()), NamedTextColor.WHITE));
-        lore.add(tags);
+        lore.add(Component.text(String.join(" • ", tags), NamedTextColor.GRAY));
+        lore.add(Component.empty());
     }
 
-    private void addStats(List<Component> lore, ItemInstance instance) {
-        Map<StatId, Double> stats = instance.computeFinalStats();
-        if (stats.isEmpty()) {
+    private void addStats(List<Component> lore, StatSnapshot stats) {
+        if (!stats.hasValues()) {
             return;
         }
-        stats.entrySet().stream()
-            .sorted(Comparator.comparing(entry -> entry.getKey().value()))
-            .forEach(entry -> lore.add(Component.text(
-                entry.getKey().value() + ": " + STAT_FORMAT.format(entry.getValue()),
-                NamedTextColor.AQUA
-            )));
+        String damage = "Damage: +" + STAT_FORMAT.format(stats.damage());
+        String defense = "Defense: +" + STAT_FORMAT.format(stats.armor());
+        lore.add(Component.text(damage + ", " + defense, NamedTextColor.AQUA));
+        lore.add(Component.empty());
     }
 
     private void addAbilities(List<Component> lore, ItemInstance instance) {
@@ -116,6 +130,7 @@ public final class ItemLoreRenderer {
             return;
         }
         lore.addAll(visual.flavor());
+        lore.add(Component.empty());
     }
 
     private void addRarity(List<Component> lore, VisualComponent visual) {
@@ -154,5 +169,42 @@ public final class ItemLoreRenderer {
             case EPIC -> component.color(NamedTextColor.DARK_PURPLE);
             case LEGENDARY -> component.color(NamedTextColor.GOLD);
         };
+    }
+
+    private StatSnapshot buildStats(ItemInstance instance, ItemMeta meta) {
+        Map<StatId, Double> stats = instance.computeFinalStats();
+        double damage = stats.getOrDefault(StatIds.ATTACK_DAMAGE, readAttribute(meta, Attribute.ATTACK_DAMAGE));
+        double armor = stats.getOrDefault(StatIds.ARMOR, readAttribute(meta, Attribute.ARMOR));
+        return new StatSnapshot(damage, armor, !stats.isEmpty());
+    }
+
+    private double readAttribute(ItemMeta meta, Attribute attribute) {
+        if (meta == null || attribute == null || meta.getAttributeModifiers(attribute) == null) {
+            return 0.0;
+        }
+        return meta.getAttributeModifiers(attribute).stream()
+            .mapToDouble(AttributeModifier::getAmount)
+            .sum();
+    }
+
+    private boolean isTool(ItemCategory category) {
+        return category == ItemCategory.AXE
+            || category == ItemCategory.PICKAXE
+            || category == ItemCategory.SHOVEL
+            || category == ItemCategory.HOE
+            || category == ItemCategory.FISHING_ROD;
+    }
+
+    private boolean isMelee(ItemCategory category) {
+        return category == ItemCategory.SWORD
+            || category == ItemCategory.AXE
+            || category == ItemCategory.WAND
+            || category == ItemCategory.TRIDENT;
+    }
+
+    private record StatSnapshot(double damage, double armor, boolean hasStats) {
+        boolean hasValues() {
+            return hasStats || damage > 0.0 || armor > 0.0;
+        }
     }
 }
