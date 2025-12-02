@@ -115,13 +115,26 @@ public final class ItemLoreRenderer {
     }
 
     private void addStats(List<Component> lore, StatSnapshot stats) {
+        Map<StatId, Double> allStats = new java.util.LinkedHashMap<>(stats.all());
         List<Component> lines = new ArrayList<>();
-        addStatLine(lines, "Damage", stats.damage());
-        addStatLine(lines, "Attack Speed", stats.attackSpeed());
-        addStatLine(lines, "Armor", stats.armor());
-        addStatLine(lines, "Max Health", stats.maxHealth());
-        addStatLine(lines, "Movement Speed", stats.movementSpeed());
-        addStatLine(lines, "Crit Damage", stats.critDamage() * 100.0, "%");
+        appendStatIfPresent(lines, allStats, StatIds.ATTACK_DAMAGE, "Damage", false);
+        appendStatIfPresent(lines, allStats, StatIds.ATTACK_SPEED, "Attack Speed", false);
+        appendStatIfPresent(lines, allStats, StatIds.ARMOR, "Armor", false);
+        appendStatIfPresent(lines, allStats, StatIds.MAX_HEALTH, "Max Health", false);
+        appendStatIfPresent(lines, allStats, StatIds.MOVEMENT_SPEED, "Movement Speed", false);
+        appendStatIfPresent(lines, allStats, StatIds.CRIT_DAMAGE, "Crit Damage", true);
+
+        if (!allStats.isEmpty()) {
+            allStats.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(StatId::value)))
+                .forEach(entry -> {
+                    Component line = statLine(labelFor(entry.getKey()), entry.getValue(), false);
+                    if (!line.equals(Component.empty())) {
+                        lines.add(line);
+                    }
+                });
+        }
+
         if (lines.isEmpty()) {
             return;
         }
@@ -279,13 +292,7 @@ public final class ItemLoreRenderer {
 
     private StatSnapshot buildStats(ItemInstance instance) {
         Map<StatId, Double> stats = instance.computeFinalStats();
-        double damage = stats.getOrDefault(StatIds.ATTACK_DAMAGE, 0.0);
-        double armor = stats.getOrDefault(StatIds.ARMOR, 0.0);
-        double attackSpeed = stats.getOrDefault(StatIds.ATTACK_SPEED, 0.0);
-        double movementSpeed = stats.getOrDefault(StatIds.MOVEMENT_SPEED, 0.0);
-        double maxHealth = stats.getOrDefault(StatIds.MAX_HEALTH, 0.0);
-        double critDamage = stats.getOrDefault(StatIds.CRIT_DAMAGE, 0.0);
-        return new StatSnapshot(damage, armor, attackSpeed, movementSpeed, maxHealth, critDamage);
+        return new StatSnapshot(stats);
     }
 
     private boolean isTool(ItemCategory category) {
@@ -304,22 +311,54 @@ public final class ItemLoreRenderer {
     }
 
     private void addStatLine(List<Component> lore, String label, double value) {
-        if (Double.compare(value, 0.0) == 0) {
-            return;
-        }
-        lore.add(Component.text(label + ": ", NamedTextColor.GRAY)
-            .append(Component.text("+" + STAT_FORMAT.format(value), NamedTextColor.RED)));
+        lore.add(statLine(label, value, false));
     }
 
     private void addStatLine(List<Component> lore, String label, double value, String suffix) {
-        if (Double.compare(value, 0.0) == 0) {
-            return;
-        }
-        lore.add(Component.text(label + ": ", NamedTextColor.GRAY)
-            .append(Component.text("+" + STAT_FORMAT.format(value) + suffix, NamedTextColor.RED)));
+        lore.add(statLine(label, value, true));
     }
 
-    private record StatSnapshot(double damage, double armor, double attackSpeed, double movementSpeed, double maxHealth, double critDamage) {
+    private Component statLine(String label, double value, boolean percent) {
+        if (Double.compare(value, 0.0) == 0) {
+            return Component.empty();
+        }
+        String suffix = percent ? "%" : "";
+        return Component.text(label + ": ", NamedTextColor.GRAY)
+            .append(Component.text("+" + STAT_FORMAT.format(percent ? value * 100.0 : value) + suffix, NamedTextColor.RED));
+    }
+
+    private void appendStatIfPresent(List<Component> lore, Map<StatId, Double> stats, StatId id, String label, boolean percent) {
+        Double value = stats.remove(id);
+        if (value == null || Double.compare(value, 0.0) == 0) {
+            return;
+        }
+        Component line = statLine(label, value, percent);
+        if (!line.equals(Component.empty())) {
+            lore.add(line);
+        }
+    }
+
+    private String labelFor(StatId id) {
+        String raw = id.value();
+        if (raw == null || raw.isBlank()) {
+            return "Stat";
+        }
+        String[] tokens = raw.split("_");
+        StringBuilder builder = new StringBuilder();
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(" ");
+            }
+            builder.append(token.substring(0, 1).toUpperCase(Locale.ROOT))
+                .append(token.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return builder.toString();
+    }
+
+    private record StatSnapshot(Map<StatId, Double> all) {
     }
 
     private void trimTrailingEmptyLines(List<Component> lore) {
