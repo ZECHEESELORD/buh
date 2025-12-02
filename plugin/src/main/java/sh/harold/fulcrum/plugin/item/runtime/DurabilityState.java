@@ -27,7 +27,7 @@ public record DurabilityState(DurabilityData data, String grade, double percent,
     }
 
     private enum Grade {
-        PERFECT("PERFECT", 100.0, NamedTextColor.DARK_GREEN, false),
+        PERFECT("PERFECT", 100.0, NamedTextColor.GREEN, false),
         LIGHTLY_USED("LIGHTLY USED", 80.0, NamedTextColor.GREEN, false),
         STURDY("STURDY", 50.0, NamedTextColor.YELLOW, false),
         WEATHERED("WEATHERED", 20.0, NamedTextColor.GOLD, false),
