@@ -338,15 +338,19 @@ public final class ItemLoreRenderer {
         }
         Component percentComponent = Component.text(STAT_FORMAT.format(durability.percent()) + "%", durability.color())
             .decoration(TextDecoration.BOLD, Double.compare(durability.percent(), 100.0) == 0);
-        Component gradeLine = Component.text()
+        Component line = Component.text()
             .append(Component.text(durability.displayedCurrent(), durability.color()))
-            .append(Component.text("/", NamedTextColor.DARK_GRAY))
+            .append(Component.text("/", NamedTextColor.GREEN))
             .append(Component.text(durability.data().max(), NamedTextColor.GREEN))
             .append(Component.text(" ", NamedTextColor.GRAY))
+            .append(Component.text("(", NamedTextColor.DARK_GRAY))
             .append(percentComponent)
-            .append(Component.text(" (" + durability.grade() + ")", NamedTextColor.DARK_GRAY))
+            .append(Component.text(")", NamedTextColor.DARK_GRAY))
             .build();
-        lore.add(gradeLine);
+        Component label = Component.text(durability.grade().toLowerCase(Locale.ROOT), NamedTextColor.DARK_GRAY)
+            .decoration(TextDecoration.ITALIC, true);
+        lore.add(line);
+        lore.add(label);
     }
 
     private void ensureGlint(ItemMeta meta, ItemInstance instance) {
