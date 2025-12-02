@@ -38,16 +38,30 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     @Override
     public void onPacketSending(PacketEvent event) {
         Player viewer = event.getPlayer();
+        boolean isMenu = MenuInventoryHolder.isMenu(viewer.getOpenInventory().getTopInventory());
+        int topSize = viewer.getOpenInventory().getTopInventory() == null ? 0 : viewer.getOpenInventory().getTopInventory().getSize();
         PacketContainer packet = event.getPacket();
         if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
-            ItemStack item = packet.getItemModifier().read(0);
-            ItemStack rendered = renderer.render(item, viewer);
-            packet.getItemModifier().write(0, rendered);
+            int windowId = packet.getIntegers().readSafely(0);
+            int slot = packet.getIntegers().readSafely(2);
+            if (!(isMenu && windowId != 0 && slot < topSize)) {
+                ItemStack item = packet.getItemModifier().read(0);
+                ItemStack rendered = renderer.render(item, viewer);
+                packet.getItemModifier().write(0, rendered);
+            }
         } else if (packet.getType() == PacketType.Play.Server.WINDOW_ITEMS) {
+            int windowId = packet.getIntegers().readSafely(0);
             List<ItemStack> items = packet.getItemListModifier().read(0);
-            for (int i = 0; i < items.size(); i++) {
-                ItemStack rendered = renderer.render(items.get(i), viewer);
-                items.set(i, rendered);
+            if (isMenu && windowId != 0 && items.size() >= topSize) {
+                for (int i = topSize; i < items.size(); i++) {
+                    ItemStack rendered = renderer.render(items.get(i), viewer);
+                    items.set(i, rendered);
+                }
+            } else {
+                for (int i = 0; i < items.size(); i++) {
+                    ItemStack rendered = renderer.render(items.get(i), viewer);
+                    items.set(i, rendered);
+                }
             }
             packet.getItemListModifier().write(0, items);
         } else if (packet.getType() == PacketType.Play.Server.ENTITY_EQUIPMENT) {
