@@ -40,6 +40,7 @@ public final class ItemEngine {
     private final EnchantService enchantService;
     private final AbilityService abilityService;
     private final ItemStatBridge statBridge;
+    private final sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer loreRenderer;
     private final DurabilityService durabilityService;
     private ProtocolLoreAdapter loreAdapter;
 
@@ -55,6 +56,7 @@ public final class ItemEngine {
         this.resolver = new ItemResolver(registry, wrapperFactory, itemPdc, new VanillaStatResolver(), enchantRegistry);
         this.abilityService = new AbilityService();
         this.statBridge = new ItemStatBridge(resolver, statsModule.statService());
+        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry);
         this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
         loadDefinitions(providers);
     }
@@ -82,6 +84,9 @@ public final class ItemEngine {
     public ItemStatBridge statBridge() {
         return statBridge;
     }
+    public sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer loreRenderer() {
+        return loreRenderer;
+    }
 
     public java.util.Optional<org.bukkit.inventory.ItemStack> createItem(String id) {
         return registry.get(id).map(definition -> {
@@ -92,12 +97,12 @@ public final class ItemEngine {
 
     public void enable() {
         PluginManager pluginManager = plugin.getServer().getPluginManager();
-        ItemLoreRenderer loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry);
         loreAdapter = ProtocolLoreAdapter.register(plugin, loreRenderer);
         pluginManager.registerEvents(new ItemEquipListener(plugin, statBridge), plugin);
         pluginManager.registerEvents(new AbilityListener(abilityService, resolver), plugin);
         pluginManager.registerEvents(new HelmetEquipListener(resolver, statBridge), plugin);
         pluginManager.registerEvents(durabilityService, plugin);
+        pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
     }
 
     public void disable() {
