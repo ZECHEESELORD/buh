@@ -38,9 +38,6 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     @Override
     public void onPacketSending(PacketEvent event) {
         Player viewer = event.getPlayer();
-        if (MenuInventoryHolder.isMenu(viewer.getOpenInventory().getTopInventory())) {
-            return;
-        }
         PacketContainer packet = event.getPacket();
         if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
             ItemStack item = packet.getItemModifier().read(0);
