@@ -18,18 +18,38 @@ public final class VanillaStatResolver {
         registerSword(Material.IRON_SWORD, 6.0);
         registerSword(Material.DIAMOND_SWORD, 7.0);
         registerSword(Material.NETHERITE_SWORD, 8.0);
+        registerSword(Material.GOLDEN_SWORD, 4.0);
 
-        registerAxe(Material.WOODEN_AXE, 7.0);
-        registerAxe(Material.STONE_AXE, 9.0);
-        registerAxe(Material.IRON_AXE, 9.0);
-        registerAxe(Material.DIAMOND_AXE, 9.0);
-        registerAxe(Material.NETHERITE_AXE, 10.0);
+        registerAxe(Material.WOODEN_AXE, 7.0, 0.8);
+        registerAxe(Material.STONE_AXE, 9.0, 0.8);
+        registerAxe(Material.IRON_AXE, 9.0, 0.9);
+        registerAxe(Material.GOLDEN_AXE, 7.0, 1.0);
+        registerAxe(Material.DIAMOND_AXE, 9.0, 1.0);
+        registerAxe(Material.NETHERITE_AXE, 10.0, 1.0);
 
-        registerHoe(Material.WOODEN_HOE);
-        registerHoe(Material.STONE_HOE);
-        registerHoe(Material.IRON_HOE);
-        registerHoe(Material.DIAMOND_HOE);
-        registerHoe(Material.NETHERITE_HOE);
+        registerPickaxe(Material.WOODEN_PICKAXE, 2.0, 1.2);
+        registerPickaxe(Material.STONE_PICKAXE, 3.0, 1.2);
+        registerPickaxe(Material.IRON_PICKAXE, 4.0, 1.2);
+        registerPickaxe(Material.GOLDEN_PICKAXE, 2.0, 1.2);
+        registerPickaxe(Material.DIAMOND_PICKAXE, 5.0, 1.2);
+        registerPickaxe(Material.NETHERITE_PICKAXE, 6.0, 1.2);
+
+        registerShovel(Material.WOODEN_SHOVEL, 2.5, 1.0);
+        registerShovel(Material.STONE_SHOVEL, 3.5, 1.0);
+        registerShovel(Material.IRON_SHOVEL, 4.5, 1.0);
+        registerShovel(Material.GOLDEN_SHOVEL, 2.5, 1.0);
+        registerShovel(Material.DIAMOND_SHOVEL, 5.5, 1.0);
+        registerShovel(Material.NETHERITE_SHOVEL, 6.5, 1.0);
+
+        registerHoe(Material.WOODEN_HOE, 1.0, 1.0);
+        registerHoe(Material.GOLDEN_HOE, 1.0, 1.0);
+        registerHoe(Material.STONE_HOE, 1.0, 2.0);
+        registerHoe(Material.IRON_HOE, 1.0, 3.0);
+        registerHoe(Material.DIAMOND_HOE, 1.0, 4.0);
+        registerHoe(Material.NETHERITE_HOE, 1.0, 4.0);
+
+        registerTrident();
+        registerMace();
 
         registerArmor(Material.LEATHER_HELMET, 1.0);
         registerArmor(Material.LEATHER_CHESTPLATE, 3.0);
@@ -61,12 +81,28 @@ public final class VanillaStatResolver {
         register(material, damage, 1.6);
     }
 
-    private void registerAxe(Material material, double damage) {
-        register(material, damage, 1.0);
+    private void registerAxe(Material material, double damage, double speed) {
+        register(material, damage, speed);
     }
 
-    private void registerHoe(Material material) {
-        register(material, 1.0, 4.0);
+    private void registerHoe(Material material, double damage, double speed) {
+        register(material, damage, speed);
+    }
+
+    private void registerPickaxe(Material material, double damage, double speed) {
+        register(material, damage, speed);
+    }
+
+    private void registerShovel(Material material, double damage, double speed) {
+        register(material, damage, speed);
+    }
+
+    private void registerTrident() {
+        registerIfPresent("TRIDENT", 9.0, 1.1);
+    }
+
+    private void registerMace() {
+        registerIfPresent("MACE", 7.0, 0.6);
     }
 
     private void registerArmor(Material material, double armor) {
@@ -80,5 +116,12 @@ public final class VanillaStatResolver {
         stats.put(StatIds.ATTACK_DAMAGE, attackDamage);
         stats.put(StatIds.ATTACK_SPEED, attackSpeed);
         table.put(material, Map.copyOf(stats));
+    }
+
+    private void registerIfPresent(String materialName, double attackDamage, double attackSpeed) {
+        Material material = Material.matchMaterial(materialName);
+        if (material != null) {
+            register(material, attackDamage, attackSpeed);
+        }
     }
 }
