@@ -92,6 +92,9 @@ public final class ItemEquipListener implements Listener {
     }
 
     private void refreshLater(Player player) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> statBridge.refreshPlayer(player));
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            statBridge.refreshPlayer(player);
+            player.updateInventory();
+        });
     }
 }
