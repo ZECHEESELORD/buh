@@ -151,10 +151,14 @@ public final class ItemLoreRenderer {
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchants.entrySet());
         entries.sort(Map.Entry.comparingByKey());
         if (entries.size() <= 4) {
+            boolean first = true;
             for (Map.Entry<String, Integer> entry : entries) {
                 EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
                 if (definition == null) {
                     continue;
+                }
+                if (!first) {
+                    lore.add(Component.empty());
                 }
                 int level = entry.getValue();
                 String levelLabel = roman(level);
@@ -164,6 +168,7 @@ public final class ItemLoreRenderer {
                 lore.add(title);
                 String description = enchantDescription(definition, level);
                 wrap(Component.text(description, NamedTextColor.GRAY), 40).forEach(lore::add);
+                first = false;
             }
         } else {
             List<String> labels = new ArrayList<>();
