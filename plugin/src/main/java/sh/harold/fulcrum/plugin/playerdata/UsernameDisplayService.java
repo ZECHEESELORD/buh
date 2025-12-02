@@ -197,8 +197,11 @@ public final class UsernameDisplayService implements Listener {
                 if (target.equals(viewer)) {
                     continue;
                 }
+                boolean initiallyVisible = viewer.canSee(target);
                 viewer.hidePlayer(plugin, target);
-                viewer.showPlayer(plugin, target);
+                if (initiallyVisible) {
+                    viewer.showPlayer(plugin, target);
+                }
             }
         });
     }
