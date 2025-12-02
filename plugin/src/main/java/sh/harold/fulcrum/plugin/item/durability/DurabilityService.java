@@ -11,8 +11,11 @@ import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.stat.ItemStatBridge;
 
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class DurabilityService implements Listener {
+
+    private static final String UNBREAKING_ID = "fulcrum:unbreaking";
 
     private final ItemResolver resolver;
     private final ItemPdc itemPdc;
@@ -31,11 +34,37 @@ public final class DurabilityService implements Listener {
             return;
         }
         resolver.resolve(item).ifPresent(instance -> instance.durability().ifPresent(durability -> {
-            DurabilityData updated = durability.data().damage(event.getDamage());
+            if (durability.defunct()) {
+                return;
+            }
+            int baseDamage = event.getDamage();
+            int level = instance.enchants().getOrDefault(UNBREAKING_ID, 0);
+            int appliedDamage = applyUnbreaking(baseDamage, level);
+            if (appliedDamage <= 0) {
+                event.setDamage(0);
+                event.setCancelled(true);
+                return;
+            }
+            DurabilityData updated = durability.data().damage(appliedDamage);
             itemPdc.writeDurability(item, updated);
             event.setDamage(0);
             event.setCancelled(true);
             statBridge.refreshPlayer(event.getPlayer());
         }));
+    }
+
+    private int applyUnbreaking(int damage, int level) {
+        if (damage <= 0 || level <= 0) {
+            return damage;
+        }
+        double chance = 1.0 / (level + 1.0);
+        int applied = 0;
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int i = 0; i < damage; i++) {
+            if (random.nextDouble() < chance) {
+                applied++;
+            }
+        }
+        return applied;
     }
 }
