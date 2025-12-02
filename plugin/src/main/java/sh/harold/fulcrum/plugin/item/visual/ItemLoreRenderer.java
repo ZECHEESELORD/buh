@@ -347,10 +347,22 @@ public final class ItemLoreRenderer {
             .append(percentComponent)
             .append(Component.text(")", NamedTextColor.DARK_GRAY))
             .build();
-        Component label = Component.text(durability.grade().toLowerCase(Locale.ROOT), NamedTextColor.DARK_GRAY)
+        Component label = Component.text(durabilityFlavor(durability), NamedTextColor.DARK_GRAY)
             .decoration(TextDecoration.ITALIC, true);
         lore.add(line);
         lore.add(label);
+    }
+
+    private String durabilityFlavor(DurabilityState state) {
+        return switch (state.grade()) {
+            case "PERFECT" -> "Perfect. Absolutely pristine. So shiny.";
+            case "LIGHTLY USED" -> "Lightly used. Barely a scuff.";
+            case "STURDY" -> "Sturdy. Holds up to scrapes.";
+            case "WEATHERED" -> "Weathered. Stories in every mark.";
+            case "FALLING APART" -> "Falling apart. One swing from ruin.";
+            case "DEFUNCT" -> "Defunct. It does nothing now.";
+            default -> state.grade().toLowerCase(Locale.ROOT);
+        };
     }
 
     private void ensureGlint(ItemMeta meta, ItemInstance instance) {
