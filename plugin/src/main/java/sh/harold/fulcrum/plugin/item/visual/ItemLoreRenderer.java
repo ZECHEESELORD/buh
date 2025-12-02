@@ -219,13 +219,26 @@ public final class ItemLoreRenderer {
     }
 
     private Component rarityComponent(sh.harold.fulcrum.plugin.item.model.ItemRarity rarity) {
-        return switch (rarity) {
-            case COMMON -> Component.text("COMMON", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true);
-            case UNCOMMON -> Component.text("UNCOMMON", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true);
-            case RARE -> Component.text("RARE", NamedTextColor.BLUE).decoration(TextDecoration.BOLD, true);
-            case EPIC -> Component.text("EPIC", NamedTextColor.DARK_PURPLE).decoration(TextDecoration.BOLD, true);
-            case LEGENDARY -> Component.text("LEGENDARY", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true);
+        int filled = switch (rarity) {
+            case COMMON -> 1;
+            case UNCOMMON -> 2;
+            case RARE -> 3;
+            case EPIC -> 4;
+            case LEGENDARY -> 5;
         };
+        NamedTextColor color = switch (rarity) {
+            case COMMON -> NamedTextColor.WHITE;
+            case UNCOMMON -> NamedTextColor.GREEN;
+            case RARE -> NamedTextColor.BLUE;
+            case EPIC -> NamedTextColor.DARK_PURPLE;
+            case LEGENDARY -> NamedTextColor.GOLD;
+        };
+        String filledStars = "★".repeat(filled);
+        String emptyStars = "☆".repeat(5 - filled);
+        return Component.text()
+            .append(Component.text(filledStars, color).decoration(TextDecoration.BOLD, true))
+            .append(Component.text(emptyStars, NamedTextColor.GRAY).decoration(TextDecoration.BOLD, true))
+            .build();
     }
 
     private Component noItalics(Component component) {
