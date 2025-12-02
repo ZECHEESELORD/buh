@@ -235,9 +235,23 @@ public final class ItemLoreRenderer {
         };
         String filledStars = "★".repeat(filled);
         String emptyStars = "☆".repeat(5 - filled);
-        return Component.text()
+        Component stars = Component.text()
             .append(Component.text(filledStars, color).decoration(TextDecoration.BOLD, true))
             .append(Component.text(emptyStars, NamedTextColor.GRAY).decoration(TextDecoration.BOLD, true))
+            .build();
+        Component label = switch (rarity) {
+            case COMMON -> Component.text("COMMON", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+            case UNCOMMON -> Component.text("UNCOMMON", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+            case RARE -> Component.text("RARE", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+            case EPIC -> Component.text("EPIC", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+            case LEGENDARY -> Component.text("LEGENDARY", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+        };
+        Component coloredLabel = label.color(color);
+        return Component.text()
+            .append(stars)
+            .append(Component.text(" (", NamedTextColor.DARK_GRAY))
+            .append(coloredLabel)
+            .append(Component.text(")", NamedTextColor.DARK_GRAY))
             .build();
     }
 
