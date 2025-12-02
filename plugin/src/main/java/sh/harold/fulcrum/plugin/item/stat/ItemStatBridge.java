@@ -38,19 +38,27 @@ public final class ItemStatBridge {
     }
 
     private void apply(StatContainer container, SlotGroup slot, ItemStack stack) {
-        StatSourceId sourceId = new StatSourceId("item:" + slot.name().toLowerCase());
-        container.clearSource(sourceId);
+        String slotPrefix = "item:" + slot.name().toLowerCase();
+        clearSlotSources(container, slotPrefix);
         resolver.resolve(stack).ifPresent(instance -> {
             boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
             if (defunct) {
                 return;
             }
-            if (instance.definition().category().defaultSlot() != slot) {
-                return;
-            }
-            for (Map.Entry<StatId, Double> entry : instance.computeFinalStats().entrySet()) {
-                container.addModifier(new StatModifier(entry.getKey(), sourceId, ModifierOp.FLAT, entry.getValue()));
-            }
+            instance.statSources().forEach((source, values) -> {
+                StatSourceId sourceId = new StatSourceId(slotPrefix + ":" + source);
+                for (Map.Entry<StatId, Double> entry : values.entrySet()) {
+                    container.addModifier(new StatModifier(entry.getKey(), sourceId, ModifierOp.FLAT, entry.getValue()));
+                }
+            });
         });
+    }
+
+    private void clearSlotSources(StatContainer container, String slotPrefix) {
+        container.debugView().forEach(snapshot -> snapshot.modifiers().forEach((op, bySource) -> {
+            bySource.keySet().stream()
+                .filter(sourceId -> sourceId.value().startsWith(slotPrefix))
+                .forEach(container::clearSource);
+        }));
     }
 }

@@ -67,4 +67,26 @@ public final class ItemInstance {
     public Optional<DurabilityState> durability() {
         return Optional.ofNullable(durabilityState);
     }
+
+    public Map<String, Map<StatId, Double>> statSources() {
+        if (durabilityState != null && durabilityState.defunct()) {
+            return Map.of();
+        }
+        Map<String, Map<StatId, Double>> sources = new HashMap<>();
+        if (!baseStats.isEmpty()) {
+            sources.put("base", baseStats);
+        }
+        double baseAttackDamage = baseStats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
+        for (Map.Entry<String, Integer> entry : enchants.entrySet()) {
+            EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+            if (definition == null) {
+                continue;
+            }
+            Map<StatId, Double> bonus = definition.bonusForLevel(entry.getValue(), baseAttackDamage);
+            if (!bonus.isEmpty()) {
+                sources.put("enchant:" + entry.getKey(), Map.copyOf(bonus));
+            }
+        }
+        return Map.copyOf(sources);
+    }
 }
