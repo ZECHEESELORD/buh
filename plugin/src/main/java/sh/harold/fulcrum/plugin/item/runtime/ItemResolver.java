@@ -199,18 +199,23 @@ public final class ItemResolver {
             return stack;
         }
         meta.setAttributeModifiers(null);
-        double attackDamage = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
-        double attackSpeed = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, 0.0);
-        double armor = stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ARMOR, 0.0);
+        boolean defunct = itemPdc.readDurability(stack)
+            .map(DurabilityData::defunct)
+            .orElse(false);
+        double attackDamage = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
+        double attackSpeed = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, 0.0);
+        double armor = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ARMOR, 0.0);
 
-        switch (definition.category()) {
-            case HELMET -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.HEAD);
-            case CHESTPLATE -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.CHEST);
-            case LEGGINGS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.LEGS);
-            case BOOTS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.FEET);
-            default -> {
-                addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
-                addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
+        if (!defunct) {
+            switch (definition.category()) {
+                case HELMET -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.HEAD);
+                case CHESTPLATE -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.CHEST);
+                case LEGGINGS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.LEGS);
+                case BOOTS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.FEET);
+                default -> {
+                    addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
+                    addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
+                }
             }
         }
         stack.setItemMeta(meta);

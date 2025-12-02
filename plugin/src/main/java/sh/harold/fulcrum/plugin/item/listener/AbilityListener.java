@@ -39,6 +39,7 @@ public final class AbilityListener implements Listener {
         resolver.resolve(player.getInventory().getItemInMainHand()).ifPresent(instance -> {
             boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
             if (defunct) {
+                player.sendMessage(net.kyori.adventure.text.Component.text("Your item is defunct and cannot be used.", net.kyori.adventure.text.format.NamedTextColor.RED));
                 return;
             }
             AbilityComponent abilityComponent = instance.definition().component(ComponentType.ABILITY, AbilityComponent.class).orElse(null);
