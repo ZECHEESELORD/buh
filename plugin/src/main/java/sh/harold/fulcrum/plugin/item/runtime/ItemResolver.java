@@ -205,6 +205,7 @@ public final class ItemResolver {
         double attackDamage = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
         double attackSpeed = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, 0.0);
         double armor = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ARMOR, 0.0);
+        boolean applyHand = definition.category().defaultSlot() == sh.harold.fulcrum.plugin.item.model.SlotGroup.MAIN_HAND;
 
         if (!defunct) {
             switch (definition.category()) {
@@ -213,8 +214,10 @@ public final class ItemResolver {
                 case LEGGINGS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.LEGS);
                 case BOOTS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.FEET);
                 default -> {
-                    addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
-                    addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
+                    if (applyHand) {
+                        addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
+                        addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
+                    }
                 }
             }
         }
