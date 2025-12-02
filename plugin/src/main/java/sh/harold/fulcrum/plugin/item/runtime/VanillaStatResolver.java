@@ -95,7 +95,7 @@ public final class VanillaStatResolver {
     }
 
     private void registerPickaxe(Material material, double damage, double speed) {
-        register(material, damage, speed);
+        register(material, damage, speed, 0.0);
     }
 
     private void registerShovel(Material material, double damage, double speed) {
