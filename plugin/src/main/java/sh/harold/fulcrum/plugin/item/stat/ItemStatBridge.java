@@ -45,6 +45,9 @@ public final class ItemStatBridge {
             if (defunct) {
                 return;
             }
+            if (instance.definition().category().defaultSlot() != slot) {
+                return;
+            }
             for (Map.Entry<StatId, Double> entry : instance.computeFinalStats().entrySet()) {
                 container.addModifier(new StatModifier(entry.getKey(), sourceId, ModifierOp.FLAT, entry.getValue()));
             }
