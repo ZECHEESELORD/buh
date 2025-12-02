@@ -5,7 +5,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.sound.Sound;
+import org.bukkit.Sound;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
