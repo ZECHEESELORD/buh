@@ -36,6 +36,8 @@ public final class DurabilityService implements Listener {
         }
         resolver.resolve(item).ifPresent(instance -> instance.durability().ifPresent(durability -> {
             if (durability.defunct()) {
+                event.setDamage(0);
+                event.setCancelled(true);
                 return;
             }
             int baseDamage = event.getDamage();
