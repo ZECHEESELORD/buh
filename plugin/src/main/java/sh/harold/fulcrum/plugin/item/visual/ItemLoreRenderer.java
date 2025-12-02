@@ -379,8 +379,8 @@ public final class ItemLoreRenderer {
             .decoration(TextDecoration.BOLD, Double.compare(durability.percent(), 100.0) == 0);
         Component line = Component.text()
             .append(Component.text(durability.displayedCurrent(), durability.color()))
-            .append(Component.text("/", NamedTextColor.GREEN))
-            .append(Component.text(durability.data().max(), NamedTextColor.GREEN))
+            .append(Component.text("/", NamedTextColor.DARK_GRAY))
+            .append(Component.text(durability.data().max(), NamedTextColor.DARK_GRAY))
             .append(Component.text(" ", NamedTextColor.GRAY))
             .append(Component.text("(", NamedTextColor.DARK_GRAY))
             .append(percentComponent)
