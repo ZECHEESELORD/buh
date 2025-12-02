@@ -85,7 +85,9 @@ public final class ItemPdc {
             return stack;
         }
         ItemStack withCurrent = write(stack, keys.durabilityCurrent(), PersistentDataType.INTEGER, durability.current());
-        return write(withCurrent, keys.durabilityMax(), PersistentDataType.INTEGER, durability.max());
+        ItemStack withMax = write(withCurrent, keys.durabilityMax(), PersistentDataType.INTEGER, durability.max());
+        mirrorVanillaDamage(withMax, durability);
+        return withMax;
     }
 
     public Optional<DurabilityData> readDurability(ItemStack stack) {
@@ -99,6 +101,20 @@ public final class ItemPdc {
 
     public ItemStack setInt(ItemStack stack, NamespacedKey key, int value) {
         return write(stack, key, PersistentDataType.INTEGER, value);
+    }
+
+    private void mirrorVanillaDamage(ItemStack stack, DurabilityData durability) {
+        if (!(stack.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+            return;
+        }
+        int vanillaMax = stack.getType().getMaxDurability();
+        if (vanillaMax <= 0) {
+            return;
+        }
+        double fractionRemaining = durability.fraction();
+        int visualDamage = (int) Math.round((1.0 - fractionRemaining) * vanillaMax);
+        damageable.setDamage(Math.max(0, Math.min(visualDamage, vanillaMax)));
+        stack.setItemMeta(damageable);
     }
 
     public Optional<Integer> readInt(ItemStack stack, NamespacedKey key) {
