@@ -4,8 +4,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -23,6 +23,7 @@ import org.bukkit.inventory.PlayerInventory;
 import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryEntry;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -36,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Level;
@@ -86,29 +88,15 @@ public final class OpenInventoryService implements Listener {
             return;
         }
 
-        OfflinePlayer offline = resolveOffline(targetName);
-        if (offline == null || (!offline.hasPlayedBefore() && !offline.isOnline())) {
-            viewer.sendMessage(Component.text("No record of that player; try a different name.", NamedTextColor.RED));
-            return;
-        }
-
-        UUID targetId = offline.getUniqueId();
-        String username = offline.getName() != null ? offline.getName() : targetName;
-        loadSnapshot(targetId, username)
-            .whenComplete((maybeSnapshot, throwable) -> runSync(() -> {
-                if (throwable != null) {
-                    logger.log(Level.SEVERE, "Failed to load inventory snapshot for " + targetId, throwable);
-                    viewer.sendMessage(Component.text("Inventory archive faltered; wait a moment and retry.", NamedTextColor.RED));
-                    return;
+        resolveTarget(targetName)
+            .thenCompose(resolved -> {
+                if (resolved == null) {
+                    return CompletableFuture.completedFuture(new ResolutionOutcome(null, Optional.empty(), null));
                 }
-                InventorySnapshot snapshot = maybeSnapshot.orElse(null);
-                if (snapshot == null) {
-                    viewer.sendMessage(Component.text("No stored inventory for " + username + ".", NamedTextColor.RED));
-                    return;
-                }
-                InventoryViewContext viewContext = new InventoryViewContext(targetId, snapshot, false);
-                openInventory(viewer, viewContext);
-            }));
+                return loadSnapshot(resolved.id(), resolved.username())
+                    .handle((snapshot, throwable) -> new ResolutionOutcome(resolved, snapshot, throwable));
+            })
+            .whenComplete((outcome, throwable) -> runSync(() -> handleResolutionOutcome(viewer, targetName, outcome, throwable)));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -164,12 +152,53 @@ public final class OpenInventoryService implements Listener {
         }
     }
 
-    private OfflinePlayer resolveOffline(String targetName) {
+    private CompletionStage<ResolvedTarget> resolveTarget(String targetName) {
         OfflinePlayer cached = plugin.getServer().getOfflinePlayerIfCached(targetName);
         if (cached != null) {
-            return cached;
+            String username = cached.getName() != null ? cached.getName() : targetName;
+            return CompletableFuture.completedFuture(new ResolvedTarget(cached.getUniqueId(), username));
         }
-        return plugin.getServer().getOfflinePlayer(targetName);
+        String normalized = targetName.trim();
+        return players.all()
+            .thenApply(documents -> documents.stream()
+                .map(PlayerDirectoryEntry::fromDocument)
+                .flatMap(Optional::stream)
+                .filter(entry -> entry.username().equalsIgnoreCase(normalized))
+                .findFirst()
+                .map(entry -> new ResolvedTarget(entry.id(), entry.username()))
+                .orElseGet(() -> {
+                    UUID parsed = parseUuid(normalized);
+                    return parsed != null ? new ResolvedTarget(parsed, normalized) : null;
+                }))
+            .exceptionally(throwable -> {
+                logger.log(Level.WARNING, "Failed to resolve inventory target " + normalized, throwable);
+                return null;
+            });
+    }
+
+    private void handleResolutionOutcome(Player viewer, String targetName, ResolutionOutcome outcome, Throwable resolveError) {
+        if (resolveError != null) {
+            logger.log(Level.SEVERE, "Failed to resolve inventory target " + targetName, resolveError);
+            viewer.sendMessage(Component.text("Inventory lookup stumbled; try again.", NamedTextColor.RED));
+            return;
+        }
+        if (outcome == null || outcome.resolved() == null) {
+            viewer.sendMessage(Component.text("No record of that player; try a different name.", NamedTextColor.RED));
+            return;
+        }
+        if (outcome.snapshotError() != null) {
+            logger.log(Level.SEVERE, "Failed to load inventory snapshot for " + outcome.resolved().id(), outcome.snapshotError());
+            viewer.sendMessage(Component.text("Inventory archive faltered; wait a moment and retry.", NamedTextColor.RED));
+            return;
+        }
+        Optional<InventorySnapshot> snapshot = outcome.snapshot();
+        if (snapshot.isEmpty()) {
+            viewer.sendMessage(Component.text("No stored inventory for " + outcome.resolved().username() + ".", NamedTextColor.RED));
+            return;
+        }
+        InventorySnapshot resolvedSnapshot = snapshot.get();
+        InventoryViewContext viewContext = new InventoryViewContext(outcome.resolved().id(), resolvedSnapshot, false);
+        openInventory(viewer, viewContext);
     }
 
     private void openInventory(Player viewer, InventoryViewContext context) {
@@ -550,6 +579,17 @@ public final class OpenInventoryService implements Listener {
         }
     }
 
+    private UUID parseUuid(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private void runSync(Runnable task) {
         if (plugin.getServer().isPrimaryThread()) {
             task.run();
@@ -612,6 +652,19 @@ public final class OpenInventoryService implements Listener {
     }
 
     private record InventoryViewContext(UUID targetId, InventorySnapshot snapshot, boolean live) {
+    }
+
+    private record ResolutionOutcome(ResolvedTarget resolved, Optional<InventorySnapshot> snapshot, Throwable snapshotError) {
+        ResolutionOutcome {
+            snapshot = Objects.requireNonNull(snapshot, "snapshot");
+        }
+    }
+
+    private record ResolvedTarget(UUID id, String username) {
+        ResolvedTarget {
+            id = Objects.requireNonNull(id, "id");
+            username = Objects.requireNonNull(username, "username");
+        }
     }
 
     private final class LiveViewSession implements Runnable {
