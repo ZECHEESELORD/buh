@@ -80,6 +80,23 @@ public final class ItemPdc {
         return clear(stack, keys.enchants());
     }
 
+    public ItemStack writeDurability(ItemStack stack, DurabilityData durability) {
+        if (stack == null || durability == null) {
+            return stack;
+        }
+        ItemStack withCurrent = write(stack, keys.durabilityCurrent(), PersistentDataType.INTEGER, durability.current());
+        return write(withCurrent, keys.durabilityMax(), PersistentDataType.INTEGER, durability.max());
+    }
+
+    public Optional<DurabilityData> readDurability(ItemStack stack) {
+        Optional<Integer> current = readInt(stack, keys.durabilityCurrent());
+        Optional<Integer> max = readInt(stack, keys.durabilityMax());
+        if (current.isEmpty() || max.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new DurabilityData(current.get(), max.get()));
+    }
+
     public ItemStack setInt(ItemStack stack, NamespacedKey key, int value) {
         return write(stack, key, PersistentDataType.INTEGER, value);
     }

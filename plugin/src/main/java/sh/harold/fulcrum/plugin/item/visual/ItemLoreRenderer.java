@@ -16,6 +16,7 @@ import sh.harold.fulcrum.plugin.item.model.CustomItem;
 import sh.harold.fulcrum.plugin.item.model.ItemCategory;
 import sh.harold.fulcrum.plugin.item.model.LoreSection;
 import sh.harold.fulcrum.plugin.item.model.VisualComponent;
+import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
 import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
@@ -25,10 +26,12 @@ import sh.harold.fulcrum.stats.core.StatIds;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public final class ItemLoreRenderer {
 
@@ -79,6 +82,7 @@ public final class ItemLoreRenderer {
             }
         }
         trimTrailingEmptyLines(lore);
+        addDurability(lore, instance);
         if (!lore.isEmpty()) {
             lore.add(noItalics(Component.empty()));
         }
@@ -87,6 +91,7 @@ public final class ItemLoreRenderer {
             : definition.id();
         lore.add(noItalics(Component.text("ID: " + idLabel, NamedTextColor.DARK_GRAY)));
         meta.lore(lore.stream().map(this::noItalics).toList());
+        mirrorVanillaBar(meta, instance);
         clone.setItemMeta(meta);
         return clone;
     }
@@ -133,7 +138,7 @@ public final class ItemLoreRenderer {
             lore.add(Component.text(formatTrigger(ability.trigger()) + ": ", NamedTextColor.GOLD)
                 .append(Optional.ofNullable(ability.displayName()).orElse(Component.text(ability.id(), NamedTextColor.WHITE))));
             for (Component line : ability.description()) {
-                lore.add(Component.text("  ").append(line));
+                wrap(line, 40).forEach(wrapped -> lore.add(Component.text("  ").append(wrapped)));
             }
         }
     }
@@ -145,17 +150,35 @@ public final class ItemLoreRenderer {
         }
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchants.entrySet());
         entries.sort(Map.Entry.comparingByKey());
-        for (Map.Entry<String, Integer> entry : entries) {
-            EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
-            if (definition == null) {
-                continue;
+        if (entries.size() <= 4) {
+            for (Map.Entry<String, Integer> entry : entries) {
+                EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+                if (definition == null) {
+                    continue;
+                }
+                int level = entry.getValue();
+                String levelLabel = roman(level);
+                String name = plain(definition.displayName());
+                NamedTextColor color = level > definition.maxLevel() ? NamedTextColor.GOLD : NamedTextColor.BLUE;
+                Component title = Component.text(name + " " + levelLabel, color);
+                lore.add(title);
+                String description = enchantDescription(definition, level);
+                wrap(Component.text(description, NamedTextColor.GRAY), 40).forEach(lore::add);
             }
-            int level = entry.getValue();
-            String levelLabel = roman(level);
-            String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(definition.displayName());
-            NamedTextColor color = level > definition.maxLevel() ? NamedTextColor.GOLD : NamedTextColor.BLUE;
-            Component line = Component.text(name + " " + levelLabel, color);
-            lore.add(line);
+        } else {
+            List<String> labels = new ArrayList<>();
+            for (Map.Entry<String, Integer> entry : entries) {
+                EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+                if (definition == null) {
+                    continue;
+                }
+                int level = entry.getValue();
+                String levelLabel = roman(level);
+                String name = plain(definition.displayName());
+                labels.add(name + " " + levelLabel);
+            }
+            String joined = String.join(", ", labels);
+            wrap(Component.text(joined, NamedTextColor.BLUE), 40).forEach(lore::add);
         }
         lore.add(Component.empty());
     }
@@ -273,6 +296,27 @@ public final class ItemLoreRenderer {
         }
     }
 
+    private void addDurability(List<Component> lore, ItemInstance instance) {
+        DurabilityState durability = instance.durability().orElse(null);
+        if (durability == null || durability.data().max() <= 0) {
+            return;
+        }
+        if (!lore.isEmpty() && !lore.get(lore.size() - 1).equals(Component.empty())) {
+            lore.add(Component.empty());
+        }
+        Component percentComponent = Component.text(STAT_FORMAT.format(durability.percent()) + "%", durability.color())
+            .decoration(TextDecoration.BOLD, Double.compare(durability.percent(), 100.0) == 0);
+        Component gradeLine = Component.text(durability.grade() + " ", durability.color())
+            .append(percentComponent);
+        Component amountLine = Component.text()
+            .append(Component.text(durability.displayedCurrent(), durability.color()))
+            .append(Component.text("/", NamedTextColor.DARK_GRAY))
+            .append(Component.text(durability.data().max(), NamedTextColor.GREEN))
+            .build();
+        lore.add(gradeLine);
+        lore.add(amountLine);
+    }
+
     private void ensureGlint(ItemMeta meta, ItemInstance instance) {
         if (meta == null) {
             return;
@@ -283,5 +327,63 @@ public final class ItemLoreRenderer {
         if (!instance.enchants().isEmpty()) {
             meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
         }
+    }
+
+    private void mirrorVanillaBar(ItemMeta meta, ItemInstance instance) {
+        if (!(meta instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+            return;
+        }
+        DurabilityState durability = instance.durability().orElse(null);
+        if (durability == null || durability.data().max() <= 0) {
+            damageable.setDamage(0);
+            return;
+        }
+        int vanillaMax = instance.stack().getType().getMaxDurability();
+        if (vanillaMax <= 0) {
+            return;
+        }
+        double fractionRemaining = durability.data().fraction();
+        int visualDamage = (int) Math.round((1.0 - fractionRemaining) * vanillaMax);
+        damageable.setDamage(Math.max(0, Math.min(visualDamage, vanillaMax)));
+    }
+
+    private List<Component> wrap(Component component, int maxChars) {
+        String plain = plain(component);
+        if (plain.length() <= maxChars) {
+            return List.of(component);
+        }
+        List<String> tokens = List.of(plain.split(" "));
+        List<String> lines = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String token : tokens) {
+            if (current.length() + token.length() + 1 > maxChars) {
+                lines.add(current.toString().trim());
+                current = new StringBuilder();
+            }
+            current.append(token).append(" ");
+        }
+        if (!current.isEmpty()) {
+            lines.add(current.toString().trim());
+        }
+        return lines.stream()
+            .map(line -> Component.text(line, component.color() == null ? NamedTextColor.GRAY : component.color()))
+            .collect(Collectors.toList());
+    }
+
+    private String plain(Component component) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    private String enchantDescription(EnchantDefinition definition, int level) {
+        double percent = 0.0;
+        if (definition.perLevelStats().containsKey(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE)) {
+            percent = definition.levelCurve().value(definition.perLevelStats().get(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE), level) * 100.0;
+            return "Increases melee damage by " + STAT_FORMAT.format(percent) + "%.";
+        }
+        if (definition.perLevelStats().containsKey(sh.harold.fulcrum.stats.core.StatIds.ARMOR)) {
+            percent = definition.levelCurve().value(definition.perLevelStats().get(sh.harold.fulcrum.stats.core.StatIds.ARMOR), level);
+            return "Increases defense by " + STAT_FORMAT.format(percent) + ".";
+        }
+        return "Enhances this item.";
     }
 }

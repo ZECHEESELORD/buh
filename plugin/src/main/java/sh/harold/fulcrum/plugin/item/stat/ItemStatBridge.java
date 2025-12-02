@@ -41,6 +41,10 @@ public final class ItemStatBridge {
         StatSourceId sourceId = new StatSourceId("item:" + slot.name().toLowerCase());
         container.clearSource(sourceId);
         resolver.resolve(stack).ifPresent(instance -> {
+            boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
+            if (defunct) {
+                return;
+            }
             for (Map.Entry<StatId, Double> entry : instance.computeFinalStats().entrySet()) {
                 container.addModifier(new StatModifier(entry.getKey(), sourceId, ModifierOp.FLAT, entry.getValue()));
             }
