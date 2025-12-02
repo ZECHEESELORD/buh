@@ -40,6 +40,11 @@ public final class ItemStatBridge {
     private void apply(StatContainer container, SlotGroup slot, ItemStack stack) {
         String slotPrefix = "item:" + slot.name().toLowerCase();
         clearSlotSources(container, slotPrefix);
+        if (slot == SlotGroup.MAIN_HAND && (stack == null || stack.getType().isAir())) {
+            StatSourceId sourceId = new StatSourceId(slotPrefix + ":empty");
+            container.addModifier(new StatModifier(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, sourceId, ModifierOp.FLAT, 4.0));
+            return;
+        }
         resolver.resolve(stack).ifPresent(instance -> {
             boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
             if (defunct) {
