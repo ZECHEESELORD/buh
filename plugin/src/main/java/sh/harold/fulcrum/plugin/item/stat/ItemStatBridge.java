@@ -50,17 +50,17 @@ public final class ItemStatBridge {
             if (defunct) {
                 return;
             }
-            boolean hasAttackSpeed = false;
+            final boolean[] hasAttackSpeed = {false};
             instance.statSources().forEach((source, values) -> {
                 StatSourceId sourceId = new StatSourceId(slotPrefix + ":" + source);
                 for (Map.Entry<StatId, Double> entry : values.entrySet()) {
                     if (entry.getKey().equals(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED) && Double.compare(entry.getValue(), 0.0) != 0) {
-                        hasAttackSpeed = true;
+                        hasAttackSpeed[0] = true;
                     }
                     container.addModifier(new StatModifier(entry.getKey(), sourceId, ModifierOp.FLAT, entry.getValue()));
                 }
             });
-            if (slot == SlotGroup.MAIN_HAND && !hasAttackSpeed) {
+            if (slot == SlotGroup.MAIN_HAND && !hasAttackSpeed[0]) {
                 StatSourceId sourceId = new StatSourceId(slotPrefix + ":default");
                 container.addModifier(new StatModifier(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, sourceId, ModifierOp.FLAT, 4.0));
             }
