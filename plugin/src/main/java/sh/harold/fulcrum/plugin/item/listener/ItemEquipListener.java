@@ -61,6 +61,7 @@ public final class ItemEquipListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
+        sanitize(player);
         refreshLater(player);
     }
 
