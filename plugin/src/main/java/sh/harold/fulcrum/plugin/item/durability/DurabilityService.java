@@ -5,6 +5,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.sound.Sound;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
@@ -50,6 +51,11 @@ public final class DurabilityService implements Listener {
             event.setDamage(0);
             event.setCancelled(true);
             statBridge.refreshPlayer(event.getPlayer());
+            if (updated.defunct()) {
+                event.getPlayer().playSound(event.getPlayer().getLocation(), Sound.BLOCK_ANVIL_LAND, 1.0f, 0.5f);
+                event.getPlayer().playSound(event.getPlayer().getLocation(), Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, 1.0f, 1.0f);
+                event.getPlayer().sendMessage(net.kyori.adventure.text.Component.text("Your item has lost all its durability, but it's not broken! Repair it to continue use!", net.kyori.adventure.text.format.NamedTextColor.RED));
+            }
         }));
     }
 
