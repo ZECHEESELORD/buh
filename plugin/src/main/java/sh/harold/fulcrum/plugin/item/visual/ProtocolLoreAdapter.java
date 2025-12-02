@@ -44,7 +44,9 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
         if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
             int windowId = packet.getIntegers().readSafely(0);
             int slot = packet.getIntegers().readSafely(2);
-            if (!(isMenu && windowId != 0 && slot < topSize)) {
+            boolean isCursor = windowId == -1;
+            boolean render = isCursor || windowId == 0 || !(isMenu && windowId != 0 && slot < topSize);
+            if (render) {
                 ItemStack item = packet.getItemModifier().read(0);
                 ItemStack rendered = renderer.render(item, viewer);
                 packet.getItemModifier().write(0, rendered);
@@ -52,15 +54,14 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
         } else if (packet.getType() == PacketType.Play.Server.WINDOW_ITEMS) {
             int windowId = packet.getIntegers().readSafely(0);
             List<ItemStack> items = packet.getItemListModifier().read(0);
-            if (isMenu && windowId != 0 && items.size() >= topSize) {
-                for (int i = topSize; i < items.size(); i++) {
-                    ItemStack rendered = renderer.render(items.get(i), viewer);
-                    items.set(i, rendered);
+            boolean isCursor = windowId == -1;
+            if (isCursor || windowId == 0 || !isMenu || items.size() < topSize) {
+                for (int i = 0; i < items.size(); i++) {
+                    items.set(i, renderer.render(items.get(i), viewer));
                 }
             } else {
-                for (int i = 0; i < items.size(); i++) {
-                    ItemStack rendered = renderer.render(items.get(i), viewer);
-                    items.set(i, rendered);
+                for (int i = topSize; i < items.size(); i++) {
+                    items.set(i, renderer.render(items.get(i), viewer));
                 }
             }
             packet.getItemListModifier().write(0, items);
