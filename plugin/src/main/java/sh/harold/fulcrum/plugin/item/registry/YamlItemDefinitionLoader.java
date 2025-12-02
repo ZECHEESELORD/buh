@@ -10,6 +10,7 @@ import sh.harold.fulcrum.plugin.item.model.AbilityComponent;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
 import sh.harold.fulcrum.plugin.item.model.ItemCategory;
+import sh.harold.fulcrum.plugin.item.model.DurabilityComponent;
 import sh.harold.fulcrum.plugin.item.model.ItemTrait;
 import sh.harold.fulcrum.plugin.item.model.LoreSection;
 import sh.harold.fulcrum.plugin.item.model.StatsComponent;
@@ -86,6 +87,13 @@ public final class YamlItemDefinitionLoader {
             components.put(ComponentType.STATS, new StatsComponent(stats));
         }
 
+        ConfigurationSection durabilitySection = yaml.getConfigurationSection("durability");
+        if (durabilitySection != null && durabilitySection.contains("max")) {
+            int max = durabilitySection.getInt("max");
+            Integer seed = durabilitySection.contains("current") ? durabilitySection.getInt("current") : null;
+            components.put(ComponentType.DURABILITY, new DurabilityComponent(max, seed));
+        }
+
         List<Map<?, ?>> abilities = yaml.getMapList("abilities");
         if (!abilities.isEmpty()) {
             Map<AbilityTrigger, AbilityDefinition> abilityDefinitions = new EnumMap<>(AbilityTrigger.class);
@@ -119,6 +127,9 @@ public final class YamlItemDefinitionLoader {
         }
         if (components.get(ComponentType.ABILITY) != null) {
             builder.component(ComponentType.ABILITY, components.get(ComponentType.ABILITY));
+        }
+        if (components.get(ComponentType.DURABILITY) != null) {
+            builder.component(ComponentType.DURABILITY, components.get(ComponentType.DURABILITY));
         }
         if (components.get(ComponentType.VISUAL) != null) {
             builder.component(ComponentType.VISUAL, components.get(ComponentType.VISUAL));

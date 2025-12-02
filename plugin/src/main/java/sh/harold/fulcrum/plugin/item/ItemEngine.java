@@ -22,6 +22,7 @@ import sh.harold.fulcrum.plugin.item.listener.AbilityListener;
 import sh.harold.fulcrum.plugin.item.listener.HelmetEquipListener;
 import sh.harold.fulcrum.plugin.item.listener.ItemEquipListener;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
+import sh.harold.fulcrum.plugin.item.durability.DurabilityService;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -39,6 +40,7 @@ public final class ItemEngine {
     private final EnchantService enchantService;
     private final AbilityService abilityService;
     private final ItemStatBridge statBridge;
+    private final DurabilityService durabilityService;
     private ProtocolLoreAdapter loreAdapter;
 
     public ItemEngine(JavaPlugin plugin, StatsModule statsModule, List<ItemDefinitionProvider> providers) {
@@ -53,6 +55,7 @@ public final class ItemEngine {
         this.resolver = new ItemResolver(registry, wrapperFactory, itemPdc, new VanillaStatResolver(), enchantRegistry);
         this.abilityService = new AbilityService();
         this.statBridge = new ItemStatBridge(resolver, statsModule.statService());
+        this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
         loadDefinitions(providers);
     }
 
@@ -94,6 +97,7 @@ public final class ItemEngine {
         pluginManager.registerEvents(new ItemEquipListener(plugin, statBridge), plugin);
         pluginManager.registerEvents(new AbilityListener(abilityService, resolver), plugin);
         pluginManager.registerEvents(new HelmetEquipListener(resolver, statBridge), plugin);
+        pluginManager.registerEvents(durabilityService, plugin);
     }
 
     public void disable() {
@@ -113,56 +117,82 @@ public final class ItemEngine {
     }
 
     private void registerDefaultEnchants() {
-        register("fulcrum:sharpness", "Sharpness", 5, StatIds.ATTACK_DAMAGE, 1.0);
-        register("fulcrum:smite", "Smite", 5, StatIds.ATTACK_DAMAGE, 1.0);
-        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", 5, StatIds.ATTACK_DAMAGE, 1.0);
+        register("fulcrum:sharpness", "Sharpness", "Increases melee damage.", 7, StatIds.ATTACK_DAMAGE, 0.05, sharpnessCurve(), true, java.util.Set.of("fulcrum:smite", "fulcrum:bane_of_arthropods"));
+        register("fulcrum:smite", "Smite", "More damage to undead foes.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"));
+        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to arthropods.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"));
 
-        register("fulcrum:protection", "Protection", 4, StatIds.ARMOR, 1.5);
-        register("fulcrum:fire_protection", "Fire Protection", 4, StatIds.ARMOR, 1.0);
-        register("fulcrum:projectile_protection", "Projectile Protection", 4, StatIds.ARMOR, 1.0);
-        register("fulcrum:blast_protection", "Blast Protection", 4, StatIds.ARMOR, 1.0);
-        register("fulcrum:feather_falling", "Feather Falling", 4, StatIds.ARMOR, 0.5);
+        register("fulcrum:protection", "Protection", "Reduces incoming damage.", 4, StatIds.ARMOR, 1.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:fire_protection", "Fire Protection", "Reduces fire and lava damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:projectile_protection", "Projectile Protection", "Reduces projectile damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:blast_protection", "Blast Protection", "Reduces explosion damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:feather_falling", "Feather Falling", "Softer landings from falls.", 4, StatIds.ARMOR, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
 
-        register("fulcrum:power", "Power", 5, StatIds.ATTACK_DAMAGE, 0.5);
-        register("fulcrum:punch", "Punch", 2, StatIds.ATTACK_DAMAGE, 0.25);
+        register("fulcrum:power", "Power", "Increases bow damage.", 5, StatIds.ATTACK_DAMAGE, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:punch", "Punch", "Increases bow knockback.", 2, StatIds.ATTACK_DAMAGE, 0.25, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
 
-        register("fulcrum:knockback", "Knockback", 2, null, 0);
-        register("fulcrum:looting", "Looting", 3, null, 0);
-        register("fulcrum:sweeping_edge", "Sweeping Edge", 3, null, 0);
-        register("fulcrum:fire_aspect", "Fire Aspect", 2, null, 0);
-        register("fulcrum:flame", "Flame", 1, null, 0);
-        register("fulcrum:infinity", "Infinity", 1, null, 0);
-        register("fulcrum:loyalty", "Loyalty", 3, null, 0);
-        register("fulcrum:channeling", "Channeling", 1, null, 0);
-        register("fulcrum:riptide", "Riptide", 3, null, 0);
-        register("fulcrum:impaling", "Impaling", 5, null, 0);
-        register("fulcrum:multishot", "Multishot", 1, null, 0);
-        register("fulcrum:piercing", "Piercing", 4, null, 0);
-        register("fulcrum:quick_charge", "Quick Charge", 3, null, 0);
-        register("fulcrum:depth_strider", "Depth Strider", 3, null, 0);
-        register("fulcrum:frost_walker", "Frost Walker", 2, null, 0);
-        register("fulcrum:soul_speed", "Soul Speed", 3, null, 0);
-        register("fulcrum:swift_sneak", "Swift Sneak", 3, null, 0);
-        register("fulcrum:aqua_affinity", "Aqua Affinity", 1, null, 0);
-        register("fulcrum:respiration", "Respiration", 3, null, 0);
-        register("fulcrum:unbreaking", "Unbreaking", 3, null, 0);
-        register("fulcrum:mending", "Mending", 1, null, 0);
-        register("fulcrum:silk_touch", "Silk Touch", 1, null, 0);
-        register("fulcrum:fortune", "Fortune", 3, null, 0);
-        register("fulcrum:lure", "Lure", 3, null, 0);
-        register("fulcrum:luck_of_the_sea", "Luck of the Sea", 3, null, 0);
-        register("fulcrum:thorns", "Thorns", 3, null, 0);
-        register("fulcrum:curse_of_binding", "Curse of Binding", 1, null, 0);
-        register("fulcrum:curse_of_vanishing", "Curse of Vanishing", 1, null, 0);
-        register("fulcrum:efficiency", "Efficiency", 5, null, 0);
+        register("fulcrum:knockback", "Knockback", "Extra melee knockback.", 2, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:looting", "Looting", "More drops from mobs.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:sweeping_edge", "Sweeping Edge", "Boosts sweeping hit damage.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:fire_aspect", "Fire Aspect", "Sets targets ablaze.", 2, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:flame", "Flame", "Ignites arrow hits.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:infinity", "Infinity", "Fired arrows are not consumed.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:loyalty", "Loyalty", "Trident returns after throwing.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:channeling", "Channeling", "Summons lightning on hit in storms.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:riptide", "Riptide", "Launches with trident in water or rain.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:impaling", "Impaling", "More damage to aquatic mobs.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:multishot", "Multishot", "Fires three arrows at once.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:piercing", "Piercing", "Arrows pass through targets.", 4, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:quick_charge", "Quick Charge", "Faster crossbow reload.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:depth_strider", "Depth Strider", "Faster swimming speed.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:frost_walker", "Frost Walker", "Freezes water underfoot.", 2, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:soul_speed", "Soul Speed", "Faster on soul blocks.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:swift_sneak", "Swift Sneak", "Faster while sneaking.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:aqua_affinity", "Aqua Affinity", "Mine faster underwater.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:respiration", "Respiration", "Longer underwater breathing.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:unbreaking", "Unbreaking", "Items lose durability slower.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:mending", "Mending", "XP repairs this item.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:silk_touch", "Silk Touch", "Drops blocks themselves.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:fortune", "Fortune", "Chance for extra drops.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:lure", "Lure", "Faster fish bites.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:luck_of_the_sea", "Luck of the Sea", "Better fishing treasure.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:thorns", "Thorns", "Chance to return damage.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:curse_of_binding", "Curse of Binding", "Cannot remove once equipped.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:curse_of_vanishing", "Curse of Vanishing", "Item disappears on death.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:efficiency", "Efficiency", "Faster mining speed.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
     }
 
     private void register(String id, String name, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel) {
+        register(id, name, "", maxLevel, statId, perLevel, sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+    }
+
+    private void register(String id, String name, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel, sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve curve, boolean scaleAttackDamage) {
+        register(id, name, "", maxLevel, statId, perLevel, curve, scaleAttackDamage, java.util.Set.of());
+    }
+
+    private void register(String id, String name, String description, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel, sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve curve, boolean scaleAttackDamage, java.util.Set<String> incompatibilities) {
         enchantRegistry.register(new EnchantDefinition(
             id,
             net.kyori.adventure.text.Component.text(name, net.kyori.adventure.text.format.NamedTextColor.AQUA),
+            net.kyori.adventure.text.Component.text(description, net.kyori.adventure.text.format.NamedTextColor.GRAY),
             maxLevel,
-            statId == null ? java.util.Map.of() : java.util.Map.of(statId, perLevel)
+            statId == null ? java.util.Map.of() : java.util.Map.of(statId, perLevel),
+            curve,
+            scaleAttackDamage,
+            incompatibilities
         ));
+    }
+
+    private sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve sharpnessCurve() {
+        return (perLevel, level) -> {
+            if (level <= 0) {
+                return 0.0;
+            }
+            if (level <= 4) {
+                return level * 0.05;
+            }
+            double bonus = 0.20; // level 4 value
+            double extra = ((level - 1.0) * (level - 4.0)) / 2.0; // sum of (level-3) from 5..level
+            return bonus + 0.05 * extra;
+        };
     }
 }

@@ -37,6 +37,10 @@ public final class AbilityListener implements Listener {
             return;
         }
         resolver.resolve(player.getInventory().getItemInMainHand()).ifPresent(instance -> {
+            boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
+            if (defunct) {
+                return;
+            }
             AbilityComponent abilityComponent = instance.definition().component(ComponentType.ABILITY, AbilityComponent.class).orElse(null);
             if (abilityComponent == null) {
                 return;

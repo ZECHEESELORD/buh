@@ -4,6 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
+import sh.harold.fulcrum.plugin.item.model.DurabilityComponent;
 import sh.harold.fulcrum.plugin.item.model.StatsComponent;
 import sh.harold.fulcrum.plugin.item.registry.ItemRegistry;
 import sh.harold.fulcrum.plugin.item.registry.VanillaWrapperFactory;
@@ -14,6 +15,9 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
+
+import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
+import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -109,11 +113,18 @@ public final class ItemResolver {
             stats = computeDefinitionStats(definition);
             working = itemPdc.writeStats(working, stats);
         }
+        DurabilityData durabilityData = itemPdc.readDurability(working).orElse(null);
+        if (durabilityData == null) {
+            durabilityData = computeDurability(definition);
+            if (durabilityData != null) {
+                working = itemPdc.writeDurability(working, durabilityData);
+            }
+        }
         Map<String, Integer> enchants = mergeEnchants(working);
         working = itemPdc.writeEnchants(working, enchants);
         working = mirrorAttributes(working, definition, stats);
         working = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(working);
-        return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry));
+        return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
     }
 
     public ItemStack applyId(ItemStack stack, String id) {
@@ -125,6 +136,10 @@ public final class ItemResolver {
         ItemStack withId = itemPdc.setId(base, definition.id());
         Map<StatId, Double> stats = computeDefinitionStats(definition);
         withId = itemPdc.writeStats(withId, stats);
+        DurabilityData durability = computeDurability(definition);
+        if (durability != null) {
+            withId = itemPdc.writeDurability(withId, durability);
+        }
         return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(withId);
     }
 
@@ -163,6 +178,16 @@ public final class ItemResolver {
             }
         }
         return Map.copyOf(enchants);
+    }
+
+    private DurabilityData computeDurability(CustomItem definition) {
+        DurabilityComponent component = definition.component(ComponentType.DURABILITY, DurabilityComponent.class).orElse(null);
+        int max = component != null ? component.max() : definition.material().getMaxDurability();
+        if (max <= 0) {
+            return null;
+        }
+        int current = component != null ? component.seededCurrentOrMax() : max;
+        return new DurabilityData(current, max);
     }
 
     private ItemStack mirrorAttributes(ItemStack stack, CustomItem definition, Map<StatId, Double> stats) {

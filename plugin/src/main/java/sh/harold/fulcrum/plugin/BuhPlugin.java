@@ -267,6 +267,8 @@ public final class BuhPlugin extends JavaPlugin {
             registrar.register(getPluginMeta(), debugItemDataCommand.build(), "debugitemdata", java.util.List.of("did"));
             sh.harold.fulcrum.plugin.item.command.DebugItemStatsCommand debugItemStatsCommand = new sh.harold.fulcrum.plugin.item.command.DebugItemStatsCommand(staffGuard, itemModule.engine().resolver());
             registrar.register(getPluginMeta(), debugItemStatsCommand.build(), "debugitemstats", java.util.List.of("dis"));
+            sh.harold.fulcrum.plugin.item.command.SetItemDurabilityCommand setItemDurabilityCommand = new sh.harold.fulcrum.plugin.item.command.SetItemDurabilityCommand(staffGuard, itemModule.engine().resolver(), itemModule.engine().itemPdc(), itemModule.engine().statBridge());
+            registrar.register(getPluginMeta(), setItemDurabilityCommand.build(), "setitemdurability", java.util.List.of("sidur"));
             sh.harold.fulcrum.plugin.stats.command.DebugStatsCommand debugStatsCommand = new sh.harold.fulcrum.plugin.stats.command.DebugStatsCommand(staffGuard, statsModule.statService());
             registrar.register(getPluginMeta(), debugStatsCommand.build(), "debugstats", java.util.List.of("ds"));
         }

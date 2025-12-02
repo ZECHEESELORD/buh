@@ -52,6 +52,8 @@ public final class DebugItemDataCommand {
         resolver.resolve(stack).ifPresentOrElse(instance -> {
             player.sendMessage(Component.text("ID: " + instance.definition().id(), NamedTextColor.GOLD));
             player.sendMessage(Component.text("Material: " + instance.definition().material(), NamedTextColor.GRAY));
+            itemPdc.readDurability(stack).ifPresent(durability ->
+                player.sendMessage(Component.text("Durability: " + Math.max(0, durability.current()) + "/" + durability.max(), NamedTextColor.YELLOW)));
             itemPdc.readStats(stack).ifPresent(stats -> {
                 player.sendMessage(Component.text("Stats:", NamedTextColor.AQUA));
                 stats.forEach((StatId id, Double value) ->
