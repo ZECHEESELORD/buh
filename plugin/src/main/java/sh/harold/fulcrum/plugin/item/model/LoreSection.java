@@ -5,6 +5,7 @@ public enum LoreSection {
     RARITY,
     TAGS,
     ENCHANTS,
+    SOCKET,
     PRIMARY_STATS,
     ABILITIES,
     FOOTER

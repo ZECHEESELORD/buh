@@ -8,6 +8,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.ArmorMeta;
+import org.bukkit.inventory.meta.trim.ArmorTrim;
+import org.bukkit.inventory.meta.trim.TrimMaterial;
+import org.bukkit.inventory.meta.trim.TrimPattern;
 import sh.harold.fulcrum.plugin.item.ability.AbilityDefinition;
 import sh.harold.fulcrum.plugin.item.ability.AbilityTrigger;
 import sh.harold.fulcrum.plugin.item.model.AbilityComponent;
@@ -341,13 +345,22 @@ public final class ItemLoreRenderer {
 
     private void addTrimSlots(List<Component> lore, ItemInstance instance) {
         ItemStack stack = instance.stack();
-        if (!(stack.getItemMeta() instanceof org.bukkit.inventory.meta.SmithingTrimMeta trimMeta)) {
+        ItemMeta meta = stack.getItemMeta();
+        if (!(meta instanceof ArmorMeta armorMeta)) {
             return;
         }
-        net.kyori.adventure.text.Component template = trimMeta.getTrim() == null
-            ? Component.text("◇ Empty Trim Upgrade Slot", NamedTextColor.DARK_GRAY)
-            : Component.text("◆ " + trimMeta.getTrim().getMaterial().getKey().getKey().replace('_', ' ') + " Trim Upgrade", NamedTextColor.GOLD);
-        lore.add(template);
+        ArmorTrim trim = armorMeta.hasTrim() ? armorMeta.getTrim() : null;
+        if (trim == null) {
+            lore.add(Component.text("◇ Empty Trim Upgrade Slot", NamedTextColor.DARK_GRAY));
+            return;
+        }
+        String pattern = humanize(trim.getPattern());
+        String material = humanize(trim.getMaterial());
+        Component line = Component.text()
+            .append(Component.text("◆ ", NamedTextColor.GOLD))
+            .append(Component.text(pattern + " Trim Upgrade (" + material + ")", NamedTextColor.GOLD))
+            .build();
+        lore.add(line);
     }
 
     private String labelFor(StatId id) {
@@ -356,6 +369,33 @@ public final class ItemLoreRenderer {
             return "Stat";
         }
         String[] tokens = raw.split("_");
+        StringBuilder builder = new StringBuilder();
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(" ");
+            }
+            builder.append(token.substring(0, 1).toUpperCase(Locale.ROOT))
+                .append(token.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return builder.toString();
+    }
+
+    private String humanize(TrimPattern pattern) {
+        return humanize(pattern.getKey().getKey());
+    }
+
+    private String humanize(TrimMaterial material) {
+        return humanize(material.getKey().getKey());
+    }
+
+    private String humanize(String key) {
+        if (key == null || key.isBlank()) {
+            return "";
+        }
+        String[] tokens = key.split("_");
         StringBuilder builder = new StringBuilder();
         for (String token : tokens) {
             if (token.isEmpty()) {
