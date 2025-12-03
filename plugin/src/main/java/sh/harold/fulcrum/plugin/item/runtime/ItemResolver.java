@@ -122,6 +122,7 @@ public final class ItemResolver {
         }
         Map<String, Integer> enchants = mergeEnchants(working);
         working = itemPdc.writeEnchants(working, enchants);
+        working = storeTrim(working);
         working = mirrorAttributes(working, definition, stats);
         working = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(working);
         return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
@@ -178,6 +179,30 @@ public final class ItemResolver {
             }
         }
         return Map.copyOf(enchants);
+    }
+
+    private ItemStack storeTrim(ItemStack stack) {
+        if (stack == null) {
+            return null;
+        }
+        if (itemPdc.readTrim(stack).isPresent()) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (!(meta instanceof org.bukkit.inventory.meta.ArmorMeta armorMeta)) {
+            return stack;
+        }
+        if (!armorMeta.hasTrim()) {
+            return stack;
+        }
+        var trim = armorMeta.getTrim();
+        if (trim == null) {
+            return stack;
+        }
+        itemPdc.writeTrim(stack, trim.getPattern().getKey().getKey(), trim.getMaterial().getKey().getKey());
+        armorMeta.setTrim(null);
+        stack.setItemMeta(armorMeta);
+        return stack;
     }
 
     private DurabilityData computeDurability(CustomItem definition) {

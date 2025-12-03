@@ -11,6 +11,8 @@ final class ItemDataKeys {
     private final NamespacedKey enchants;
     private final NamespacedKey durabilityCurrent;
     private final NamespacedKey durabilityMax;
+    private final NamespacedKey trimPattern;
+    private final NamespacedKey trimMaterial;
 
     ItemDataKeys(Plugin plugin) {
         this.itemId = new NamespacedKey(plugin, "item-id");
@@ -19,6 +21,8 @@ final class ItemDataKeys {
         this.enchants = new NamespacedKey(plugin, "item-enchants");
         this.durabilityCurrent = new NamespacedKey(plugin, "item-durability-current");
         this.durabilityMax = new NamespacedKey(plugin, "item-durability-max");
+        this.trimPattern = new NamespacedKey(plugin, "item-trim-pattern");
+        this.trimMaterial = new NamespacedKey(plugin, "item-trim-material");
     }
 
     NamespacedKey itemId() {
@@ -43,5 +47,13 @@ final class ItemDataKeys {
 
     NamespacedKey durabilityMax() {
         return durabilityMax;
+    }
+
+    NamespacedKey trimPattern() {
+        return trimPattern;
+    }
+
+    NamespacedKey trimMaterial() {
+        return trimMaterial;
     }
 }

@@ -99,6 +99,23 @@ public final class ItemPdc {
         return Optional.of(new DurabilityData(current.get(), max.get()));
     }
 
+    public ItemStack writeTrim(ItemStack stack, String patternKey, String materialKey) {
+        if (stack == null) {
+            return null;
+        }
+        ItemStack withPattern = write(stack, keys.trimPattern(), PersistentDataType.STRING, patternKey);
+        return write(withPattern, keys.trimMaterial(), PersistentDataType.STRING, materialKey);
+    }
+
+    public Optional<TrimData> readTrim(ItemStack stack) {
+        Optional<String> pattern = readString(stack, keys.trimPattern());
+        Optional<String> material = readString(stack, keys.trimMaterial());
+        if (pattern.isEmpty() || material.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new TrimData(pattern.get(), material.get()));
+    }
+
     public ItemStack setInt(ItemStack stack, NamespacedKey key, int value) {
         return write(stack, key, PersistentDataType.INTEGER, value);
     }
