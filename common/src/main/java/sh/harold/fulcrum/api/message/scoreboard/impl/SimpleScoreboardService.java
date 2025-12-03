@@ -283,12 +283,12 @@ public class SimpleScoreboardService implements ScoreboardService {
     }
 
     private void applyNoCollisionTeam(Scoreboard scoreboard) {
-        Team team = scoreboard.getTeam(NO_COLLISION_TEAM);
-        if (team == null) {
-            team = scoreboard.registerNewTeam(NO_COLLISION_TEAM);
+        Team existing = scoreboard.getTeam(NO_COLLISION_TEAM);
+        Team collisionTeam = existing != null ? existing : scoreboard.registerNewTeam(NO_COLLISION_TEAM);
+        collisionTeam.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            collisionTeam.addEntry(online.getName());
         }
-        team.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
-        Bukkit.getOnlinePlayers().forEach(online -> team.addEntry(online.getName()));
     }
 
     private Player requireOnline(UUID playerId) {
