@@ -37,6 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 public final class ItemLoreRenderer {
 
@@ -69,6 +70,7 @@ public final class ItemLoreRenderer {
         Component name = visual != null && visual.hasDisplayName()
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
+        name = applyAnvilName(meta, name);
         name = rarityColorize(name, visual);
         meta.displayName(noItalics(name));
         ensureGlint(meta, instance);
@@ -114,6 +116,10 @@ public final class ItemLoreRenderer {
         }
         if (isMelee(definition.category())) {
             tags.add("Melee");
+        }
+        String anvilName = customName(definition.material(), stats.meta());
+        if (anvilName != null && !anvilName.isBlank()) {
+            tags.add("\"" + anvilName + "\"");
         }
         if (tags.isEmpty()) {
             return;
@@ -300,7 +306,7 @@ public final class ItemLoreRenderer {
 
     private StatSnapshot buildStats(ItemInstance instance) {
         Map<StatId, Double> stats = instance.computeFinalStats();
-        return new StatSnapshot(stats);
+        return new StatSnapshot(stats, instance.stack().getItemMeta());
     }
 
     private boolean isTool(ItemCategory category) {
@@ -446,7 +452,19 @@ public final class ItemLoreRenderer {
         return builder.toString();
     }
 
-    private record StatSnapshot(Map<StatId, Double> all) {
+    private String customName(org.bukkit.Material material, ItemMeta meta) {
+        if (meta == null || !meta.hasDisplayName()) {
+            return null;
+        }
+        String plain = PlainTextComponentSerializer.plainText().serialize(meta.displayName());
+        String base = material == null ? "" : material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        if (plain.equalsIgnoreCase(base)) {
+            return null;
+        }
+        return plain;
+    }
+
+    private record StatSnapshot(Map<StatId, Double> all, ItemMeta meta) {
     }
 
     private void trimTrailingEmptyLines(List<Component> lore) {
