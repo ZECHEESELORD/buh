@@ -185,11 +185,13 @@ public final class ItemResolver {
         if (stack == null) {
             return null;
         }
-        if (itemPdc.readTrim(stack).isPresent()) {
-            return stack;
-        }
         ItemMeta meta = stack.getItemMeta();
         if (!(meta instanceof org.bukkit.inventory.meta.ArmorMeta armorMeta)) {
+            return stack;
+        }
+        if (itemPdc.readTrim(stack).isPresent()) {
+            armorMeta.setTrim(null);
+            stack.setItemMeta(armorMeta);
             return stack;
         }
         if (!armorMeta.hasTrim()) {
@@ -199,8 +201,17 @@ public final class ItemResolver {
         if (trim == null) {
             return stack;
         }
-        itemPdc.writeTrim(stack, trim.getPattern().getKey().getKey(), trim.getMaterial().getKey().getKey());
         armorMeta.setTrim(null);
+        armorMeta.getPersistentDataContainer().set(
+            itemPdc.keys().trimPattern(),
+            org.bukkit.persistence.PersistentDataType.STRING,
+            trim.getPattern().getKey().getKey()
+        );
+        armorMeta.getPersistentDataContainer().set(
+            itemPdc.keys().trimMaterial(),
+            org.bukkit.persistence.PersistentDataType.STRING,
+            trim.getMaterial().getKey().getKey()
+        );
         stack.setItemMeta(armorMeta);
         return stack;
     }
