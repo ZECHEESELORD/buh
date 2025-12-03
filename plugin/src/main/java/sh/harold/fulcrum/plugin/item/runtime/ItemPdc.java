@@ -21,6 +21,10 @@ public final class ItemPdc {
         this.keys = new ItemDataKeys(plugin);
     }
 
+    public ItemDataKeys keys() {
+        return keys;
+    }
+
     public ItemStack setId(ItemStack stack, String id) {
         if (stack == null || id == null) {
             return stack;
