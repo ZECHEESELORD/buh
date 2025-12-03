@@ -405,7 +405,7 @@ public final class ItemLoreRenderer {
         String key = pattern.getKey().getKey();
         return switch (key) {
             case "vex", "ward", "eye", "spire" -> NamedTextColor.GREEN; // uncommon
-            case "silence" -> NamedTextColor.GOLD; // rare
+            case "silence" -> NamedTextColor.BLUE; // rare
             default -> NamedTextColor.WHITE; // common
         };
     }
