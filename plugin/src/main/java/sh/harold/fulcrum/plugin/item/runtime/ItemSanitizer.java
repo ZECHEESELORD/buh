@@ -32,7 +32,11 @@ public final class ItemSanitizer {
         if (meta == null) {
             return stack;
         }
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
+        meta.addItemFlags(
+            ItemFlag.HIDE_ATTRIBUTES,
+            ItemFlag.HIDE_ENCHANTS,
+            ItemFlag.HIDE_ARMOR_TRIM
+        );
         stack.setItemMeta(meta);
         return stack;
     }
