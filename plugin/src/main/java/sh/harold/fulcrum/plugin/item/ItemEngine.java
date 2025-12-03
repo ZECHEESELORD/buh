@@ -56,7 +56,7 @@ public final class ItemEngine {
         this.resolver = new ItemResolver(registry, wrapperFactory, itemPdc, new VanillaStatResolver(), enchantRegistry);
         this.abilityService = new AbilityService();
         this.statBridge = new ItemStatBridge(resolver, statsModule.statService());
-        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry);
+        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry, itemPdc);
         this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
         loadDefinitions(providers);
     }

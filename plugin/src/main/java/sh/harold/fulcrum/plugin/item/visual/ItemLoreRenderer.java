@@ -42,10 +42,12 @@ public final class ItemLoreRenderer {
     private static final DecimalFormat STAT_FORMAT = new DecimalFormat("#.##");
     private final ItemResolver resolver;
     private final EnchantRegistry enchantRegistry;
+    private final sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc;
 
-    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry) {
+    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry, sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc) {
         this.resolver = resolver;
         this.enchantRegistry = enchantRegistry;
+        this.itemPdc = itemPdc;
     }
 
     public ItemStack render(ItemStack stack, Player viewer) {
@@ -345,11 +347,7 @@ public final class ItemLoreRenderer {
 
     private void addTrimSlots(List<Component> lore, ItemInstance instance) {
         ItemStack stack = instance.stack();
-        ItemMeta meta = stack.getItemMeta();
-        if (!(meta instanceof ArmorMeta armorMeta)) {
-            return;
-        }
-        ArmorTrim trim = armorMeta.hasTrim() ? armorMeta.getTrim() : null;
+        ArmorTrim trim = itemPdc.readTrim(stack).map(this::toTrim).orElse(null);
         if (trim == null) {
             lore.add(Component.text("◇ Empty Trim Upgrade Slot", NamedTextColor.DARK_GRAY));
             return;
@@ -385,6 +383,16 @@ public final class ItemLoreRenderer {
         return builder.toString();
     }
 
+    private ArmorTrim toTrim(sh.harold.fulcrum.plugin.item.runtime.TrimData data) {
+        try {
+            TrimPattern pattern = TrimPattern.valueOf(data.patternKey().toUpperCase(Locale.ROOT));
+            TrimMaterial material = TrimMaterial.valueOf(data.materialKey().toUpperCase(Locale.ROOT));
+            return new ArmorTrim(material, pattern);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private String humanize(TrimPattern pattern) {
         return humanize(pattern.getKey().getKey());
     }
@@ -394,15 +402,12 @@ public final class ItemLoreRenderer {
     }
 
     private NamedTextColor patternColor(TrimPattern pattern) {
-        // Simplified rarity coloring based on vanilla trim material rarity colors: common white, rare gold, epic purple.
         String key = pattern.getKey().getKey();
-        if (key.contains("rib") || key.contains("sentry") || key.contains("vex")) {
-            return NamedTextColor.LIGHT_PURPLE;
-        }
-        if (key.contains("silence") || key.contains("tide") || key.contains("snout")) {
-            return NamedTextColor.GOLD;
-        }
-        return NamedTextColor.WHITE;
+        return switch (key) {
+            case "vex", "ward", "eye", "spire" -> NamedTextColor.GREEN; // uncommon
+            case "silence" -> NamedTextColor.GOLD; // rare
+            default -> NamedTextColor.WHITE; // common
+        };
     }
 
     private String humanize(String key) {
