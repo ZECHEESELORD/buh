@@ -132,6 +132,10 @@ public final class ItemResolver {
         return itemPdc.setId(stack, id);
     }
 
+    public String readItemId(ItemStack stack) {
+        return readId(stack);
+    }
+
     public ItemStack initializeItem(CustomItem definition) {
         ItemStack base = new ItemStack(definition.material());
         ItemStack withId = itemPdc.setId(base, definition.id());

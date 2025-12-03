@@ -51,6 +51,10 @@ public final class ItemStatBridge {
                 return;
             }
             if (instance.definition().category().defaultSlot() != slot) {
+                if (slot == SlotGroup.MAIN_HAND) {
+                    StatSourceId sourceId = new StatSourceId(slotPrefix + ":default");
+                    container.addModifier(new StatModifier(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, sourceId, ModifierOp.FLAT, 4.0));
+                }
                 return;
             }
             final boolean[] hasAttackSpeed = {false};

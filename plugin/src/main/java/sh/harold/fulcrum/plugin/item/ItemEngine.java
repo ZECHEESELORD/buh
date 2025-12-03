@@ -20,6 +20,7 @@ import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
 import sh.harold.fulcrum.plugin.item.listener.AbilityListener;
 import sh.harold.fulcrum.plugin.item.listener.HelmetEquipListener;
+import sh.harold.fulcrum.plugin.item.listener.AnvilListener;
 import sh.harold.fulcrum.plugin.item.listener.ItemEquipListener;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.item.durability.DurabilityService;
@@ -103,6 +104,7 @@ public final class ItemEngine {
         pluginManager.registerEvents(new HelmetEquipListener(resolver, statBridge), plugin);
         pluginManager.registerEvents(durabilityService, plugin);
         pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
+        pluginManager.registerEvents(new AnvilListener(plugin, resolver), plugin);
     }
 
     public void disable() {

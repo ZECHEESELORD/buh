@@ -67,15 +67,15 @@ public final class ItemLoreRenderer {
 
         CustomItem definition = instance.definition();
         VisualComponent visual = definition.component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
-        Component name = visual != null && visual.hasDisplayName()
+        Component baseName = visual != null && visual.hasDisplayName()
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
-        name = applyAnvilName(meta, name);
-        name = rarityColorize(name, visual);
-        meta.displayName(noItalics(name));
+        Component displayName = rarityColorize(baseName, visual);
+        meta.displayName(noItalics(displayName));
         ensureGlint(meta, instance);
 
         StatSnapshot stats = buildStats(instance);
+        String anvilName = customName(definition.material(), stats.meta());
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
             switch (section) {
@@ -83,7 +83,7 @@ public final class ItemLoreRenderer {
                     // header handled via display name
                 }
                 case RARITY -> addRarity(lore, visual);
-                case TAGS -> addTags(lore, definition, stats);
+                case TAGS -> addTags(lore, definition, stats, anvilName);
                 case ENCHANTS -> addEnchants(lore, instance);
                 case SOCKET -> addTrimSlots(lore, instance);
                 case PRIMARY_STATS -> addStats(lore, stats);
@@ -106,7 +106,7 @@ public final class ItemLoreRenderer {
         return clone;
     }
 
-    private void addTags(List<Component> lore, CustomItem definition, StatSnapshot stats) {
+    private void addTags(List<Component> lore, CustomItem definition, StatSnapshot stats, String anvilName) {
         List<String> tags = new ArrayList<>();
         if (definition.id().startsWith("vanilla:")) {
             tags.add("Vanilla");
@@ -117,7 +117,6 @@ public final class ItemLoreRenderer {
         if (isMelee(definition.category())) {
             tags.add("Melee");
         }
-        String anvilName = customName(definition.material(), stats.meta());
         if (anvilName != null && !anvilName.isBlank()) {
             tags.add("\"" + anvilName + "\"");
         }
