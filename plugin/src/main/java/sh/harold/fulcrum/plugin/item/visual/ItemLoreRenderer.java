@@ -468,13 +468,13 @@ public final class ItemLoreRenderer {
         Component line = Component.text()
             .append(Component.text(durability.displayedCurrent(), durability.color()))
             .append(Component.text("/", NamedTextColor.DARK_GRAY))
-            .append(Component.text(durability.data().max(), NamedTextColor.DARK_GRAY))
+            .append(Component.text(durability.data().max(), NamedTextColor.GRAY))
             .append(Component.text(" ", NamedTextColor.GRAY))
             .append(Component.text("(", NamedTextColor.DARK_GRAY))
             .append(percentComponent)
             .append(Component.text(")", NamedTextColor.DARK_GRAY))
             .build();
-        Component label = Component.text(durabilityFlavor(durability), NamedTextColor.DARK_GRAY)
+        Component label = Component.text(durabilityFlavor(durability), NamedTextColor.GRAY)
             .decoration(TextDecoration.ITALIC, true);
         lore.add(line);
         lore.add(label);
