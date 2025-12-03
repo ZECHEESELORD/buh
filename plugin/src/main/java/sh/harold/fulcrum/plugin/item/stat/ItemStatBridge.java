@@ -50,6 +50,9 @@ public final class ItemStatBridge {
             if (defunct) {
                 return;
             }
+            if (instance.definition().category().defaultSlot() != slot) {
+                return;
+            }
             final boolean[] hasAttackSpeed = {false};
             instance.statSources().forEach((source, values) -> {
                 StatSourceId sourceId = new StatSourceId(slotPrefix + ":" + source);
