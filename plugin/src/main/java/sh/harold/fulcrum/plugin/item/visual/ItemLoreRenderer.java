@@ -76,6 +76,7 @@ public final class ItemLoreRenderer {
                 case RARITY -> addRarity(lore, visual);
                 case TAGS -> addTags(lore, definition, stats);
                 case ENCHANTS -> addEnchants(lore, instance);
+                case SOCKET -> addTrimSlots(lore, instance);
                 case PRIMARY_STATS -> addStats(lore, stats);
                 case ABILITIES -> addAbilities(lore, instance);
                 case FOOTER -> addFlavor(lore, visual);
@@ -336,6 +337,17 @@ public final class ItemLoreRenderer {
         if (!line.equals(Component.empty())) {
             lore.add(line);
         }
+    }
+
+    private void addTrimSlots(List<Component> lore, ItemInstance instance) {
+        ItemStack stack = instance.stack();
+        if (!(stack.getItemMeta() instanceof org.bukkit.inventory.meta.SmithingTrimMeta trimMeta)) {
+            return;
+        }
+        net.kyori.adventure.text.Component template = trimMeta.getTrim() == null
+            ? Component.text("◇ Empty Trim Upgrade Slot", NamedTextColor.DARK_GRAY)
+            : Component.text("◆ " + trimMeta.getTrim().getMaterial().getKey().getKey().replace('_', ' ') + " Trim Upgrade", NamedTextColor.GOLD);
+        lore.add(template);
     }
 
     private String labelFor(StatId id) {
