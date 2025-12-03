@@ -349,6 +349,9 @@ public final class ItemLoreRenderer {
     private void addTrimSlots(List<Component> lore, ItemInstance instance) {
         ItemStack stack = instance.stack();
         ArmorTrim trim = itemPdc.readTrim(stack).map(this::toTrim).orElse(null);
+        if (!(stack.getItemMeta() instanceof ArmorMeta)) {
+            return;
+        }
         if (trim == null) {
             lore.add(Component.text("◇ Empty Trim Upgrade Slot", NamedTextColor.DARK_GRAY));
             return;
