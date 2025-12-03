@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.Registry;
 import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimMaterial;
@@ -384,13 +385,12 @@ public final class ItemLoreRenderer {
     }
 
     private ArmorTrim toTrim(sh.harold.fulcrum.plugin.item.runtime.TrimData data) {
-        try {
-            TrimPattern pattern = TrimPattern.valueOf(data.patternKey().toUpperCase(Locale.ROOT));
-            TrimMaterial material = TrimMaterial.valueOf(data.materialKey().toUpperCase(Locale.ROOT));
-            return new ArmorTrim(material, pattern);
-        } catch (IllegalArgumentException ignored) {
+        TrimPattern pattern = findPattern(data.patternKey());
+        TrimMaterial material = findMaterial(data.materialKey());
+        if (pattern == null || material == null) {
             return null;
         }
+        return new ArmorTrim(material, pattern);
     }
 
     private String humanize(TrimPattern pattern) {
@@ -408,6 +408,20 @@ public final class ItemLoreRenderer {
             case "silence" -> NamedTextColor.BLUE; // rare
             default -> NamedTextColor.WHITE; // common
         };
+    }
+
+    private TrimPattern findPattern(String key) {
+        return Registry.TRIM_PATTERN.stream()
+            .filter(pattern -> pattern.getKey().getKey().equalsIgnoreCase(key))
+            .findFirst()
+            .orElse(null);
+    }
+
+    private TrimMaterial findMaterial(String key) {
+        return Registry.TRIM_MATERIAL.stream()
+            .filter(material -> material.getKey().getKey().equalsIgnoreCase(key))
+            .findFirst()
+            .orElse(null);
     }
 
     private String humanize(String key) {
