@@ -77,6 +77,7 @@ public final class CustomItem {
             LoreSection.TAGS,
             LoreSection.PRIMARY_STATS,
             LoreSection.ENCHANTS,
+            LoreSection.SOCKET,
             LoreSection.ABILITIES,
             LoreSection.FOOTER
         );
