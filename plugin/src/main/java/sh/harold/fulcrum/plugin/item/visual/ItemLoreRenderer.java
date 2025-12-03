@@ -356,9 +356,11 @@ public final class ItemLoreRenderer {
         }
         String pattern = humanize(trim.getPattern());
         String material = humanize(trim.getMaterial());
+        NamedTextColor patternColor = patternColor(trim.getPattern());
         Component line = Component.text()
             .append(Component.text("◆ ", NamedTextColor.GOLD))
-            .append(Component.text(pattern + " Trim Upgrade (" + material + ")", NamedTextColor.GOLD))
+            .append(Component.text(pattern + " Trim Upgrade ", patternColor))
+            .append(Component.text("(" + material + ")", NamedTextColor.DARK_GRAY))
             .build();
         lore.add(line);
     }
@@ -389,6 +391,18 @@ public final class ItemLoreRenderer {
 
     private String humanize(TrimMaterial material) {
         return humanize(material.getKey().getKey());
+    }
+
+    private NamedTextColor patternColor(TrimPattern pattern) {
+        // Simplified rarity coloring based on vanilla trim material rarity colors: common white, rare gold, epic purple.
+        String key = pattern.getKey().getKey();
+        if (key.contains("rib") || key.contains("sentry") || key.contains("vex")) {
+            return NamedTextColor.LIGHT_PURPLE;
+        }
+        if (key.contains("silence") || key.contains("tide") || key.contains("snout")) {
+            return NamedTextColor.GOLD;
+        }
+        return NamedTextColor.WHITE;
     }
 
     private String humanize(String key) {
