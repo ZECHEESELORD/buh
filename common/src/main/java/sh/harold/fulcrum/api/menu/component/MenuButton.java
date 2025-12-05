@@ -638,6 +638,7 @@ public class MenuButton implements MenuItem {
     private void updateItemMeta() {
         ItemMeta meta = displayItem.getItemMeta();
         if (meta != null) {
+            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
             if (name != null) {
                 meta.displayName(name);
             }
@@ -855,10 +856,7 @@ public class MenuButton implements MenuItem {
     @Override
     public void setDisplayItem(ItemStack itemStack) {
         this.displayItem = Objects.requireNonNull(itemStack, "ItemStack cannot be null").clone();
-        // Preserve name and lore if they exist
-        if (name != null || !lore.isEmpty()) {
-            updateItemMeta();
-        }
+        updateItemMeta();
         rebuildConfirmationDisplayItem();
     }
 
