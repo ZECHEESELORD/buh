@@ -3,8 +3,11 @@ package sh.harold.fulcrum.plugin.item.runtime;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.persistence.PersistentDataType;
 import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
 import sh.harold.fulcrum.common.data.ledger.item.ItemInstanceRecord;
@@ -73,6 +76,34 @@ public final class BlockedItemMasker {
         return masked;
     }
 
+    /**
+     * Converts a blocked stack into a vanilla-tagged stack while preserving material, amount, enchantments, and damage.
+     */
+    public ItemStack sanitizeToVanilla(ItemStack original) {
+        if (original == null || original.getType().isAir()) {
+            return original;
+        }
+        ItemStack sanitized = new ItemStack(original.getType(), Math.max(1, original.getAmount()));
+        sanitized.addUnsafeEnchantments(original.getEnchantments());
+
+        ItemMeta originalMeta = original.getItemMeta();
+        ItemMeta sanitizedMeta = sanitized.getItemMeta();
+        if (sanitizedMeta != null) {
+            sanitizedMeta.displayName(null);
+            sanitizedMeta.lore(null);
+            if (sanitizedMeta instanceof Damageable damageable && originalMeta instanceof Damageable originalDamageable) {
+                damageable.setDamage(originalDamageable.getDamage());
+            }
+            if (sanitizedMeta instanceof EnchantmentStorageMeta storage && originalMeta instanceof EnchantmentStorageMeta originalStorage) {
+                originalStorage.getStoredEnchants().forEach((enchant, level) -> storage.addStoredEnchant(enchant, level, true));
+            }
+            sanitized.setItemMeta(sanitizedMeta);
+        }
+
+        sanitized = itemPdc.setId(sanitized, "vanilla:" + original.getType().getKey().getKey());
+        return ItemSanitizer.normalize(sanitized);
+    }
+
     private ItemStack createCustomMask(CustomItem definition) {
         ItemStack base = new ItemStack(definition.material());
         ItemStack withId = itemPdc.setId(base, definition.id());
@@ -121,11 +152,6 @@ public final class BlockedItemMasker {
         if (itemLedgerRepository == null || instanceId == null) {
             return;
         }
-        String itemId = itemPdc.readId(masked).orElse(MASK_ITEM_ID);
-        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, ItemCreationSource.SYSTEM, null, Instant.now());
-        itemLedgerRepository.append(record).exceptionally(throwable -> {
-            logger.log(Level.WARNING, "Failed to ledger-log masked item " + instanceId + " (" + itemId + ")", throwable);
-            return null;
-        });
+        // Ledger writes are temporarily disabled while we keep migration non-destructive.
     }
 }
