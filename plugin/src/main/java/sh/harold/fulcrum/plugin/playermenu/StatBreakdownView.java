@@ -411,12 +411,12 @@ final class StatBreakdownView {
             return entries;
         }
         if (flattened) {
-            return aggregateByCategory(entries);
+            return grouped ? aggregateBySlotAndCategory(entries, false) : entries;
         }
         if (!grouped) {
             return aggregateBySlot(entries);
         }
-        return aggregateBySlotAndCategory(entries);
+        return aggregateBySlotAndCategory(entries, true);
     }
 
     private List<SourceEntry> aggregateByCategory(List<SourceEntry> entries) {
@@ -463,10 +463,10 @@ final class StatBreakdownView {
         return result;
     }
 
-    private List<SourceEntry> aggregateBySlotAndCategory(List<SourceEntry> entries) {
+    private List<SourceEntry> aggregateBySlotAndCategory(List<SourceEntry> entries, boolean collapseArmor) {
         Map<String, Map<SourceCategory, List<SourceEntry>>> grouped = new LinkedHashMap<>();
         for (SourceEntry entry : entries) {
-            String slot = slotKey(entry, true);
+            String slot = slotKey(entry, collapseArmor);
             SourceCategory category = categoryOf(entry);
             grouped.computeIfAbsent(slot, ignored -> new LinkedHashMap<>())
                 .computeIfAbsent(category, ignored -> new ArrayList<>())
