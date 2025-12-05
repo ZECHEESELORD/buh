@@ -15,6 +15,9 @@ import java.util.Objects;
 
 public final class EmergencyCreativeCommand {
 
+    private static final net.kyori.adventure.text.Component STAFF_PREFIX = net.kyori.adventure.text.Component.text("[STAFF] ", net.kyori.adventure.text.format.NamedTextColor.AQUA);
+    private static final net.kyori.adventure.text.format.NamedTextColor STAFF_ACCENT = net.kyori.adventure.text.format.NamedTextColor.AQUA;
+
     private final StaffGuard staffGuard;
 
     public EmergencyCreativeCommand(StaffGuard staffGuard) {
@@ -31,11 +34,13 @@ public final class EmergencyCreativeCommand {
     private int execute(CommandSourceStack source) {
         CommandSender sender = source.getSender();
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can use this.", NamedTextColor.RED));
+            sender.sendMessage(STAFF_PREFIX
+                .append(Component.text("Only players can use this.", STAFF_ACCENT)));
             return Command.SINGLE_SUCCESS;
         }
         player.setGameMode(GameMode.CREATIVE);
-        player.sendMessage(Component.text("You are now in true Creative mode.", NamedTextColor.GOLD));
+        player.sendMessage(STAFF_PREFIX
+            .append(Component.text("You are now in true Creative mode.", STAFF_ACCENT)));
         return Command.SINGLE_SUCCESS;
     }
 }

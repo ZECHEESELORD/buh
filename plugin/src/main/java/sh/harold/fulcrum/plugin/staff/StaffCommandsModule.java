@@ -80,10 +80,11 @@ public final class StaffCommandsModule implements FulcrumModule {
         registrar.register(new VanishCommand(plugin, staffGuard, vanishService).build(), "vanish", java.util.List.of());
         registrar.register(new OpenInventoryCommand(staffGuard, openInventoryService).build(), "openinv", java.util.List.of("openinventory"));
         registrar.register(new DumpDataCommand(plugin, staffGuard, dataModule).build(), "dumpdata", java.util.List.of());
-        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).build(), "gamemode", java.util.List.of());
-        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gmc", "creative"), "gmc", java.util.List.of());
-        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gms", "survival"), "gms", java.util.List.of());
-        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gmsp", "spectator"), "gmsp", java.util.List.of());
+        StaffGamemodeCommand gmCommand = new StaffGamemodeCommand(staffGuard, staffCreativeService);
+        registrar.register(gmCommand.build(), "gamemode", java.util.List.of());
+        registrar.register(gmCommand.alias("gmc", "creative"), "gmc", java.util.List.of());
+        registrar.register(gmCommand.alias("gms", "survival"), "gms", java.util.List.of());
+        registrar.register(gmCommand.alias("gmsp", "spectator"), "gmsp", java.util.List.of());
         registrar.register(new EmergencyCreativeCommand(staffGuard).build(), "ireallywantcreativemode", java.util.List.of());
     }
 }

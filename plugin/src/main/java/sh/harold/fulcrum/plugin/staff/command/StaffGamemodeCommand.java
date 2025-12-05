@@ -27,6 +27,9 @@ public final class StaffGamemodeCommand {
         return builder.buildFuture();
     };
 
+    private static final Component STAFF_PREFIX = Component.text("[STAFF] ", NamedTextColor.AQUA);
+    private static final NamedTextColor STAFF_ACCENT = NamedTextColor.AQUA;
+
     private final StaffGuard staffGuard;
     private final StaffCreativeService creativeService;
 
@@ -77,17 +80,23 @@ public final class StaffGamemodeCommand {
                     player.sendMessage(Component.text("You do not have access to staff creative.", NamedTextColor.RED));
                     return Command.SINGLE_SUCCESS;
                 }
-                player.sendMessage(Component.text("Staff Creative enabled.", NamedTextColor.AQUA));
+                player.sendMessage(STAFF_PREFIX
+                    .append(Component.text("Staff Creative enabled.", STAFF_ACCENT))
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
             }
             case "survival", "gms" -> {
                 creativeService.disable(player);
                 player.setGameMode(GameMode.SURVIVAL);
-                player.sendMessage(Component.text("Set to Survival.", NamedTextColor.YELLOW));
+                player.sendMessage(STAFF_PREFIX
+                    .append(Component.text("Set to Survival.", STAFF_ACCENT))
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
             }
             case "spectator", "gmsp" -> {
                 creativeService.disable(player);
                 player.setGameMode(GameMode.SPECTATOR);
-                player.sendMessage(Component.text("Set to Spectator.", NamedTextColor.YELLOW));
+                player.sendMessage(STAFF_PREFIX
+                    .append(Component.text("Set to Spectator.", STAFF_ACCENT))
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
             }
             default -> player.sendMessage(Component.text("Unknown mode. Try survival, spectator, or creative.", NamedTextColor.RED));
         }
