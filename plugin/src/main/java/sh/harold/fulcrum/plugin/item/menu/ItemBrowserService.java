@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.event.inventory.ClickType;
 import net.kyori.adventure.text.event.ClickCallback;
 import io.papermc.paper.registry.data.dialog.DialogInstancesProvider;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -235,6 +236,7 @@ public final class ItemBrowserService {
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(SEARCH_SLOT)
             .onClick(this::promptSearch)
+            .onClick(ClickType.RIGHT, this::clearSearch)
             .build();
     }
 
@@ -246,6 +248,10 @@ public final class ItemBrowserService {
         ItemBrowserSession session = currentSession(player);
         String initial = session == null ? "" : session.state().searchQuery();
         player.showDialog(buildSearchDialog(player, initial));
+    }
+
+    private void clearSearch(Player player) {
+        applySearch(player, "");
     }
 
     private void openFilterMenu(Player player) {
@@ -455,20 +461,42 @@ public final class ItemBrowserService {
     private void updateSession(Player player, java.util.function.Function<ItemBrowserState, ItemBrowserState> transformer) {
         ItemBrowserSession session = currentSession(player);
         if (session == null) {
+            buildSession(player, ItemBrowserState.defaultState())
+                .thenCompose(built -> callSync(() -> {
+                    ItemBrowserState nextState = transformer.apply(built.state());
+                    ItemBrowserSession updated = new ItemBrowserSession(built.entries(), nextState);
+                    return open(player, updated);
+                }))
+                .thenCompose(Function.identity())
+                .exceptionally(throwable -> {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to update item browser for " + player.getUniqueId(), throwable);
+                    player.sendMessage(Component.text("Could not update the item browser right now.", NamedTextColor.RED));
+                    return null;
+                });
             return;
         }
         ItemBrowserState next = transformer.apply(session.state());
         ItemBrowserSession updated = new ItemBrowserSession(session.entries(), next);
         storeSession(player, updated);
-        refreshOpenBrowser(player, updated);
+        if (!refreshOpenBrowser(player, updated)) {
+            callSync(() -> open(player, updated))
+                .thenCompose(Function.identity())
+                .exceptionally(throwable -> {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to refresh item browser for " + player.getUniqueId(), throwable);
+                    player.sendMessage(Component.text("Could not refresh the item browser right now.", NamedTextColor.RED));
+                    return null;
+                });
+        }
     }
 
-    private void refreshOpenBrowser(Player player, ItemBrowserSession session) {
-        menuService.getOpenMenu(player)
-            .filter(menu -> menu.getProperty(MENU_PROPERTY, Boolean.class).orElse(false))
+    private boolean refreshOpenBrowser(Player player, ItemBrowserSession session) {
+        var menuOpt = menuService.getOpenMenu(player)
+            .filter(menu -> menu.getProperty(MENU_PROPERTY, Boolean.class).orElse(false));
+        menuOpt
             .filter(DefaultListMenu.class::isInstance)
             .map(DefaultListMenu.class::cast)
             .ifPresent(menu -> refresh(menu, session));
+        return menuOpt.isPresent();
     }
 
     private ItemBrowserSession currentSession(Player player) {
