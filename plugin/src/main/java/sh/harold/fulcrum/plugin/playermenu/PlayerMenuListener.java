@@ -55,7 +55,7 @@ final class PlayerMenuListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (event.getPlayer().getScoreboardTags().contains(StaffCreativeService.CREATIVE_TAG)) {
+        if (event.getPlayer().hasPermission("fulcrum.item") || event.getPlayer().getScoreboardTags().contains(StaffCreativeService.CREATIVE_TAG)) {
             event.getPlayer().performCommand("item");
             return;
         }
