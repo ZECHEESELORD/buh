@@ -67,12 +67,7 @@ public final class CreativeSanitizerListener implements Listener {
         if (stack == null || stack.getType().isAir()) {
             return stack;
         }
-        return renderer.render(tagIfNeeded(stack, resolver), viewer);
-    }
-
-    private ItemStack tagIfNeeded(ItemStack stack, sh.harold.fulcrum.plugin.item.runtime.ItemResolver resolver) {
-        return resolver.readItemId(stack) != null
-            ? stack
-            : resolver.applyId(stack, "vanilla:" + stack.getType().getKey().getKey());
+        ItemStack tagged = itemEngine.tagItem(stack, sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource.CREATIVE);
+        return renderer.render(tagged, viewer);
     }
 }

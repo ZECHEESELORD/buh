@@ -6,8 +6,10 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
 import sh.harold.fulcrum.stats.core.StatId;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -84,6 +86,39 @@ public final class ItemPdc {
 
     public Optional<UUID> readInstanceId(ItemStack stack) {
         return read(stack, keys.instanceId(), PersistentDataType.STRING).map(UUID::fromString);
+    }
+
+    public ItemStack ensureProvenance(ItemStack stack, ItemCreationSource source, Instant createdAt) {
+        if (stack == null || source == null || createdAt == null) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        PersistentDataContainer container = meta.getPersistentDataContainer();
+        if (!container.has(keys.createdAt(), PersistentDataType.STRING)) {
+            container.set(keys.createdAt(), PersistentDataType.STRING, createdAt.toString());
+        }
+        if (!container.has(keys.source(), PersistentDataType.STRING)) {
+            container.set(keys.source(), PersistentDataType.STRING, source.name());
+        }
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    public Optional<Instant> readCreatedAt(ItemStack stack) {
+        return read(stack, keys.createdAt(), PersistentDataType.STRING).map(Instant::parse);
+    }
+
+    public Optional<ItemCreationSource> readSource(ItemStack stack) {
+        return read(stack, keys.source(), PersistentDataType.STRING).map(value -> {
+            try {
+                return ItemCreationSource.valueOf(value);
+            } catch (IllegalArgumentException ignored) {
+                return ItemCreationSource.UNKNOWN;
+            }
+        });
     }
 
     public ItemStack writeStats(ItemStack stack, Map<StatId, Double> stats) {

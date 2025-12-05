@@ -48,14 +48,14 @@ public final class SampleItemProvider implements ItemDefinitionProvider {
             ))
             .build();
         CustomItem mask = CustomItem.builder("fulcrum:null_item")
-            .material(Material.GRAY_STAINED_GLASS_PANE)
+            .material(Material.STRUCTURE_VOID)
             .category(ItemCategory.MATERIAL)
             .loreLayout(List.of(LoreSection.HEADER, LoreSection.TAGS, LoreSection.FOOTER))
             .component(ComponentType.VISUAL, new VisualComponent(
                 Component.text("Null Item", NamedTextColor.DARK_GRAY),
                 List.of(
-                    Component.text("Removed to keep the world balanced.", NamedTextColor.GRAY),
-                    Component.text("If you believe this is a mistake, contact staff.", NamedTextColor.GRAY)
+                    Component.text("Gone. Reduced to null.", NamedTextColor.GRAY),
+                    Component.text("A small price to pay for balance.", NamedTextColor.GRAY)
                 ),
                 ItemRarity.COMMON
             ))

@@ -27,6 +27,7 @@ import sh.harold.fulcrum.plugin.item.listener.AbilityListener;
 import sh.harold.fulcrum.plugin.item.listener.HelmetEquipListener;
 import sh.harold.fulcrum.plugin.item.listener.AnvilListener;
 import sh.harold.fulcrum.plugin.item.listener.ItemEquipListener;
+import sh.harold.fulcrum.plugin.item.listener.NullItemPlacementListener;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.item.durability.DurabilityService;
 import sh.harold.fulcrum.stats.core.StatCondition;
@@ -161,9 +162,23 @@ public final class ItemEngine {
         return registry.get(id).map(definition -> {
             org.bukkit.inventory.ItemStack initialized = resolver.initializeItem(definition);
             java.util.UUID instanceId = itemPdc.readInstanceId(initialized).orElse(null);
+            initialized = itemPdc.ensureProvenance(initialized, source, java.time.Instant.now());
             logInstance(definition.id(), instanceId, source, creatorId);
             return initialized;
         });
+    }
+
+    public org.bukkit.inventory.ItemStack tagItem(org.bukkit.inventory.ItemStack stack, ItemCreationSource source) {
+        if (stack == null || stack.getType().isAir()) {
+            return stack;
+        }
+        java.time.Instant now = java.time.Instant.now();
+        var resolved = resolver.resolve(stack).orElse(null);
+        org.bukkit.inventory.ItemStack working = resolved == null ? stack.clone() : resolved.stack();
+        if (resolved != null && resolver.shouldTagInstance(resolved.definition())) {
+            working = itemPdc.ensureInstanceId(working);
+        }
+        return itemPdc.ensureProvenance(working, source == null ? ItemCreationSource.UNKNOWN : source, now);
     }
 
     public void enable() {
@@ -175,6 +190,7 @@ public final class ItemEngine {
         pluginManager.registerEvents(durabilityService, plugin);
         pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
         pluginManager.registerEvents(new AnvilListener(plugin, resolver), plugin);
+        pluginManager.registerEvents(new NullItemPlacementListener(itemPdc), plugin);
         armorTrimRecipeBlocker.register();
     }
 
@@ -198,11 +214,7 @@ public final class ItemEngine {
         if (itemLedgerRepository == null || instanceId == null) {
             return;
         }
-        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, source, creatorId, Instant.now());
-        itemLedgerRepository.append(record).exceptionally(throwable -> {
-            plugin.getLogger().log(Level.WARNING, "Failed to write item ledger for " + instanceId + " (" + itemId + ")", throwable);
-            return null;
-        });
+        // Ledger writes are temporarily disabled while we move to item-first provenance.
     }
 
     private void registerDefaultEnchants() {

@@ -9,6 +9,7 @@ public enum ItemCategory {
     AXE(SlotGroup.MAIN_HAND),
     BOW(SlotGroup.MAIN_HAND),
     WAND(SlotGroup.MAIN_HAND),
+    MACE(SlotGroup.MAIN_HAND),
     PICKAXE(SlotGroup.MAIN_HAND),
     SHOVEL(SlotGroup.MAIN_HAND),
     HOE(SlotGroup.MAIN_HAND),
@@ -50,6 +51,7 @@ public enum ItemCategory {
             if (name.endsWith("_PICKAXE")) return PICKAXE;
             if (name.endsWith("_SHOVEL")) return SHOVEL;
             if (name.endsWith("_HOE")) return HOE;
+            if (name.endsWith("_MACE")) return MACE;
             if (name.endsWith("_HELMET")) return HELMET;
             if (name.endsWith("_CHESTPLATE")) return CHESTPLATE;
             if (name.endsWith("_LEGGINGS")) return LEGGINGS;
@@ -60,6 +62,7 @@ public enum ItemCategory {
             case NETHERITE_AXE, DIAMOND_AXE, GOLDEN_AXE, IRON_AXE, STONE_AXE, WOODEN_AXE -> AXE;
             case BOW, CROSSBOW -> BOW;
             case TRIDENT -> TRIDENT;
+            case MACE -> MACE;
             case FISHING_ROD -> FISHING_ROD;
             case NETHERITE_PICKAXE, DIAMOND_PICKAXE, GOLDEN_PICKAXE, IRON_PICKAXE, STONE_PICKAXE, WOODEN_PICKAXE -> PICKAXE;
             case NETHERITE_SHOVEL, DIAMOND_SHOVEL, GOLDEN_SHOVEL, IRON_SHOVEL, STONE_SHOVEL, WOODEN_SHOVEL -> SHOVEL;
