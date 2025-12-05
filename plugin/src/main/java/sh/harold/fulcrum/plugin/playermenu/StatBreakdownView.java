@@ -828,10 +828,8 @@ final class StatBreakdownView {
         boolean grouping = state.groupingEnabled();
         return MenuButton.builder(Material.COMPARATOR)
             .name("&bGroup By Category")
-            .secondary("Flatten Stats Menu")
             .description("Groups all modifiers from the same category into one.")
-            .lore(Component.text("Enabled: " + (grouping ? "ON" : "OFF"), grouping ? NamedTextColor.GREEN : NamedTextColor.RED)
-                .decoration(TextDecoration.ITALIC, false))
+            .lore(enabledLine(grouping))
             .slot(50)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleGrouping()))
@@ -844,12 +842,17 @@ final class StatBreakdownView {
             .name("&eFlatten Stats Menu")
             .secondary("Flatten Stats Menu")
             .description("Breaks down modifiers on items so you can compare them individually.")
-            .lore(Component.text("Enabled: " + (flattened ? "ON" : "OFF"), flattened ? NamedTextColor.GREEN : NamedTextColor.RED)
-                .decoration(TextDecoration.ITALIC, false))
+            .lore(enabledLine(flattened))
             .slot(51)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleFlatten()))
             .build();
+    }
+
+    private Component enabledLine(boolean enabled) {
+        return Component.text("Enabled: ", NamedTextColor.GRAY)
+            .append(Component.text(enabled ? "ON" : "OFF", enabled ? NamedTextColor.GREEN : NamedTextColor.RED))
+            .decoration(TextDecoration.ITALIC, false);
     }
 
     private StatVisual visualFor(StatId id) {
