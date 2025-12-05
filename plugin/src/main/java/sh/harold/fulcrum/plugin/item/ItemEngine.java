@@ -2,6 +2,9 @@ package sh.harold.fulcrum.plugin.item;
 
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
+import sh.harold.fulcrum.common.data.ledger.item.ItemInstanceRecord;
+import sh.harold.fulcrum.common.data.ledger.item.ItemLedgerRepository;
 import sh.harold.fulcrum.plugin.item.ability.AbilityService;
 import sh.harold.fulcrum.plugin.item.registry.ItemDefinitionProvider;
 import sh.harold.fulcrum.plugin.item.registry.ItemRegistry;
@@ -10,6 +13,7 @@ import sh.harold.fulcrum.plugin.item.registry.YamlItemDefinitionLoader;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.runtime.VanillaStatResolver;
+import sh.harold.fulcrum.plugin.item.recipe.ArmorTrimRecipeBlocker;
 import sh.harold.fulcrum.plugin.item.stat.ItemStatBridge;
 import sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer;
 import sh.harold.fulcrum.plugin.item.visual.ProtocolLoreAdapter;
@@ -24,10 +28,15 @@ import sh.harold.fulcrum.plugin.item.listener.AnvilListener;
 import sh.harold.fulcrum.plugin.item.listener.ItemEquipListener;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.item.durability.DurabilityService;
+import sh.harold.fulcrum.stats.core.StatCondition;
+import sh.harold.fulcrum.plugin.item.listener.CreativeSanitizerListener;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.logging.Level;
 
 public final class ItemEngine {
 
@@ -43,9 +52,11 @@ public final class ItemEngine {
     private final ItemStatBridge statBridge;
     private final sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer loreRenderer;
     private final DurabilityService durabilityService;
+    private final ArmorTrimRecipeBlocker armorTrimRecipeBlocker;
+    private final ItemLedgerRepository itemLedgerRepository;
     private ProtocolLoreAdapter loreAdapter;
 
-    public ItemEngine(JavaPlugin plugin, StatsModule statsModule, List<ItemDefinitionProvider> providers) {
+    public ItemEngine(JavaPlugin plugin, StatsModule statsModule, List<ItemDefinitionProvider> providers, ItemLedgerRepository itemLedgerRepository) {
         this.plugin = plugin;
         this.statsModule = statsModule;
         this.registry = new ItemRegistry();
@@ -54,12 +65,25 @@ public final class ItemEngine {
         this.enchantRegistry = new EnchantRegistry();
         this.enchantService = new EnchantService(enchantRegistry, itemPdc);
         registerDefaultEnchants();
-        this.resolver = new ItemResolver(registry, wrapperFactory, itemPdc, new VanillaStatResolver(), enchantRegistry);
+        this.resolver = new ItemResolver(
+            registry,
+            wrapperFactory,
+            itemPdc,
+            new VanillaStatResolver(),
+            enchantRegistry,
+            itemLedgerRepository,
+            plugin.getLogger()
+        );
         this.abilityService = new AbilityService();
-        this.statBridge = new ItemStatBridge(resolver, statsModule.statService());
-        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry, itemPdc);
+        this.statBridge = new ItemStatBridge(resolver, statsModule.statService(), statsModule.statSourceContextRegistry());
+        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry, itemPdc, statsModule.statRegistry());
         this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
+        this.armorTrimRecipeBlocker = new ArmorTrimRecipeBlocker(plugin);
+        this.itemLedgerRepository = itemLedgerRepository;
         loadDefinitions(providers);
+
+        PluginManager pluginManager = plugin.getServer().getPluginManager();
+        pluginManager.registerEvents(new CreativeSanitizerListener(this), plugin);
     }
 
     public ItemResolver resolver() {
@@ -89,9 +113,20 @@ public final class ItemEngine {
         return loreRenderer;
     }
 
+    public ItemRegistry registry() {
+        return registry;
+    }
+
     public java.util.Optional<org.bukkit.inventory.ItemStack> createItem(String id) {
+        return createItem(id, ItemCreationSource.SYSTEM, null);
+    }
+
+    public java.util.Optional<org.bukkit.inventory.ItemStack> createItem(String id, ItemCreationSource source, java.util.UUID creatorId) {
+        java.util.Objects.requireNonNull(source, "source");
         return registry.get(id).map(definition -> {
             org.bukkit.inventory.ItemStack initialized = resolver.initializeItem(definition);
+            java.util.UUID instanceId = itemPdc.readInstanceId(initialized).orElse(null);
+            logInstance(definition.id(), instanceId, source, creatorId);
             return initialized;
         });
     }
@@ -105,6 +140,7 @@ public final class ItemEngine {
         pluginManager.registerEvents(durabilityService, plugin);
         pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
         pluginManager.registerEvents(new AnvilListener(plugin, resolver), plugin);
+        armorTrimRecipeBlocker.register();
     }
 
     public void disable() {
@@ -123,15 +159,26 @@ public final class ItemEngine {
         plugin.getLogger().info("Item engine loaded");
     }
 
+    private void logInstance(String itemId, UUID instanceId, ItemCreationSource source, UUID creatorId) {
+        if (itemLedgerRepository == null || instanceId == null) {
+            return;
+        }
+        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, source, creatorId, Instant.now());
+        itemLedgerRepository.append(record).exceptionally(throwable -> {
+            plugin.getLogger().log(Level.WARNING, "Failed to write item ledger for " + instanceId + " (" + itemId + ")", throwable);
+            return null;
+        });
+    }
+
     private void registerDefaultEnchants() {
         register("fulcrum:sharpness", "Sharpness", "Increases melee damage.", 7, StatIds.ATTACK_DAMAGE, 0.05, sharpnessCurve(), true, java.util.Set.of("fulcrum:smite", "fulcrum:bane_of_arthropods"));
-        register("fulcrum:smite", "Smite", "More damage to undead foes.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"));
-        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to arthropods.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"));
+        register("fulcrum:smite", "Smite", "More damage to undead foes.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"), StatCondition.whenTag("target:undead"));
+        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to arthropods.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"), StatCondition.whenTag("target:arthropod"));
 
         register("fulcrum:protection", "Protection", "Reduces incoming damage.", 4, StatIds.ARMOR, 1.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
-        register("fulcrum:fire_protection", "Fire Protection", "Reduces fire and lava damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
-        register("fulcrum:projectile_protection", "Projectile Protection", "Reduces projectile damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
-        register("fulcrum:blast_protection", "Blast Protection", "Reduces explosion damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:fire_protection", "Fire Protection", "Reduces fire and lava damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:fire"));
+        register("fulcrum:projectile_protection", "Projectile Protection", "Reduces projectile damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:projectile"));
+        register("fulcrum:blast_protection", "Blast Protection", "Reduces explosion damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:explosion"));
         register("fulcrum:feather_falling", "Feather Falling", "Softer landings from falls.", 4, StatIds.ARMOR, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
 
         register("fulcrum:power", "Power", "Increases bow damage.", 5, StatIds.ATTACK_DAMAGE, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
@@ -177,6 +224,10 @@ public final class ItemEngine {
     }
 
     private void register(String id, String name, String description, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel, sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve curve, boolean scaleAttackDamage, java.util.Set<String> incompatibilities) {
+        register(id, name, description, maxLevel, statId, perLevel, curve, scaleAttackDamage, incompatibilities, sh.harold.fulcrum.stats.core.StatCondition.always());
+    }
+
+    private void register(String id, String name, String description, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel, sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition.LevelCurve curve, boolean scaleAttackDamage, java.util.Set<String> incompatibilities, sh.harold.fulcrum.stats.core.StatCondition condition) {
         enchantRegistry.register(new EnchantDefinition(
             id,
             net.kyori.adventure.text.Component.text(name, net.kyori.adventure.text.format.NamedTextColor.AQUA),
@@ -185,7 +236,8 @@ public final class ItemEngine {
             statId == null ? java.util.Map.of() : java.util.Map.of(statId, perLevel),
             curve,
             scaleAttackDamage,
-            incompatibilities
+            incompatibilities,
+            condition
         ));
     }
 
