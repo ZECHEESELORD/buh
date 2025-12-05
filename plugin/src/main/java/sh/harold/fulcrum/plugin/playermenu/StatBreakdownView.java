@@ -823,11 +823,11 @@ final class StatBreakdownView {
     private MenuButton groupingToggle(StatViewState state, java.util.function.Consumer<StatViewState> action) {
         boolean grouping = state.groupingEnabled();
         return MenuButton.builder(Material.COMPARATOR)
-            .name(grouping ? "&bGrouping: On" : "&bGrouping: Off")
-            .secondary("View Mode")
-            .description(grouping
-                ? "Bucket sources by category."
-                : "Show sources without category grouping.")
+            .name("&bGroup By Category")
+            .secondary("Flatten Stats Menu")
+            .description("Groups all modifiers from the same category into one.")
+            .lore(Component.text("Enabled: " + (grouping ? "ON" : "OFF"), grouping ? NamedTextColor.GREEN : NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false))
             .slot(50)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleGrouping()))
@@ -837,11 +837,11 @@ final class StatBreakdownView {
     private MenuButton flattenToggle(StatViewState state, java.util.function.Consumer<StatViewState> action) {
         boolean flattened = state.flattenEnabled();
         return MenuButton.builder(Material.COBBLESTONE_SLAB)
-            .name(flattened ? "&eFlatten: On" : "&eFlatten: Off")
-            .secondary("Layout")
-            .description(flattened
-                ? "Show individual source cards."
-                : "Collapse sources inside their slots.")
+            .name("&eFlatten Stats Menu")
+            .secondary("Flatten Stats Menu")
+            .description("Breaks down modifiers on items so you can compare them individually.")
+            .lore(Component.text("Enabled: " + (flattened ? "ON" : "OFF"), flattened ? NamedTextColor.GREEN : NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false))
             .slot(51)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleFlatten()))
