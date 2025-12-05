@@ -300,9 +300,9 @@ final class StatBreakdownView {
 
     private String defaultSecondary(SourceEntry entry) {
         return switch (entry.view()) {
-            case SLOT -> "&8Slot Group";
-            case CATEGORY -> "&8Category";
-            case SLOT_CATEGORY -> "&8" + displaySlotName(resolveSlot(entry));
+            case SLOT -> "&8" + displaySlotName(resolveSlot(entry));
+            case CATEGORY -> "&8" + displayCategoryName(categoryOf(entry));
+            case SLOT_CATEGORY -> "&8" + displayCategoryName(categoryOf(entry));
             case INDIVIDUAL -> {
                 SourceCategory category = categoryOf(entry);
                 boolean isEnchant = category == SourceCategory.ENCHANT || entry.sourceId().value().toLowerCase(Locale.ROOT).contains("enchant");
@@ -569,7 +569,7 @@ final class StatBreakdownView {
         String description = "All sources from " + displaySlot.toLowerCase(Locale.ROOT) + ".";
         return new StatSourceContext(
             displaySlot,
-            "&8Slot",
+            "&8" + displaySlot,
             description,
             new ItemStack(slotMaterial(slotTag)),
             SourceCategory.UNKNOWN,
@@ -582,7 +582,7 @@ final class StatBreakdownView {
         boolean hasSlot = slotTag != null && !slotTag.isBlank();
         String displaySlot = hasSlot ? displaySlotName(slotTag) : "";
         String title = hasSlot ? displaySlot + " " + categoryName : categoryName + " Category";
-        String secondary = hasSlot ? "&8" + displaySlot : "&8Category";
+        String secondary = "&8" + categoryName;
         String description = hasSlot
             ? "Grouped " + categoryName.toLowerCase(Locale.ROOT) + " sources on " + displaySlot.toLowerCase(Locale.ROOT) + "."
             : "All " + categoryName.toLowerCase(Locale.ROOT) + " sources together.";
