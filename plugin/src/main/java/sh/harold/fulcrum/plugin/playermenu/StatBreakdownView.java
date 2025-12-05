@@ -193,7 +193,7 @@ final class StatBreakdownView {
 
             List<sh.harold.fulcrum.api.menu.component.MenuItem> items = new ArrayList<>();
             items.add(baseInnateItem(player, definition.id(), baseValue));
-            items.addAll(sources.stream().map(entry -> buildSourceItem(player, entry, state)).toList());
+            items.addAll(sources.stream().map(entry -> buildSourceMenuItem(player, definition, entry, state)).toList());
 
             menuService.createListMenu()
                 .title(humanize(definition.id().value()) + " Sources")
@@ -217,6 +217,29 @@ final class StatBreakdownView {
             plugin.getLogger().log(Level.SEVERE, "Failed to open stat sources for " + player.getUniqueId(), throwable);
             player.sendMessage("§cSources are snoozing; try again soon.");
         }
+    }
+
+    private void openGroupedDetail(Player player, StatDefinition definition, StatViewState state, SourceEntry parent, SourceDisplay display) {
+        StatViewState detailState = new StatViewState(StatGrouping.OFF, StatFlatten.ON, state.filter());
+        List<sh.harold.fulcrum.api.menu.component.MenuItem> items = parent.children().stream()
+            .map(entry -> (sh.harold.fulcrum.api.menu.component.MenuItem) buildSourceItem(player, entry, detailState))
+            .toList();
+
+        menuService.createListMenu()
+            .title(display.title() + " Details")
+            .rows(ROWS)
+            .addBorder(Material.BLACK_STAINED_GLASS_PANE)
+            .showPageIndicator(false)
+            .addButton(MenuButton.createPositionedClose(ROWS))
+            .addButton(statBackButton(definition, state))
+            .addItems(items)
+            .emptyMessage(Component.text("No sources found.", NamedTextColor.GRAY))
+            .buildAsync(player)
+            .exceptionally(throwable -> {
+                plugin.getLogger().log(Level.SEVERE, "Failed to open grouped stat sources for " + player.getUniqueId(), throwable);
+                player.sendMessage("§cSources are snoozing; try again soon.");
+                return null;
+            });
     }
 
     private MenuDisplayItem baseInnateItem(Player player, StatId statId, double baseValue) {
@@ -247,6 +270,13 @@ final class StatBreakdownView {
             item.setDisplayItem(stack);
         }
         return item;
+    }
+
+    private sh.harold.fulcrum.api.menu.component.MenuItem buildSourceMenuItem(Player player, StatDefinition definition, SourceEntry entry, StatViewState state) {
+        if (state.groupingEnabled() && entry.view() != SourceView.INDIVIDUAL) {
+            return buildGroupedSourceButton(player, definition, entry, state);
+        }
+        return buildSourceItem(player, entry, state);
     }
 
     private MenuDisplayItem buildSourceItem(Player player, SourceEntry entry, StatViewState state) {
@@ -283,6 +313,38 @@ final class StatBreakdownView {
             item.setDisplayItem(display.displayItem());
         }
         return item;
+    }
+
+    private MenuButton buildGroupedSourceButton(Player player, StatDefinition definition, SourceEntry entry, StatViewState state) {
+        double displayFlat = scale(entry.statId(), entry.totalFlat(), false);
+        var key = EntityKey.fromUuid(player.getUniqueId());
+        var context = contextRegistry.get(key, entry.sourceId()).orElse(entry.context());
+        SourceDisplay display = displayMetadata(entry, context);
+        TextColor color = colorFor(entry.statId());
+        String icon = visualIcon(entry.statId());
+        List<Component> lore = new ArrayList<>();
+        Component valueLine = Component.text()
+            .append(Component.text("Value: ", NamedTextColor.GRAY))
+            .append(Component.text(formattedSigned(displayFlat) + (icon.isBlank() ? "" : icon), color))
+            .decoration(TextDecoration.ITALIC, false)
+            .build();
+        lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
+        lore.add(valueLine);
+        lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
+        wrap(display.description(), 40).forEach(line -> lore.add(Component.text(line, NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)));
+
+        MenuButton button = MenuButton.builder(materialForSource(entry.sourceId()))
+            .name(toLegacy(color) + (icon.isBlank() ? "" : icon + " ") + display.title())
+            .secondary(display.secondary())
+            .lore(lore.toArray(new Component[0]))
+            .slot(-1)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(viewer -> openGroupedDetail(viewer, definition, state, entry, display))
+            .build();
+        if (display.displayItem() != null) {
+            button.setDisplayItem(display.displayItem());
+        }
+        return button;
     }
 
     private SourceDisplay displayMetadata(SourceEntry entry, StatSourceContext context) {
