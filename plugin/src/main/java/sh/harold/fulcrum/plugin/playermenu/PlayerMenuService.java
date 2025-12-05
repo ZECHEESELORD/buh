@@ -44,6 +44,13 @@ import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
+import sh.harold.fulcrum.stats.core.StatId;
+import sh.harold.fulcrum.stats.core.StatRegistry;
+import sh.harold.fulcrum.stats.core.StatVisual;
+import sh.harold.fulcrum.stats.core.StatIds;
+import sh.harold.fulcrum.stats.service.EntityKey;
+import sh.harold.fulcrum.stats.service.StatService;
+import sh.harold.fulcrum.plugin.item.stat.StatSourceContextRegistry;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -92,11 +99,15 @@ public final class PlayerMenuService {
     private final UsernameDisplayService usernameDisplayService;
     private final UnlockableService unlockableService;
     private final UnlockableRegistry unlockableRegistry;
+    private final StatService statService;
+    private final StatRegistry statRegistry;
+    private final StatSourceContextRegistry statSourceContextRegistry;
     private final PerkMenuView perkMenuView;
     private final NamespacedKey markerKey;
     private final NamespacedKey displayMaterialKey;
     private final ProtocolManager protocolManager;
     private final BankMenuView bankMenuView;
+    private final StatBreakdownView statBreakdownView;
 
     public PlayerMenuService(
         JavaPlugin plugin,
@@ -108,7 +119,10 @@ public final class PlayerMenuService {
         PlayerDirectoryService playerDirectoryService,
         ScoreboardService scoreboardService,
         UnlockableService unlockableService,
-        UnlockableRegistry unlockableRegistry
+        UnlockableRegistry unlockableRegistry,
+        StatService statService,
+        StatRegistry statRegistry,
+        sh.harold.fulcrum.plugin.item.stat.StatSourceContextRegistry contextRegistry
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = plugin.getLogger();
@@ -122,6 +136,9 @@ public final class PlayerMenuService {
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.unlockableRegistry = Objects.requireNonNull(unlockableRegistry, "unlockableRegistry");
+        this.statService = Objects.requireNonNull(statService, "statService");
+        this.statRegistry = Objects.requireNonNull(statRegistry, "statRegistry");
+        this.statSourceContextRegistry = Objects.requireNonNull(contextRegistry, "contextRegistry");
         this.markerKey = new NamespacedKey(plugin, "player_menu");
         this.displayMaterialKey = new NamespacedKey(plugin, "player_menu_display");
         this.protocolManager = plugin.getServer().getPluginManager().isPluginEnabled("ProtocolLib")
@@ -142,6 +159,14 @@ public final class PlayerMenuService {
             unlockableRegistry,
             this.players
         );
+        this.statBreakdownView = new StatBreakdownView(
+            plugin,
+            menuService,
+            statService,
+            statRegistry,
+            contextRegistry,
+            this::openMenu
+        );
         registerSpoofingAdapter();
     }
 
@@ -159,12 +184,21 @@ public final class PlayerMenuService {
 
     public CompletionStage<Void> openMenu(Player player) {
         Objects.requireNonNull(player, "player");
-        MenuDisplayItem headline = MenuDisplayItem.builder(Material.PLAYER_HEAD)
-            .name("&aPlayer Menu")
-            .secondary(player.getName())
-            .description("&7Features unlock soon; stay tuned.")
+        MenuButton headline = MenuButton.builder(Material.PLAYER_HEAD)
+            .name("&aYour Stats")
+            .secondary("View stat breakdowns")
+            .lore(statSummaryLore(player).toArray(String[]::new))
             .slot(MENU_HEADLINE_SLOT)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(statBreakdownView::open)
             .build();
+        ItemStack headlineStack = headline.getDisplayItem();
+        ItemMeta headlineMeta = headlineStack.getItemMeta();
+        if (headlineMeta instanceof SkullMeta skullMeta) {
+            skullMeta.setOwningPlayer(player);
+            headlineStack.setItemMeta(skullMeta);
+            headline.setDisplayItem(headlineStack);
+        }
 
         int closeSlot = MenuButton.getCloseSlot(MENU_ROWS);
         MenuButton settingsButton = MenuButton.builder(Material.REDSTONE_TORCH)
@@ -221,7 +255,7 @@ public final class PlayerMenuService {
                 .addButton(directoryButton)
                 .addButton(bankButton)
                 .addButton(perksButton)
-                .addItem(headline, MENU_HEADLINE_SLOT);
+                .addButton(headline);
 
             comingSoon.forEach(item -> builder.addItem(item, item.getSlot()));
 
@@ -953,6 +987,69 @@ public final class PlayerMenuService {
             }
         }
         return -1;
+    }
+
+    private List<String> statSummaryLore(Player player) {
+        var container = statService.getContainer(EntityKey.fromUuid(player.getUniqueId()));
+        List<String> lines = new ArrayList<>();
+        lines.add("");
+        lines.add(statLine(StatIds.MOVEMENT_SPEED, "Movement Speed", container.getStat(StatIds.MOVEMENT_SPEED)));
+        lines.add(statLine(StatIds.ATTACK_DAMAGE, "Attack Damage", container.getStat(StatIds.ATTACK_DAMAGE)));
+        lines.add(statLine(StatIds.ARMOR, "Defense", container.getStat(StatIds.ARMOR)));
+        lines.add(statLine(StatIds.CRIT_DAMAGE, "Crit Damage", container.getStat(StatIds.CRIT_DAMAGE)));
+        lines.add(statLine(StatIds.MAX_HEALTH, "Health", container.getStat(StatIds.MAX_HEALTH)));
+        lines.add("&8and more...");
+        lines.add("");
+        lines.add("&8Also accessible via /stats");
+        return lines;
+    }
+
+    private String statLine(StatId id, String label, double rawValue) {
+        double value = displayValue(id, rawValue);
+        String color = legacyColor(id);
+        String icon = visualIcon(id);
+        String suffix = StatIds.CRIT_DAMAGE.equals(id) ? "%" : "";
+        String name = (icon.isBlank() ? "" : icon + " ") + label;
+        return color + name + " &f" + format(value) + suffix;
+    }
+
+    private double displayValue(StatId id, double rawValue) {
+        if (StatIds.MOVEMENT_SPEED.equals(id)) {
+            return rawValue * 1000.0;
+        }
+        if (StatIds.CRIT_DAMAGE.equals(id)) {
+            return rawValue * 100.0;
+        }
+        return rawValue;
+    }
+
+    private String visualIcon(StatId id) {
+        StatVisual visual = statRegistry.get(id).visual();
+        return visual != null && visual.hasIcon() ? visual.icon() : "";
+    }
+
+    private String legacyColor(StatId id) {
+        if (StatIds.MAX_HEALTH.equals(id) || StatIds.ATTACK_DAMAGE.equals(id)) {
+            return "&c";
+        }
+        if (StatIds.ATTACK_SPEED.equals(id)) {
+            return "&e";
+        }
+        if (StatIds.MOVEMENT_SPEED.equals(id)) {
+            return "&f";
+        }
+        if (StatIds.ARMOR.equals(id)) {
+            return "&a";
+        }
+        if (StatIds.CRIT_DAMAGE.equals(id)) {
+            return "&9";
+        }
+        return "&7";
+    }
+
+    private String format(double value) {
+        java.text.DecimalFormat format = new java.text.DecimalFormat("#.##");
+        return format.format(value);
     }
 
     private record MenuItemPlacement(int menuSlot, MenuButton button) {
