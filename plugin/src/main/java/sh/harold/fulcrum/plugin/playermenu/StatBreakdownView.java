@@ -411,7 +411,7 @@ final class StatBreakdownView {
             return entries;
         }
         if (flattened) {
-            return grouped ? aggregateBySlotAndCategory(entries, false) : entries;
+            return grouped ? aggregateBySlotAndCategory(entries, true) : entries;
         }
         if (!grouped) {
             return aggregateBySlot(entries);
