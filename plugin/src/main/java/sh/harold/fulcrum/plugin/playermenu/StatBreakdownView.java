@@ -231,7 +231,7 @@ final class StatBreakdownView {
             .addBorder(Material.BLACK_STAINED_GLASS_PANE)
             .showPageIndicator(false)
             .addButton(MenuButton.createPositionedClose(ROWS))
-            .addButton(statBackButton(definition, state))
+            .addButton(groupedBackButton(definition, state))
             .addItems(items)
             .emptyMessage(Component.text("No sources found.", NamedTextColor.GRAY))
             .buildAsync(player)
@@ -407,6 +407,17 @@ final class StatBreakdownView {
             .slot(MenuButton.getBackSlot(ROWS))
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> open(player, state))
+            .build();
+    }
+
+    private MenuButton groupedBackButton(StatDefinition definition, StatViewState state) {
+        return MenuButton.builder(Material.ARROW)
+            .name("&7Back")
+            .secondary("Stat Sources")
+            .description("Return to grouped sources.")
+            .slot(MenuButton.getBackSlot(ROWS))
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(player -> openSources(player, definition, state))
             .build();
     }
 
