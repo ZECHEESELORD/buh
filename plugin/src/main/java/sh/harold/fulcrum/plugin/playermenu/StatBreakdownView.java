@@ -758,16 +758,14 @@ final class StatBreakdownView {
         if (meta == null) {
             return List.of();
         }
-        Component name = meta.displayName();
-        if (name == null) {
-            String localized = displayItem.getI18NDisplayName();
-            if (localized != null && !localized.isBlank()) {
-                name = Component.text(localized, NamedTextColor.WHITE);
-            } else {
-                name = Component.text(humanize(displayItem.getType().name()), NamedTextColor.WHITE);
-            }
-        }
-        name = name.decoration(TextDecoration.ITALIC, false);
+        NamedTextColor color = Optional.ofNullable(meta.displayName())
+            .flatMap(component -> Optional.ofNullable(component.color()))
+            .map(raw -> raw instanceof NamedTextColor named ? named : NamedTextColor.nearestTo(raw))
+            .orElse(NamedTextColor.WHITE);
+        String baseName = Optional.ofNullable(displayItem.getI18NDisplayName())
+            .filter(raw -> !raw.isBlank())
+            .orElse(humanize(displayItem.getType().name()));
+        Component name = Component.text(baseName, color).decoration(TextDecoration.ITALIC, false);
         Component spacer = Component.empty().decoration(TextDecoration.ITALIC, false);
         Component label = Component.text("Flattened from:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
         return List.of(spacer, label, name);
