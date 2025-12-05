@@ -180,7 +180,6 @@ public final class ItemBrowserService {
     private MenuButton buildFilterButton(ItemBrowserState state) {
         return MenuButton.builder(Material.COMPARATOR)
             .name("&dFilters")
-            .secondary("Filters")
             .lore(filterSummaryLore(state).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(FILTER_SLOT)
@@ -191,7 +190,6 @@ public final class ItemBrowserService {
     private MenuButton buildSortButton(ItemBrowserState state) {
         return MenuButton.builder(Material.HOPPER)
             .name("&6Sort Order")
-            .secondary("Filters")
             .lore(sortLore(state.sort()).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(SORT_SLOT)
@@ -202,7 +200,6 @@ public final class ItemBrowserService {
     private MenuButton buildSourceFilterButton(ItemBrowserState state) {
         return MenuButton.builder(Material.NETHER_STAR)
             .name("&bItem Source")
-            .secondary("Filters")
             .description("Toggle between custom items, vanilla items, or both.")
             .lore(sourceLore(state.sourceFilter()).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
@@ -217,7 +214,6 @@ public final class ItemBrowserService {
     private MenuButton buildRarityFilterButton(ItemBrowserState state) {
         return MenuButton.builder(Material.AMETHYST_SHARD)
             .name("&dRarity Filter")
-            .secondary("Filters")
             .description("Showing " + state.rarityFilter().label() + " items.")
             .lore(rarityLore(state.rarityFilter()).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
@@ -304,7 +300,6 @@ public final class ItemBrowserService {
         int slot = 48;
         return MenuButton.builder(Material.ARROW)
             .name("&aBack to Browser")
-            .secondary("Navigation")
             .description("Return to the item list with these filters.")
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(slot)
