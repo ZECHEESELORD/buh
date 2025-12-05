@@ -137,7 +137,9 @@ public final class ItemBrowserService {
 
     private void ensureVanillaSeeded() {
         if (vanillaSeeded.compareAndSet(false, true)) {
-            itemEngine.ensureVanillaDefinitions(Arrays.asList(Material.values()));
+            itemEngine.ensureVanillaDefinitions(Arrays.stream(Material.values())
+                .filter(material -> !material.isLegacy())
+                .toList());
         }
     }
 
