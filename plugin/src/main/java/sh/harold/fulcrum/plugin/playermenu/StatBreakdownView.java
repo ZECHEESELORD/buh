@@ -57,7 +57,6 @@ final class StatBreakdownView {
         sh.harold.fulcrum.stats.core.StatIds.CRIT_DAMAGE.value(), Material.GOLDEN_SWORD
     );
     private static final List<String> SLOT_ORDER = List.of(
-        "ARMOR",
         "HELMET",
         "CHESTPLATE",
         "LEGGINGS",
@@ -466,7 +465,7 @@ final class StatBreakdownView {
     private List<SourceEntry> aggregateBySlotAndCategory(List<SourceEntry> entries) {
         Map<String, Map<SourceCategory, List<SourceEntry>>> grouped = new LinkedHashMap<>();
         for (SourceEntry entry : entries) {
-            String slot = slotKey(entry, true);
+            String slot = resolveSlot(entry);
             SourceCategory category = categoryOf(entry);
             grouped.computeIfAbsent(slot, ignored -> new LinkedHashMap<>())
                 .computeIfAbsent(category, ignored -> new ArrayList<>())
@@ -529,14 +528,6 @@ final class StatBreakdownView {
             return "DEFAULT";
         }
         return "MISC";
-    }
-
-    private String slotKey(SourceEntry entry, boolean collapseArmor) {
-        String slot = resolveSlot(entry);
-        if (collapseArmor && (slot.equals("HELMET") || slot.equals("CHESTPLATE") || slot.equals("LEGGINGS") || slot.equals("BOOTS"))) {
-            return "ARMOR";
-        }
-        return slot;
     }
 
     private int slotIndex(String slotTag) {
