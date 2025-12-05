@@ -22,7 +22,8 @@ public final class StaffCreativeService implements Listener {
 
     public static final String CREATIVE_TAG = "fulcrum:staff_creative";
 
-    private static final Component BAR_TEXT = Component.text("Staff Creative", NamedTextColor.AQUA);
+    private static final Component STAFF_PREFIX = Component.text("[STAFF] ", NamedTextColor.AQUA);
+    private static final NamedTextColor STAFF_ACCENT = NamedTextColor.AQUA;
 
     private final JavaPlugin plugin;
     private final StaffGuard staffGuard;
@@ -50,7 +51,7 @@ public final class StaffCreativeService implements Listener {
             player.getAllowFlight(),
             player.isFlying(),
             player.isInvulnerable(),
-            BossBar.bossBar(BAR_TEXT, 1.0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS)
+            bossBar()
         );
         sessions.put(id, session);
 
@@ -104,5 +105,12 @@ public final class StaffCreativeService implements Listener {
     }
 
     private record Session(GameMode previousMode, boolean allowedFlight, boolean wasFlying, boolean invulnerable, BossBar bar) {
+    }
+
+    private BossBar bossBar() {
+        Component label = STAFF_PREFIX
+            .append(Component.text("Creative Mode", STAFF_ACCENT))
+            .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false);
+        return BossBar.bossBar(label, 1.0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
     }
 }

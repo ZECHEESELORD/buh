@@ -288,4 +288,8 @@ public final class BuhPlugin extends JavaPlugin {
             }
         };
     }
+
+    public MessageService messageService() {
+        return messageService;
+    }
 }
