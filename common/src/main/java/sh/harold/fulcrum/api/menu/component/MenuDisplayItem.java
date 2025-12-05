@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.fulcrum.api.menu.util.ColorUtils;
@@ -50,6 +51,7 @@ public class MenuDisplayItem implements MenuItem {
     private void updateItemMeta() {
         ItemMeta meta = displayItem.getItemMeta();
         if (meta != null) {
+            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
             if (name != null) {
                 meta.displayName(name);
             }
@@ -78,10 +80,7 @@ public class MenuDisplayItem implements MenuItem {
     @Override
     public void setDisplayItem(ItemStack itemStack) {
         this.displayItem = Objects.requireNonNull(itemStack, "ItemStack cannot be null").clone();
-        // Preserve name and lore if they exist
-        if (name != null || !lore.isEmpty()) {
-            updateItemMeta();
-        }
+        updateItemMeta();
     }
 
     @Override
