@@ -146,6 +146,7 @@ public final class ItemEngine {
         Objects.requireNonNull(materials, "materials");
         return materials.stream()
             .filter(Material::isItem)
+            .filter(material -> !material.isLegacy())
             .filter(material -> !VANILLA_EXCLUDES.contains(material))
             .map(material -> registry.getOrCreateVanilla(material, wrapperFactory))
             .toList();
