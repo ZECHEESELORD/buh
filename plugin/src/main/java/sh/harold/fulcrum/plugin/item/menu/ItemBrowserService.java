@@ -231,9 +231,7 @@ public final class ItemBrowserService {
         String queryLabel = state.searchQuery().isBlank() ? "None" : state.searchQuery();
         return MenuButton.builder(Material.OAK_SIGN)
             .name("&bSearch Items")
-            .secondary("Filters")
             .description("Current query: " + queryLabel)
-            .lore(Component.text("Click to enter text to filter names.", NamedTextColor.YELLOW))
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(SEARCH_SLOT)
             .onClick(this::promptSearch)
