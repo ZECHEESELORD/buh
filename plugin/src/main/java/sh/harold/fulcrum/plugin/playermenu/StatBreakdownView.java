@@ -268,8 +268,8 @@ final class StatBreakdownView {
         }
         if (!entry.children().isEmpty()) {
             lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("Includes:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
-            entry.children().forEach(child -> lore.add(contributionLine(child, entry.view())));
+            lore.add(Component.text("Flat Bonuses:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+            entry.children().forEach(child -> lore.add(flatContributionLine(child)));
         }
         lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
         wrap(display.description(), 40).forEach(line -> lore.add(Component.text(line, NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)));
@@ -323,24 +323,15 @@ final class StatBreakdownView {
         };
     }
 
-    private Component contributionLine(SourceEntry entry, SourceView parentView) {
-        String slotLabel = displaySlotName(resolveSlot(entry));
-        String categoryLabel = displayCategoryName(categoryOf(entry));
-        String leading = switch (parentView) {
-            case CATEGORY -> slotLabel;
-            case SLOT -> categoryLabel;
-            case SLOT_CATEGORY, INDIVIDUAL -> "";
-        };
-        String name = displayMetadata(entry, entry.context()).title();
-        String label = leading.isBlank() ? name : leading + " -> " + name;
+    private Component flatContributionLine(SourceEntry entry) {
         TextColor color = colorFor(entry.statId());
         String icon = visualIcon(entry.statId());
         double displayFlat = scale(entry.statId(), entry.totalFlat(), false);
+        String title = displayMetadata(entry, entry.context()).title();
         return Component.text()
-            .append(Component.text("- ", NamedTextColor.GRAY))
-            .append(Component.text(label, NamedTextColor.DARK_GRAY))
-            .append(Component.text(": ", NamedTextColor.GRAY))
-            .append(Component.text(formattedSigned(displayFlat) + (icon.isBlank() ? "" : icon), color))
+            .append(Component.text(" ", NamedTextColor.GRAY))
+            .append(Component.text(formattedSigned(displayFlat) + (icon.isBlank() ? "" : icon) + " ", color))
+            .append(Component.text(title, NamedTextColor.WHITE))
             .decoration(TextDecoration.ITALIC, false)
             .build();
     }
