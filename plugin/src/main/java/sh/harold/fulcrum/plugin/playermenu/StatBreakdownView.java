@@ -851,7 +851,6 @@ final class StatBreakdownView {
         boolean flattened = state.flattenEnabled();
         return MenuButton.builder(Material.COBBLESTONE_SLAB)
             .name("&eFlatten Stats Menu")
-            .secondary("Flatten Stats Menu")
             .description("Breaks down modifiers on items so you can compare them individually.")
             .lore(Component.empty().decoration(TextDecoration.ITALIC, false), enabledLine(flattened))
             .slot(51)
