@@ -353,8 +353,12 @@ final class StatBreakdownView {
             .name("&aToggle Show All Stats")
             .secondary("Show All Stats")
             .description("Toggle whether you want to see ALL SMP statistics, or just the ones you have.")
-            .lore(Component.text("Show all stats: " + (positiveOnly ? "Nope" : "Yup"), positiveOnly ? NamedTextColor.RED : NamedTextColor.GREEN)
-                .decoration(TextDecoration.ITALIC, false))
+            .lore(
+                Component.empty().decoration(TextDecoration.ITALIC, false),
+                Component.text("Show all stats: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                    .append(Component.text(positiveOnly ? "Nope" : "Yup", positiveOnly ? NamedTextColor.RED : NamedTextColor.GREEN)
+                        .decoration(TextDecoration.ITALIC, false))
+            )
             .slot(50)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleFilter()))
