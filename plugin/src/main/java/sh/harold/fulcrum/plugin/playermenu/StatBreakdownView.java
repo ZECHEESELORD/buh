@@ -840,7 +840,7 @@ final class StatBreakdownView {
         return MenuButton.builder(Material.COMPARATOR)
             .name("&bGroup By Category")
             .description("Groups all modifiers from the same category into one.")
-            .lore(enabledLine(grouping))
+            .lore(Component.empty().decoration(TextDecoration.ITALIC, false), enabledLine(grouping))
             .slot(50)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleGrouping()))
