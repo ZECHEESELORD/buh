@@ -750,6 +750,23 @@ final class StatBreakdownView {
         };
     }
 
+    private NamedTextColor rarityColor(Material material) {
+        String name = material.name();
+        if (name.contains("NETHERITE")) {
+            return NamedTextColor.GOLD;
+        }
+        if (name.contains("DIAMOND")) {
+            return NamedTextColor.GREEN;
+        }
+        if (name.contains("GOLD")) {
+            return NamedTextColor.YELLOW;
+        }
+        if (name.contains("IRON")) {
+            return NamedTextColor.WHITE;
+        }
+        return NamedTextColor.WHITE;
+    }
+
     private List<Component> flattenedFrom(ItemStack displayItem) {
         if (displayItem == null) {
             return List.of();
@@ -761,7 +778,7 @@ final class StatBreakdownView {
         NamedTextColor color = Optional.ofNullable(meta.displayName())
             .flatMap(component -> Optional.ofNullable(component.color()))
             .map(raw -> raw instanceof NamedTextColor named ? named : NamedTextColor.nearestTo(raw))
-            .orElse(NamedTextColor.WHITE);
+            .orElse(rarityColor(displayItem.getType()));
         String baseName = Optional.ofNullable(displayItem.getI18NDisplayName())
             .filter(raw -> !raw.isBlank())
             .orElse(humanize(displayItem.getType().name()));
