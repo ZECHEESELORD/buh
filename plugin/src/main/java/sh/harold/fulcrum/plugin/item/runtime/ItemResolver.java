@@ -19,12 +19,14 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.NamespacedKey;
 
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,47 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class ItemResolver {
 
-    private static final Map<Enchantment, String> ENCHANT_IDS = Map.ofEntries(
-        Map.entry(Enchantment.SHARPNESS, "fulcrum:sharpness"),
-        Map.entry(Enchantment.SMITE, "fulcrum:smite"),
-        Map.entry(Enchantment.BANE_OF_ARTHROPODS, "fulcrum:bane_of_arthropods"),
-        Map.entry(Enchantment.PROTECTION, "fulcrum:protection"),
-        Map.entry(Enchantment.FIRE_PROTECTION, "fulcrum:fire_protection"),
-        Map.entry(Enchantment.PROJECTILE_PROTECTION, "fulcrum:projectile_protection"),
-        Map.entry(Enchantment.BLAST_PROTECTION, "fulcrum:blast_protection"),
-        Map.entry(Enchantment.FEATHER_FALLING, "fulcrum:feather_falling"),
-        Map.entry(Enchantment.POWER, "fulcrum:power"),
-        Map.entry(Enchantment.PUNCH, "fulcrum:punch"),
-        Map.entry(Enchantment.KNOCKBACK, "fulcrum:knockback"),
-        Map.entry(Enchantment.LOOTING, "fulcrum:looting"),
-        Map.entry(Enchantment.SWEEPING_EDGE, "fulcrum:sweeping_edge"),
-        Map.entry(Enchantment.FIRE_ASPECT, "fulcrum:fire_aspect"),
-        Map.entry(Enchantment.FLAME, "fulcrum:flame"),
-        Map.entry(Enchantment.INFINITY, "fulcrum:infinity"),
-        Map.entry(Enchantment.LOYALTY, "fulcrum:loyalty"),
-        Map.entry(Enchantment.CHANNELING, "fulcrum:channeling"),
-        Map.entry(Enchantment.RIPTIDE, "fulcrum:riptide"),
-        Map.entry(Enchantment.IMPALING, "fulcrum:impaling"),
-        Map.entry(Enchantment.MULTISHOT, "fulcrum:multishot"),
-        Map.entry(Enchantment.PIERCING, "fulcrum:piercing"),
-        Map.entry(Enchantment.QUICK_CHARGE, "fulcrum:quick_charge"),
-        Map.entry(Enchantment.DEPTH_STRIDER, "fulcrum:depth_strider"),
-        Map.entry(Enchantment.FROST_WALKER, "fulcrum:frost_walker"),
-        Map.entry(Enchantment.SOUL_SPEED, "fulcrum:soul_speed"),
-        Map.entry(Enchantment.SWIFT_SNEAK, "fulcrum:swift_sneak"),
-        Map.entry(Enchantment.AQUA_AFFINITY, "fulcrum:aqua_affinity"),
-        Map.entry(Enchantment.RESPIRATION, "fulcrum:respiration"),
-        Map.entry(Enchantment.UNBREAKING, "fulcrum:unbreaking"),
-        Map.entry(Enchantment.MENDING, "fulcrum:mending"),
-        Map.entry(Enchantment.SILK_TOUCH, "fulcrum:silk_touch"),
-        Map.entry(Enchantment.FORTUNE, "fulcrum:fortune"),
-        Map.entry(Enchantment.LURE, "fulcrum:lure"),
-        Map.entry(Enchantment.LUCK_OF_THE_SEA, "fulcrum:luck_of_the_sea"),
-        Map.entry(Enchantment.THORNS, "fulcrum:thorns"),
-        Map.entry(Enchantment.BINDING_CURSE, "fulcrum:curse_of_binding"),
-        Map.entry(Enchantment.VANISHING_CURSE, "fulcrum:curse_of_vanishing"),
-        Map.entry(Enchantment.EFFICIENCY, "fulcrum:efficiency")
-    );
+    private static final Map<Enchantment, String> ENCHANT_IDS = buildEnchantIds();
 
     private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = Set.of(
         Enchantment.SHARPNESS,
@@ -100,6 +62,53 @@ public final class ItemResolver {
     private final Logger logger;
     private final BlockedItemMasker blockedItemMasker;
     private final Set<UUID> ledgerChecked = ConcurrentHashMap.newKeySet();
+
+    private static Map<Enchantment, String> buildEnchantIds() {
+        Map<Enchantment, String> ids = new LinkedHashMap<>();
+        ids.put(Enchantment.SHARPNESS, "fulcrum:sharpness");
+        ids.put(Enchantment.SMITE, "fulcrum:smite");
+        ids.put(Enchantment.BANE_OF_ARTHROPODS, "fulcrum:bane_of_arthropods");
+        ids.put(Enchantment.PROTECTION, "fulcrum:protection");
+        ids.put(Enchantment.FIRE_PROTECTION, "fulcrum:fire_protection");
+        ids.put(Enchantment.PROJECTILE_PROTECTION, "fulcrum:projectile_protection");
+        ids.put(Enchantment.BLAST_PROTECTION, "fulcrum:blast_protection");
+        ids.put(Enchantment.FEATHER_FALLING, "fulcrum:feather_falling");
+        ids.put(Enchantment.POWER, "fulcrum:power");
+        ids.put(Enchantment.PUNCH, "fulcrum:punch");
+        ids.put(Enchantment.KNOCKBACK, "fulcrum:knockback");
+        ids.put(Enchantment.LOOTING, "fulcrum:looting");
+        ids.put(Enchantment.SWEEPING_EDGE, "fulcrum:sweeping_edge");
+        ids.put(Enchantment.FIRE_ASPECT, "fulcrum:fire_aspect");
+        ids.put(Enchantment.FLAME, "fulcrum:flame");
+        ids.put(Enchantment.INFINITY, "fulcrum:infinity");
+        ids.put(Enchantment.LOYALTY, "fulcrum:loyalty");
+        ids.put(Enchantment.CHANNELING, "fulcrum:channeling");
+        ids.put(Enchantment.RIPTIDE, "fulcrum:riptide");
+        ids.put(Enchantment.IMPALING, "fulcrum:impaling");
+        ids.put(Enchantment.MULTISHOT, "fulcrum:multishot");
+        ids.put(Enchantment.PIERCING, "fulcrum:piercing");
+        ids.put(Enchantment.QUICK_CHARGE, "fulcrum:quick_charge");
+        ids.put(Enchantment.DEPTH_STRIDER, "fulcrum:depth_strider");
+        ids.put(Enchantment.FROST_WALKER, "fulcrum:frost_walker");
+        ids.put(Enchantment.SOUL_SPEED, "fulcrum:soul_speed");
+        ids.put(Enchantment.SWIFT_SNEAK, "fulcrum:swift_sneak");
+        ids.put(Enchantment.AQUA_AFFINITY, "fulcrum:aqua_affinity");
+        ids.put(Enchantment.RESPIRATION, "fulcrum:respiration");
+        ids.put(Enchantment.UNBREAKING, "fulcrum:unbreaking");
+        ids.put(Enchantment.MENDING, "fulcrum:mending");
+        ids.put(Enchantment.SILK_TOUCH, "fulcrum:silk_touch");
+        ids.put(Enchantment.FORTUNE, "fulcrum:fortune");
+        ids.put(Enchantment.LURE, "fulcrum:lure");
+        ids.put(Enchantment.LUCK_OF_THE_SEA, "fulcrum:luck_of_the_sea");
+        ids.put(Enchantment.THORNS, "fulcrum:thorns");
+        ids.put(Enchantment.BINDING_CURSE, "fulcrum:curse_of_binding");
+        ids.put(Enchantment.VANISHING_CURSE, "fulcrum:curse_of_vanishing");
+        ids.put(Enchantment.EFFICIENCY, "fulcrum:efficiency");
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:density"));
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:breach"));
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:wind_burst"));
+        return Map.copyOf(ids);
+    }
 
     public ItemResolver(
         ItemRegistry registry,
@@ -132,12 +141,8 @@ public final class ItemResolver {
             working = itemPdc.setIdInPlace(working, definition.id());
         }
         if (blockedItemMasker.isBlocked(working)) {
-            ItemStack masked = blockedItemMasker.mask(working);
-            String maskedId = itemPdc.readId(masked).orElse(definition.id());
-            CustomItem maskedDefinition = registry.get(maskedId).orElse(definition);
-            String maskedDefinitionId = maskedDefinition.id();
-            itemPdc.readInstanceId(masked).ifPresent(instanceId -> ensureLedgerRecord(instanceId, maskedDefinitionId));
-            return Optional.of(new ItemInstance(maskedDefinition, masked, Map.of(), Map.of(), enchantRegistry, DurabilityState.from(null)));
+            working = blockedItemMasker.sanitizeToVanilla(working);
+            definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
         }
         final String resolvedDefinitionId = definition.id();
         Map<StatId, Double> stats = itemPdc.readStats(working).orElse(null);

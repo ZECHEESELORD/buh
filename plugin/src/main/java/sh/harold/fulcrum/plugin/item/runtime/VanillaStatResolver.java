@@ -126,7 +126,7 @@ public final class VanillaStatResolver {
     }
 
     private void registerMace() {
-        registerIfPresent("MACE", 7.0, 0.6, 0.0);
+        registerIfPresent("MACE", 6.0, 0.6, 0.0);
     }
 
     private void registerArmor(Material material, double armor, double critDamage) {

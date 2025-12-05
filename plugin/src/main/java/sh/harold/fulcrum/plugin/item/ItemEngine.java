@@ -260,6 +260,19 @@ public final class ItemEngine {
         register("fulcrum:curse_of_binding", "Curse of Binding", "Cannot remove once equipped.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:curse_of_vanishing", "Curse of Vanishing", "Item disappears on death.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:efficiency", "Efficiency", "Faster mining speed.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:density", "Density", "Smash deals more damage per fallen block.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(
+            "fulcrum:sharpness",
+            "fulcrum:smite",
+            "fulcrum:bane_of_arthropods",
+            "fulcrum:breach"
+        ));
+        register("fulcrum:breach", "Breach", "Smash pierces armor effectiveness.", 4, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(
+            "fulcrum:sharpness",
+            "fulcrum:smite",
+            "fulcrum:bane_of_arthropods",
+            "fulcrum:density"
+        ));
+        register("fulcrum:wind_burst", "Wind Burst", "Smash creates a gust on impact.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
     }
 
     private void register(String id, String name, int maxLevel, sh.harold.fulcrum.stats.core.StatId statId, double perLevel) {
