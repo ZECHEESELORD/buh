@@ -685,10 +685,15 @@ final class StatBreakdownView {
         if (meta == null) {
             return List.of();
         }
-        Component name = meta.hasDisplayName()
-            ? meta.displayName()
-            : Component.text(humanize(displayItem.getType().name()), NamedTextColor.DARK_GRAY);
-        name = name == null ? Component.text(humanize(displayItem.getType().name()), NamedTextColor.DARK_GRAY) : name;
+        Component name = meta.displayName();
+        if (name == null) {
+            String localized = displayItem.getI18NDisplayName();
+            if (localized != null && !localized.isBlank()) {
+                name = Component.text(localized, NamedTextColor.WHITE);
+            } else {
+                name = Component.text(humanize(displayItem.getType().name()), NamedTextColor.WHITE);
+            }
+        }
         name = name.decoration(TextDecoration.ITALIC, false);
         Component spacer = Component.empty().decoration(TextDecoration.ITALIC, false);
         Component label = Component.text("Flattened from:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
