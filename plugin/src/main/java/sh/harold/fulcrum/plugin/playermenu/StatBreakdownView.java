@@ -842,7 +842,7 @@ final class StatBreakdownView {
             .name("&eFlatten Stats Menu")
             .secondary("Flatten Stats Menu")
             .description("Breaks down modifiers on items so you can compare them individually.")
-            .lore(enabledLine(flattened))
+            .lore(Component.empty().decoration(TextDecoration.ITALIC, false), enabledLine(flattened))
             .slot(51)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleFlatten()))
