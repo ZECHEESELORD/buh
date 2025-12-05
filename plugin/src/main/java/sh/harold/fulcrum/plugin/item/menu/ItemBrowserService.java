@@ -311,9 +311,11 @@ public final class ItemBrowserService {
 
     private List<Component> filterSummaryLore(ItemBrowserState state) {
         Component source = Component.text("➜ Source: ", NamedTextColor.YELLOW)
-            .append(sourceDisplay(state.sourceFilter()));
+            .append(sourceDisplay(state.sourceFilter()))
+            .decoration(TextDecoration.ITALIC, false);
         Component rarity = Component.text("➜ Rarity: ", NamedTextColor.YELLOW)
-            .append(rarityDisplay(state.rarityFilter()));
+            .append(rarityDisplay(state.rarityFilter()))
+            .decoration(TextDecoration.ITALIC, false);
         return List.of(source, rarity);
     }
 
@@ -329,14 +331,14 @@ public final class ItemBrowserService {
         boolean selected = filter == current;
         Component pointer = Component.text(selected ? "➜ " : "   ", NamedTextColor.YELLOW);
         Component display = sourceDisplay(filter).decoration(TextDecoration.BOLD, selected);
-        return pointer.append(display);
+        return pointer.append(display).decoration(TextDecoration.ITALIC, false);
     }
 
     private Component rarityLoreLine(ItemRarityFilter filter, ItemRarityFilter current) {
         boolean selected = filter == current;
         Component pointer = Component.text(selected ? "➜ " : "   ", NamedTextColor.YELLOW);
         Component display = rarityDisplay(filter);
-        return pointer.append(display);
+        return pointer.append(display).decoration(TextDecoration.ITALIC, false);
     }
 
     private List<Component> rarityLore(ItemRarityFilter current) {
@@ -360,12 +362,14 @@ public final class ItemBrowserService {
         String pointer = selected ? "➜ " : "   ";
         NamedTextColor color = selected ? NamedTextColor.YELLOW : NamedTextColor.GRAY;
         return Component.text(pointer + label, color)
-            .decoration(TextDecoration.BOLD, selected);
+            .decoration(TextDecoration.BOLD, selected)
+            .decoration(TextDecoration.ITALIC, false);
     }
 
     private Component sourceDisplay(SourceFilter filter) {
         return Component.text(filter.label(), filter.color())
-            .decoration(TextDecoration.BOLD, true);
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false);
     }
 
     private Component rarityDisplay(ItemRarityFilter filter) {
@@ -377,7 +381,8 @@ public final class ItemBrowserService {
                 .append(Component.text(" (", NamedTextColor.DARK_GRAY))
                 .append(label)
                 .append(Component.text(")", NamedTextColor.DARK_GRAY))
-                .build();
+                .build()
+                .decoration(TextDecoration.ITALIC, false);
         }
         ItemRarity rarity = filter.rarity;
         int filled = switch (rarity) {
@@ -402,7 +407,8 @@ public final class ItemBrowserService {
             .append(Component.text(" (", NamedTextColor.DARK_GRAY))
             .append(label)
             .append(Component.text(")", NamedTextColor.DARK_GRAY))
-            .build();
+            .build()
+            .decoration(TextDecoration.ITALIC, false);
     }
 
     private boolean matchesSearch(ItemBrowserState state, ItemEntry entry) {
