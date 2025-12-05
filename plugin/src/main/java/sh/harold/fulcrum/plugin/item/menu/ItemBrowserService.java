@@ -336,18 +336,18 @@ public final class ItemBrowserService {
     }
 
     private List<Component> filterSummaryLore(ItemBrowserState state) {
-        Component spacer = Component.text(" ").decoration(TextDecoration.ITALIC, false);
         Component source = Component.text("Source: ", NamedTextColor.YELLOW)
             .append(sourceDisplay(state.sourceFilter()))
             .decoration(TextDecoration.ITALIC, false);
         Component rarity = Component.text("Rarity: ", NamedTextColor.YELLOW)
             .append(rarityDisplay(state.rarityFilter()))
             .decoration(TextDecoration.ITALIC, false);
-        return List.of(spacer, source, rarity);
+        return List.of(spacer(), source, rarity);
     }
 
     private List<Component> sourceLore(SourceFilter current) {
         return List.of(
+            spacer(),
             sourceLoreLine(SourceFilter.BOTH, current),
             sourceLoreLine(SourceFilter.CUSTOM, current),
             sourceLoreLine(SourceFilter.VANILLA, current)
@@ -370,6 +370,7 @@ public final class ItemBrowserService {
 
     private List<Component> rarityLore(ItemRarityFilter current) {
         return List.of(
+            spacer(),
             rarityLoreLine(ItemRarityFilter.ANY, current),
             rarityLoreLine(ItemRarityFilter.COMMON, current),
             rarityLoreLine(ItemRarityFilter.UNCOMMON, current),
@@ -380,10 +381,9 @@ public final class ItemBrowserService {
     }
 
     private List<Component> sortLore(ItemSort current) {
-        Component spacer = Component.text(" ").decoration(TextDecoration.ITALIC, false);
         Component name = sortLine("Sort by Name", current == ItemSort.NAME);
         Component type = sortLine("Sort by Item Type", current == ItemSort.TYPE);
-        return List.of(spacer, name, type);
+        return List.of(spacer(), name, type);
     }
 
     private Component sortLine(String label, boolean selected) {
@@ -483,6 +483,10 @@ public final class ItemBrowserService {
             case EPIC -> "Epic";
             case LEGENDARY -> "Legendary";
         };
+    }
+
+    private Component spacer() {
+        return Component.text(" ").decoration(TextDecoration.ITALIC, false);
     }
 
     private NamedTextColor rarityColor(ItemRarity rarity) {
