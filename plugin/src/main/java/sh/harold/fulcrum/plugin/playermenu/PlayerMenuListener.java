@@ -18,6 +18,7 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import sh.harold.fulcrum.plugin.staff.StaffCreativeService;
 
 import java.util.Objects;
 
@@ -54,6 +55,10 @@ final class PlayerMenuListener implements Listener {
         }
 
         event.setCancelled(true);
+        if (event.getPlayer().getScoreboardTags().contains(StaffCreativeService.CREATIVE_TAG)) {
+            event.getPlayer().performCommand("item");
+            return;
+        }
         menuService.openMenu(event.getPlayer())
             .exceptionally(throwable -> {
                 event.getPlayer().sendMessage("§cFailed to open the player menu; try again soon.");

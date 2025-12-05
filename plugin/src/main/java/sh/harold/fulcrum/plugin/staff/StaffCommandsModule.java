@@ -15,9 +15,12 @@ import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 import sh.harold.fulcrum.plugin.staff.command.OpenInventoryCommand;
 import sh.harold.fulcrum.plugin.staff.VanishService;
 import sh.harold.fulcrum.plugin.staff.command.DumpDataCommand;
+import sh.harold.fulcrum.plugin.staff.command.EmergencyCreativeCommand;
 import sh.harold.fulcrum.plugin.staff.command.LoopCommand;
+import sh.harold.fulcrum.plugin.staff.command.StaffGamemodeCommand;
 import sh.harold.fulcrum.plugin.staff.command.SudoCommand;
 import sh.harold.fulcrum.plugin.staff.command.VanishCommand;
+import sh.harold.fulcrum.plugin.staff.StaffCreativeService;
 
 import java.util.Objects;
 import java.util.Set;
@@ -32,6 +35,7 @@ public final class StaffCommandsModule implements FulcrumModule {
     private StaffGuard staffGuard;
     private VanishService vanishService;
     private OpenInventoryService openInventoryService;
+    private StaffCreativeService staffCreativeService;
 
     public StaffCommandsModule(JavaPlugin plugin, LuckPermsModule luckPermsModule, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -50,7 +54,9 @@ public final class StaffCommandsModule implements FulcrumModule {
         DataApi dataApi = dataModule.dataApi().orElseThrow(() -> new IllegalStateException("DataApi not available"));
         vanishService = new VanishService(plugin, staffGuard, dataApi);
         openInventoryService = new OpenInventoryService(plugin, dataApi);
+        staffCreativeService = new StaffCreativeService(plugin, staffGuard);
         plugin.getServer().getPluginManager().registerEvents(vanishService, plugin);
+        plugin.getServer().getPluginManager().registerEvents(staffCreativeService, plugin);
         openInventoryService.registerListeners();
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
@@ -60,6 +66,9 @@ public final class StaffCommandsModule implements FulcrumModule {
     public CompletionStage<Void> disable() {
         if (vanishService != null) {
             vanishService.revealAll();
+        }
+        if (staffCreativeService != null) {
+            staffCreativeService.disableAll();
         }
         return CompletableFuture.completedFuture(null);
     }
@@ -71,5 +80,10 @@ public final class StaffCommandsModule implements FulcrumModule {
         registrar.register(new VanishCommand(plugin, staffGuard, vanishService).build(), "vanish", java.util.List.of());
         registrar.register(new OpenInventoryCommand(staffGuard, openInventoryService).build(), "openinv", java.util.List.of("openinventory"));
         registrar.register(new DumpDataCommand(plugin, staffGuard, dataModule).build(), "dumpdata", java.util.List.of());
+        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).build(), "gamemode", java.util.List.of());
+        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gmc", "creative"), "gmc", java.util.List.of());
+        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gms", "survival"), "gms", java.util.List.of());
+        registrar.register(new StaffGamemodeCommand(staffGuard, staffCreativeService).alias("gmsp", "spectator"), "gmsp", java.util.List.of());
+        registrar.register(new EmergencyCreativeCommand(staffGuard).build(), "ireallywantcreativemode", java.util.List.of());
     }
 }
