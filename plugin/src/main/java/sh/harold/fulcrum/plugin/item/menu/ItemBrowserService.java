@@ -206,7 +206,7 @@ public final class ItemBrowserService {
             .description("Toggle between custom items, vanilla items, or both.")
             .lore(sourceLore(state.sourceFilter()).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
-            .slot(11)
+            .slot(21)
             .onClick(player -> {
                 updateSession(player, ItemBrowserState::nextSource);
                 reopenFilterMenu(player);
@@ -221,7 +221,7 @@ public final class ItemBrowserService {
             .description("Showing " + state.rarityFilter().label() + " items.")
             .lore(rarityLore(state.rarityFilter()).toArray(Component[]::new))
             .sound(Sound.UI_BUTTON_CLICK)
-            .slot(15)
+            .slot(23)
             .onClick(player -> {
                 updateSession(player, ItemBrowserState::nextRarity);
                 reopenFilterMenu(player);
@@ -277,15 +277,15 @@ public final class ItemBrowserService {
     private void openFilterMenu(Player player, ItemBrowserSession session) {
         CustomMenuBuilder builder = menuService.createMenuBuilder()
             .title("Item Filters")
-            .viewPort(3)
-            .rows(3)
-            .addBorder(Material.BLACK_STAINED_GLASS_PANE)
+            .viewPort(6)
+            .rows(6)
+            .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
             .autoCloseButton(false);
 
         builder.addButton(buildSourceFilterButton(session.state()));
         builder.addButton(buildRarityFilterButton(session.state()));
         builder.addButton(buildBackButton());
-        builder.addButton(MenuButton.createPositionedClose(3));
+        builder.addButton(MenuButton.createPositionedClose(6));
 
         builder.buildAsync(player)
             .thenAccept(menu -> {
@@ -301,7 +301,7 @@ public final class ItemBrowserService {
     }
 
     private MenuButton buildBackButton() {
-        int slot = MenuButton.getCloseSlot(3) - 2;
+        int slot = MenuButton.getCloseSlot(6) - 4;
         return MenuButton.builder(Material.ARROW)
             .name("&aBack to Browser")
             .secondary("Navigation")
