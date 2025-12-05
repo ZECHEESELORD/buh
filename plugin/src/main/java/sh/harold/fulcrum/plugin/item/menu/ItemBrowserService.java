@@ -629,12 +629,12 @@ public final class ItemBrowserService {
     }
 
     private enum ItemRarityFilter {
-        ANY("All Rarities", null),
-        COMMON("Common", ItemRarity.COMMON),
-        UNCOMMON("Uncommon", ItemRarity.UNCOMMON),
-        RARE("Rare", ItemRarity.RARE),
-        EPIC("Epic", ItemRarity.EPIC),
-        LEGENDARY("Legendary", ItemRarity.LEGENDARY);
+        ANY("ALL", null),
+        COMMON("COMMON", ItemRarity.COMMON),
+        UNCOMMON("UNCOMMON", ItemRarity.UNCOMMON),
+        RARE("RARE", ItemRarity.RARE),
+        EPIC("EPIC", ItemRarity.EPIC),
+        LEGENDARY("LEGENDARY", ItemRarity.LEGENDARY);
 
         private final String label;
         private final ItemRarity rarity;
