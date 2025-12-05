@@ -3,6 +3,7 @@ package sh.harold.fulcrum.plugin.item.visual;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
@@ -28,6 +29,8 @@ import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
 import sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
+import sh.harold.fulcrum.stats.core.StatRegistry;
+import sh.harold.fulcrum.stats.core.StatVisual;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -45,11 +48,13 @@ public final class ItemLoreRenderer {
     private final ItemResolver resolver;
     private final EnchantRegistry enchantRegistry;
     private final sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc;
+    private final StatRegistry statRegistry;
 
-    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry, sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc) {
+    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry, sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc, StatRegistry statRegistry) {
         this.resolver = resolver;
         this.enchantRegistry = enchantRegistry;
         this.itemPdc = itemPdc;
+        this.statRegistry = statRegistry;
     }
 
     public ItemStack render(ItemStack stack, Player viewer) {
@@ -57,6 +62,7 @@ public final class ItemLoreRenderer {
     }
 
     private ItemStack renderInstance(ItemInstance instance, Player viewer) {
+        ItemMeta sourceMeta = instance.stack().getItemMeta();
         ItemStack clone = instance.stack().clone();
         ItemMeta meta = clone.getItemMeta();
         if (meta == null) {
@@ -70,12 +76,12 @@ public final class ItemLoreRenderer {
         Component baseName = visual != null && visual.hasDisplayName()
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
-        Component displayName = rarityColorize(baseName, visual);
-        meta.displayName(noItalics(displayName));
+        Component defaultDisplayName = rarityColorize(baseName, visual);
+        meta.displayName(noItalics(defaultDisplayName));
         ensureGlint(meta, instance);
 
         StatSnapshot stats = buildStats(instance);
-        String anvilName = customName(definition.material(), stats.meta());
+        String anvilName = customName(sourceMeta, defaultDisplayName, definition.material());
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
             switch (section) {
@@ -96,10 +102,7 @@ public final class ItemLoreRenderer {
         if (!lore.isEmpty()) {
             lore.add(noItalics(Component.empty()));
         }
-        String idLabel = definition.id().startsWith("vanilla:")
-            ? definition.material().name()
-            : definition.id();
-        lore.add(noItalics(Component.text("ID: " + idLabel, NamedTextColor.DARK_GRAY)));
+        lore.add(noItalics(Component.text("ID: " + formattedId(definition), NamedTextColor.DARK_GRAY)));
         meta.lore(lore.stream().map(this::noItalics).toList());
         mirrorVanillaBar(meta, instance);
         clone.setItemMeta(meta);
@@ -132,7 +135,7 @@ public final class ItemLoreRenderer {
         List<Component> lines = new ArrayList<>();
         appendStatIfPresent(lines, allStats, StatIds.ATTACK_DAMAGE, "Damage", false);
         appendStatIfPresent(lines, allStats, StatIds.ATTACK_SPEED, "Attack Speed", false);
-        appendStatIfPresent(lines, allStats, StatIds.ARMOR, "Armor", false);
+        appendStatIfPresent(lines, allStats, StatIds.ARMOR, "Defense", false);
         appendStatIfPresent(lines, allStats, StatIds.MAX_HEALTH, "Max Health", false);
         appendStatIfPresent(lines, allStats, StatIds.MOVEMENT_SPEED, "Movement Speed", false);
         appendStatIfPresent(lines, allStats, StatIds.CRIT_DAMAGE, "Crit Damage", true);
@@ -141,7 +144,7 @@ public final class ItemLoreRenderer {
             allStats.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(StatId::value)))
                 .forEach(entry -> {
-                    Component line = statLine(labelFor(entry.getKey()), entry.getValue(), false);
+                    Component line = statLine(entry.getKey(), labelFor(entry.getKey()), entry.getValue(), false);
                     if (!line.equals(Component.empty())) {
                         lines.add(line);
                     }
@@ -197,7 +200,7 @@ public final class ItemLoreRenderer {
                 first = false;
             }
         } else {
-            List<String> labels = new ArrayList<>();
+            List<Component> labels = new ArrayList<>();
             for (Map.Entry<String, Integer> entry : entries) {
                 EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
                 if (definition == null) {
@@ -206,10 +209,13 @@ public final class ItemLoreRenderer {
                 int level = entry.getValue();
                 String levelLabel = roman(level);
                 String name = plain(definition.displayName());
-                labels.add(name + " " + levelLabel);
+                NamedTextColor color = level > definition.maxLevel() ? NamedTextColor.GOLD : NamedTextColor.BLUE;
+                labels.add(Component.text(name + " " + levelLabel, color));
             }
-            String joined = String.join(", ", labels);
-            wrap(Component.text(joined, NamedTextColor.BLUE), 40).forEach(lore::add);
+            if (labels.isEmpty()) {
+                return;
+            }
+            lore.addAll(wrapComponents(labels, 40));
         }
         lore.add(Component.empty());
     }
@@ -303,6 +309,17 @@ public final class ItemLoreRenderer {
         };
     }
 
+    private String formattedId(CustomItem definition) {
+        String raw = definition.id();
+        if (!raw.contains(":")) {
+            raw = "fulcrum:" + raw;
+        }
+        int colon = raw.indexOf(':');
+        String namespace = colon >= 0 ? raw.substring(0, colon) : raw;
+        String path = colon >= 0 && colon + 1 < raw.length() ? raw.substring(colon + 1) : "";
+        return namespace + ":" + path.toUpperCase(Locale.ROOT);
+    }
+
     private StatSnapshot buildStats(ItemInstance instance) {
         Map<StatId, Double> stats = instance.computeFinalStats();
         return new StatSnapshot(stats, instance.stack().getItemMeta());
@@ -324,20 +341,25 @@ public final class ItemLoreRenderer {
     }
 
     private void addStatLine(List<Component> lore, String label, double value) {
-        lore.add(statLine(label, value, false));
+        lore.add(statLine(null, label, value, false));
     }
 
     private void addStatLine(List<Component> lore, String label, double value, String suffix) {
-        lore.add(statLine(label, value, true));
+        lore.add(statLine(null, label, value, true));
     }
 
-    private Component statLine(String label, double value, boolean percent) {
+    private Component statLine(StatId id, String label, double value, boolean percent) {
         if (Double.compare(value, 0.0) == 0) {
             return Component.empty();
         }
         String suffix = percent ? "%" : "";
+        double displayValue = percent ? value * 100.0 : value;
+        String number = (displayValue >= 0 ? "+" : "") + STAT_FORMAT.format(displayValue) + suffix;
+        StatVisual visual = visualFor(id);
+        TextColor color = visual.hasColor() ? TextColor.fromCSSHexString(visual.color()) : NamedTextColor.RED;
+        String icon = visual.hasIcon() ? visual.icon() : "";
         return Component.text(label + ": ", NamedTextColor.GRAY)
-            .append(Component.text("+" + STAT_FORMAT.format(percent ? value * 100.0 : value) + suffix, NamedTextColor.RED));
+            .append(Component.text(number + icon, color == null ? NamedTextColor.RED : color));
     }
 
     private void appendStatIfPresent(List<Component> lore, Map<StatId, Double> stats, StatId id, String label, boolean percent) {
@@ -345,9 +367,22 @@ public final class ItemLoreRenderer {
         if (value == null || Double.compare(value, 0.0) == 0) {
             return;
         }
-        Component line = statLine(label, value, percent);
+        double displayValue = StatIds.MOVEMENT_SPEED.equals(id) ? value * 1000.0 : value;
+        Component line = statLine(id, label, displayValue, percent);
         if (!line.equals(Component.empty())) {
             lore.add(line);
+        }
+    }
+
+    private StatVisual visualFor(StatId id) {
+        if (statRegistry == null || id == null) {
+            return StatVisual.empty();
+        }
+        try {
+            StatVisual visual = statRegistry.get(id).visual();
+            return visual == null ? StatVisual.empty() : visual;
+        } catch (IllegalArgumentException ignored) {
+            return StatVisual.empty();
         }
     }
 
@@ -451,16 +486,23 @@ public final class ItemLoreRenderer {
         return builder.toString();
     }
 
-    private String customName(org.bukkit.Material material, ItemMeta meta) {
+    private String customName(ItemMeta meta, Component defaultDisplayName, org.bukkit.Material material) {
         if (meta == null || !meta.hasDisplayName()) {
             return null;
         }
-        String plain = PlainTextComponentSerializer.plainText().serialize(meta.displayName());
-        String base = material == null ? "" : material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
-        if (plain.equalsIgnoreCase(base)) {
+        String plainName = plain(meta.displayName()).trim();
+        if (plainName.isEmpty()) {
             return null;
         }
-        return plain;
+        String defaultPlain = plain(defaultDisplayName).trim();
+        if (!defaultPlain.isEmpty() && plainName.equalsIgnoreCase(defaultPlain)) {
+            return null;
+        }
+        String base = material == null ? "" : material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        if (!base.isBlank() && plainName.equalsIgnoreCase(base)) {
+            return null;
+        }
+        return plainName;
     }
 
     private record StatSnapshot(Map<StatId, Double> all, ItemMeta meta) {
@@ -560,6 +602,34 @@ public final class ItemLoreRenderer {
         return lines.stream()
             .map(line -> Component.text(line, component.color() == null ? NamedTextColor.GRAY : component.color()))
             .collect(Collectors.toList());
+    }
+
+    private List<Component> wrapComponents(List<Component> components, int maxChars) {
+        List<Component> lines = new ArrayList<>();
+        Component current = Component.empty();
+        int currentLength = 0;
+        boolean firstInLine = true;
+        for (Component component : components) {
+            int length = plain(component).length();
+            int separatorLength = firstInLine ? 0 : 2; // ", "
+            if (currentLength + separatorLength + length > maxChars && !firstInLine) {
+                lines.add(current);
+                current = Component.empty();
+                currentLength = 0;
+                firstInLine = true;
+                separatorLength = 0;
+            }
+            if (!firstInLine) {
+                current = current.append(Component.text(", ", NamedTextColor.DARK_GRAY));
+            }
+            current = current.append(component);
+            currentLength += separatorLength + length;
+            firstInLine = false;
+        }
+        if (!firstInLine) {
+            lines.add(current);
+        }
+        return lines;
     }
 
     private String plain(Component component) {
