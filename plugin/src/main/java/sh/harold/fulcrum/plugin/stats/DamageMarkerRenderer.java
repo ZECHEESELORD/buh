@@ -74,7 +74,7 @@ final class DamageMarkerRenderer {
     private Component buildText(double damage, boolean critical) {
         String formatted = DAMAGE_FORMAT.get().format(damage);
         Component base = Component.text(
-            critical ? formatted + " \u2620" : formatted,
+            critical ? formatted + "\u2620" : formatted,
             critical ? NamedTextColor.RED : NamedTextColor.GRAY
         );
         return base.decoration(TextDecoration.ITALIC, false);

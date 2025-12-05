@@ -102,7 +102,6 @@ public final class ItemLoreRenderer {
         if (!lore.isEmpty()) {
             lore.add(noItalics(Component.empty()));
         }
-        lore.add(noItalics(Component.text("ID: " + formattedId(definition), NamedTextColor.DARK_GRAY)));
         meta.lore(lore.stream().map(this::noItalics).toList());
         mirrorVanillaBar(meta, instance);
         clone.setItemMeta(meta);

@@ -11,9 +11,12 @@ import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
 import sh.harold.fulcrum.plugin.stats.binding.ArmorVisualStatBinding;
 import sh.harold.fulcrum.plugin.stats.binding.MaxHealthStatBinding;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
+import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.stats.binding.StatBindingManager;
 import sh.harold.fulcrum.stats.core.StatRegistry;
 import sh.harold.fulcrum.stats.service.StatService;
+import sh.harold.fulcrum.plugin.item.stat.StatSourceContextRegistry;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -21,21 +24,26 @@ import java.util.concurrent.CompletionStage;
 public final class StatsModule implements FulcrumModule, ConfigurableModule {
 
     private final JavaPlugin plugin;
+    private final PlayerDataModule playerDataModule;
     private FeatureConfigService configService;
     private StatMappingConfig mappingConfig;
     private StatRegistry statRegistry;
     private StatService statService;
+    private StatSourceContextRegistry statSourceContextRegistry;
     private StatBindingManager bindingManager;
+    private PlayerSettingsService playerSettingsService;
+    private DamageMarkerRenderer damageMarkerRenderer;
     private StatEntityListener statEntityListener;
     private StatDamageListener statDamageListener;
 
-    public StatsModule(JavaPlugin plugin) {
+    public StatsModule(JavaPlugin plugin, PlayerDataModule playerDataModule) {
         this.plugin = plugin;
+        this.playerDataModule = playerDataModule;
     }
 
     @Override
     public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.of(ModuleId.of("rpg-stats"), ModuleCategory.GAMEPLAY);
+        return ModuleDescriptor.of(ModuleId.of("rpg-stats"), ModuleCategory.GAMEPLAY, ModuleId.of("player-data"));
     }
 
     @Override
@@ -43,7 +51,11 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         configService = new FeatureConfigService(plugin);
         statRegistry = StatRegistry.withDefaults();
         statService = new StatService(statRegistry);
+        statSourceContextRegistry = new StatSourceContextRegistry();
         bindingManager = new StatBindingManager();
+        playerSettingsService = playerDataModule.playerSettingsService()
+            .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available for stats"));
+        damageMarkerRenderer = new DamageMarkerRenderer(plugin, playerSettingsService);
         refreshConfiguration(loadMappingConfig());
         return CompletableFuture.completedFuture(null);
     }
@@ -77,6 +89,10 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         return statRegistry;
     }
 
+    public StatSourceContextRegistry statSourceContextRegistry() {
+        return statSourceContextRegistry;
+    }
+
     public StatMappingConfig mappingConfig() {
         return mappingConfig;
     }
@@ -106,7 +122,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         unregisterListeners();
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         statEntityListener = new StatEntityListener(statService);
-        statDamageListener = new StatDamageListener(statService, mappingConfig);
+        statDamageListener = new StatDamageListener(statService, mappingConfig, damageMarkerRenderer);
         pluginManager.registerEvents(statEntityListener, plugin);
         pluginManager.registerEvents(statDamageListener, plugin);
     }

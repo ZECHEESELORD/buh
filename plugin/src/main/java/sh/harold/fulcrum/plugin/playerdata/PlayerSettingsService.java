@@ -20,13 +20,16 @@ public final class PlayerSettingsService {
     private static final String SCOREBOARD_PATH = "settings.scoreboard.enabled";
     private static final String PVP_PATH = "settings.pvp.enabled";
     private static final String USERNAME_VIEW_PATH = "settings.username.view";
+    private static final String DAMAGE_MARKERS_PATH = "settings.damage.markers.enabled";
     private static final boolean DEFAULT_SCOREBOARD = true;
     private static final boolean DEFAULT_PVP = false;
+    private static final boolean DEFAULT_DAMAGE_MARKERS = true;
     private static final UsernameView DEFAULT_USERNAME_VIEW = UsernameView.MINECRAFT;
 
     private final DocumentCollection players;
     private final Map<UUID, Boolean> pvpCache;
     private final Map<UUID, UsernameView> usernameViewCache;
+    private final Map<UUID, Boolean> damageMarkerCache;
     private final Map<UUID, PlayerSettings> settingsCache;
 
     public PlayerSettingsService(DataApi dataApi) {
@@ -34,6 +37,7 @@ public final class PlayerSettingsService {
         this.players = dataApi.collection("players");
         this.pvpCache = new ConcurrentHashMap<>();
         this.usernameViewCache = new ConcurrentHashMap<>();
+        this.damageMarkerCache = new ConcurrentHashMap<>();
         this.settingsCache = new ConcurrentHashMap<>();
     }
 
@@ -53,12 +57,21 @@ public final class PlayerSettingsService {
             });
     }
 
+    public CompletionStage<Boolean> areDamageMarkersEnabled(UUID playerId) {
+        return loadSettings(playerId)
+            .thenApply(PlayerSettings::damageMarkersEnabled)
+            .exceptionally(throwable -> {
+                throw new CompletionException("Failed to load damage marker setting for " + playerId, throwable);
+            });
+    }
+
     public CompletionStage<PlayerSettings> loadSettings(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         PlayerSettings cached = settingsCache.get(playerId);
         if (cached != null) {
             cachePvp(playerId, cached.pvpEnabled());
             cacheUsernameView(playerId, cached.usernameView());
+            cacheDamageMarkers(playerId, cached.damageMarkersEnabled());
             return CompletableFuture.completedFuture(cached);
         }
         return players.load(playerId.toString())
@@ -78,6 +91,11 @@ public final class PlayerSettingsService {
         return persistSetting(playerId, PVP_PATH, enabled, true, "PvP");
     }
 
+    public CompletionStage<Boolean> setDamageMarkersEnabled(UUID playerId, boolean enabled) {
+        Objects.requireNonNull(playerId, "playerId");
+        return persistSetting(playerId, DAMAGE_MARKERS_PATH, enabled, false, "damage markers");
+    }
+
     public CompletionStage<UsernameView> setUsernameView(UUID playerId, UsernameView view) {
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(view, "view");
@@ -85,7 +103,12 @@ public final class PlayerSettingsService {
             .thenCompose(document -> document.set(USERNAME_VIEW_PATH, view.name()).thenApply(ignored -> view))
             .thenApply(updated -> {
                 cacheUsernameView(playerId, updated);
-                updateCachedSettings(playerId, settings -> new PlayerSettings(settings.scoreboardEnabled(), settings.pvpEnabled(), updated));
+                updateCachedSettings(playerId, settings -> new PlayerSettings(
+                    settings.scoreboardEnabled(),
+                    settings.pvpEnabled(),
+                    updated,
+                    settings.damageMarkersEnabled()
+                ));
                 return updated;
             })
             .exceptionally(throwable -> {
@@ -103,6 +126,11 @@ public final class PlayerSettingsService {
         return toggleSetting(playerId, PVP_PATH, DEFAULT_PVP, true, "PvP");
     }
 
+    public CompletionStage<Boolean> toggleDamageMarkers(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return toggleSetting(playerId, DAMAGE_MARKERS_PATH, DEFAULT_DAMAGE_MARKERS, false, "damage markers");
+    }
+
     public CompletionStage<UsernameView> toggleUsernameView(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         return players.load(playerId.toString())
@@ -115,7 +143,12 @@ public final class PlayerSettingsService {
             })
             .thenApply(updated -> {
                 cacheUsernameView(playerId, updated);
-                updateCachedSettings(playerId, settings -> new PlayerSettings(settings.scoreboardEnabled(), settings.pvpEnabled(), updated));
+                updateCachedSettings(playerId, settings -> new PlayerSettings(
+                    settings.scoreboardEnabled(),
+                    settings.pvpEnabled(),
+                    updated,
+                    settings.damageMarkersEnabled()
+                ));
                 return updated;
             })
             .exceptionally(throwable -> {
@@ -126,6 +159,11 @@ public final class PlayerSettingsService {
     public boolean cachedPvpEnabled(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         return pvpCache.getOrDefault(playerId, DEFAULT_PVP);
+    }
+
+    public boolean cachedDamageMarkersEnabled(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return damageMarkerCache.getOrDefault(playerId, DEFAULT_DAMAGE_MARKERS);
     }
 
     public boolean hasCachedPvp(UUID playerId) {
@@ -141,6 +179,7 @@ public final class PlayerSettingsService {
     public void evictCachedSettings(UUID playerId) {
         pvpCache.remove(Objects.requireNonNull(playerId, "playerId"));
         usernameViewCache.remove(playerId);
+        damageMarkerCache.remove(playerId);
         settingsCache.remove(playerId);
     }
 
@@ -148,9 +187,11 @@ public final class PlayerSettingsService {
         Optional<Boolean> scoreboardStored = document.get(SCOREBOARD_PATH, Boolean.class);
         Optional<Boolean> pvpStored = document.get(PVP_PATH, Boolean.class);
         Optional<String> usernameViewStored = document.get(USERNAME_VIEW_PATH, String.class);
+        Optional<Boolean> damageMarkersStored = document.get(DAMAGE_MARKERS_PATH, Boolean.class);
 
         boolean scoreboardEnabled = scoreboardStored.orElse(DEFAULT_SCOREBOARD);
         boolean pvpEnabled = pvpStored.orElse(DEFAULT_PVP);
+        boolean damageMarkersEnabled = damageMarkersStored.orElse(DEFAULT_DAMAGE_MARKERS);
         UsernameView usernameView = usernameViewStored
             .map(UsernameView::fromConfig)
             .orElse(DEFAULT_USERNAME_VIEW);
@@ -165,6 +206,9 @@ public final class PlayerSettingsService {
         if (usernameViewStored.isEmpty()) {
             defaults.put(USERNAME_VIEW_PATH, usernameView.name());
         }
+        if (damageMarkersStored.isEmpty()) {
+            defaults.put(DAMAGE_MARKERS_PATH, damageMarkersEnabled);
+        }
 
         CompletionStage<Void> persist = defaults.isEmpty()
             ? CompletableFuture.completedFuture(null)
@@ -173,7 +217,8 @@ public final class PlayerSettingsService {
         return persist.thenApply(ignored -> {
             cachePvp(playerId, pvpEnabled);
             cacheUsernameView(playerId, usernameView);
-            PlayerSettings settings = new PlayerSettings(scoreboardEnabled, pvpEnabled, usernameView);
+            cacheDamageMarkers(playerId, damageMarkersEnabled);
+            PlayerSettings settings = new PlayerSettings(scoreboardEnabled, pvpEnabled, usernameView, damageMarkersEnabled);
             settingsCache.put(playerId, settings);
             return settings;
         });
@@ -186,9 +231,10 @@ public final class PlayerSettingsService {
                 if (cachePvp) {
                     cachePvp(playerId, updated);
                 }
-                updateCachedSettings(playerId, settings -> path.equals(SCOREBOARD_PATH)
-                    ? new PlayerSettings(updated, settings.pvpEnabled(), settings.usernameView())
-                    : new PlayerSettings(settings.scoreboardEnabled(), updated, settings.usernameView()));
+                if (path.equals(DAMAGE_MARKERS_PATH)) {
+                    cacheDamageMarkers(playerId, updated);
+                }
+                updateCachedSettings(playerId, settings -> updatedSettings(settings, path, updated));
                 return updated;
             })
             .exceptionally(throwable -> {
@@ -207,9 +253,10 @@ public final class PlayerSettingsService {
                 if (cachePvp) {
                     cachePvp(playerId, updated);
                 }
-                updateCachedSettings(playerId, settings -> path.equals(SCOREBOARD_PATH)
-                    ? new PlayerSettings(updated, settings.pvpEnabled(), settings.usernameView())
-                    : new PlayerSettings(settings.scoreboardEnabled(), updated, settings.usernameView()));
+                if (path.equals(DAMAGE_MARKERS_PATH)) {
+                    cacheDamageMarkers(playerId, updated);
+                }
+                updateCachedSettings(playerId, settings -> updatedSettings(settings, path, updated));
                 return updated;
             })
             .exceptionally(throwable -> {
@@ -225,14 +272,32 @@ public final class PlayerSettingsService {
         usernameViewCache.put(playerId, view);
     }
 
+    private void cacheDamageMarkers(UUID playerId, boolean enabled) {
+        damageMarkerCache.put(playerId, enabled);
+    }
+
+    private PlayerSettings updatedSettings(PlayerSettings settings, String path, boolean updatedValue) {
+        if (path.equals(SCOREBOARD_PATH)) {
+            return new PlayerSettings(updatedValue, settings.pvpEnabled(), settings.usernameView(), settings.damageMarkersEnabled());
+        }
+        if (path.equals(PVP_PATH)) {
+            return new PlayerSettings(settings.scoreboardEnabled(), updatedValue, settings.usernameView(), settings.damageMarkersEnabled());
+        }
+        if (path.equals(DAMAGE_MARKERS_PATH)) {
+            return new PlayerSettings(settings.scoreboardEnabled(), settings.pvpEnabled(), settings.usernameView(), updatedValue);
+        }
+        return settings;
+    }
+
     private void updateCachedSettings(UUID playerId, UnaryOperator<PlayerSettings> mutator) {
         settingsCache.compute(playerId, (id, existing) -> {
             PlayerSettings base = existing == null
-                ? new PlayerSettings(DEFAULT_SCOREBOARD, DEFAULT_PVP, DEFAULT_USERNAME_VIEW)
+                ? new PlayerSettings(DEFAULT_SCOREBOARD, DEFAULT_PVP, DEFAULT_USERNAME_VIEW, DEFAULT_DAMAGE_MARKERS)
                 : existing;
             PlayerSettings updated = mutator.apply(base);
             cachePvp(id, updated.pvpEnabled());
             cacheUsernameView(id, updated.usernameView());
+            cacheDamageMarkers(id, updated.damageMarkersEnabled());
             return updated;
         });
     }

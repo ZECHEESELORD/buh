@@ -22,6 +22,11 @@ public final class StatContainer {
         return ensureInstance(id).getFinalValue();
     }
 
+    public double getStat(StatId id, ConditionContext context) {
+        Objects.requireNonNull(id, "id");
+        return ensureInstance(id).compute(context == null ? ConditionContext.empty() : context);
+    }
+
     public void setBase(StatId id, double baseValue) {
         Objects.requireNonNull(id, "id");
         StatInstance instance = ensureInstance(id);

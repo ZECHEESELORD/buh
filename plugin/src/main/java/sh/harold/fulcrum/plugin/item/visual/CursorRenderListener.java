@@ -6,6 +6,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.api.menu.impl.MenuInventoryHolder;
 
@@ -34,7 +35,17 @@ public final class CursorRenderListener implements Listener {
             if (cursor == null || cursor.getType().isAir()) {
                 return;
             }
+            ItemMeta originalMeta = cursor.getItemMeta();
             ItemStack rendered = renderer.render(cursor, player);
+            // Preserve any existing custom name on the server-side stack; we only want
+            // to override names in the outbound packet, not mutate persisted state.
+            if (originalMeta != null) {
+                ItemMeta renderedMeta = rendered.getItemMeta();
+                if (renderedMeta != null) {
+                    renderedMeta.displayName(originalMeta.displayName());
+                    rendered.setItemMeta(renderedMeta);
+                }
+            }
             if (!rendered.equals(cursor)) {
                 player.setItemOnCursor(rendered);
             }

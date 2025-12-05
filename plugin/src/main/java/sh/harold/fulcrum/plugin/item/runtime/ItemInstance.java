@@ -45,14 +45,17 @@ public final class ItemInstance {
         }
         Map<StatId, Double> result = new HashMap<>(baseStats);
         double baseAttackDamage = result.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
-        for (Map.Entry<String, Integer> entry : enchants.entrySet()) {
-            EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
+        enchants.forEach((id, level) -> {
+            EnchantDefinition definition = enchantRegistry.get(id).orElse(null);
             if (definition == null) {
-                continue;
+                return;
             }
-            Map<StatId, Double> bonuses = definition.bonusForLevel(entry.getValue(), baseAttackDamage);
+            Map<StatId, Double> bonuses = definition.bonusForLevel(level, baseAttackDamage);
+            if (!definition.condition().isAlways()) {
+                return; // Avoid overstating conditionally applied stats in the unconditional view.
+            }
             bonuses.forEach((statId, value) -> result.merge(statId, value, Double::sum));
-        }
+        });
         return Map.copyOf(result);
     }
 
@@ -68,13 +71,15 @@ public final class ItemInstance {
         return Optional.ofNullable(durabilityState);
     }
 
-    public Map<String, Map<StatId, Double>> statSources() {
+    public Map<String, Map<StatId, StatContribution>> statSources() {
         if (durabilityState != null && durabilityState.defunct()) {
             return Map.of();
         }
-        Map<String, Map<StatId, Double>> sources = new HashMap<>();
+        Map<String, Map<StatId, StatContribution>> sources = new HashMap<>();
         if (!baseStats.isEmpty()) {
-            sources.put("base", baseStats);
+            Map<StatId, StatContribution> base = new HashMap<>();
+            baseStats.forEach((statId, value) -> base.put(statId, StatContribution.of(value)));
+            sources.put("base", Map.copyOf(base));
         }
         double baseAttackDamage = baseStats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
         for (Map.Entry<String, Integer> entry : enchants.entrySet()) {
@@ -84,7 +89,9 @@ public final class ItemInstance {
             }
             Map<StatId, Double> bonus = definition.bonusForLevel(entry.getValue(), baseAttackDamage);
             if (!bonus.isEmpty()) {
-                sources.put("enchant:" + entry.getKey(), Map.copyOf(bonus));
+                Map<StatId, StatContribution> conditioned = new HashMap<>();
+                bonus.forEach((statId, value) -> conditioned.put(statId, new StatContribution(value, definition.condition())));
+                sources.put("enchant:" + entry.getKey(), Map.copyOf(conditioned));
             }
         }
         return Map.copyOf(sources);

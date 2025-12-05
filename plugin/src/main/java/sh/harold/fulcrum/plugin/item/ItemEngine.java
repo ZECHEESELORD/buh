@@ -1,5 +1,6 @@
 package sh.harold.fulcrum.plugin.item;
 
+import org.bukkit.Material;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
@@ -30,9 +31,11 @@ import sh.harold.fulcrum.plugin.stats.StatsModule;
 import sh.harold.fulcrum.plugin.item.durability.DurabilityService;
 import sh.harold.fulcrum.stats.core.StatCondition;
 import sh.harold.fulcrum.plugin.item.listener.CreativeSanitizerListener;
+import sh.harold.fulcrum.plugin.item.model.CustomItem;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -54,7 +57,24 @@ public final class ItemEngine {
     private final DurabilityService durabilityService;
     private final ArmorTrimRecipeBlocker armorTrimRecipeBlocker;
     private final ItemLedgerRepository itemLedgerRepository;
+    private final sh.harold.fulcrum.plugin.item.runtime.BlockedItemMasker blockedItemMasker;
     private ProtocolLoreAdapter loreAdapter;
+    private static final EnumSet<Material> VANILLA_EXCLUDES = EnumSet.of(
+        Material.AIR,
+        Material.CAVE_AIR,
+        Material.VOID_AIR,
+        Material.STRUCTURE_VOID,
+        Material.STRUCTURE_BLOCK,
+        Material.COMMAND_BLOCK,
+        Material.CHAIN_COMMAND_BLOCK,
+        Material.REPEATING_COMMAND_BLOCK,
+        Material.COMMAND_BLOCK_MINECART,
+        Material.JIGSAW,
+        Material.BARRIER,
+        Material.LIGHT,
+        Material.DEBUG_STICK,
+        Material.KNOWLEDGE_BOOK
+    );
 
     public ItemEngine(JavaPlugin plugin, StatsModule statsModule, List<ItemDefinitionProvider> providers, ItemLedgerRepository itemLedgerRepository) {
         this.plugin = plugin;
@@ -80,6 +100,7 @@ public final class ItemEngine {
         this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
         this.armorTrimRecipeBlocker = new ArmorTrimRecipeBlocker(plugin);
         this.itemLedgerRepository = itemLedgerRepository;
+        this.blockedItemMasker = new sh.harold.fulcrum.plugin.item.runtime.BlockedItemMasker(registry, itemPdc, itemLedgerRepository, plugin.getLogger());
         loadDefinitions(providers);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
@@ -113,8 +134,21 @@ public final class ItemEngine {
         return loreRenderer;
     }
 
+    public java.util.Optional<ItemLedgerRepository> itemLedger() {
+        return java.util.Optional.ofNullable(itemLedgerRepository);
+    }
+
     public ItemRegistry registry() {
         return registry;
+    }
+
+    public java.util.List<CustomItem> ensureVanillaDefinitions(java.util.Collection<Material> materials) {
+        Objects.requireNonNull(materials, "materials");
+        return materials.stream()
+            .filter(Material::isItem)
+            .filter(material -> !VANILLA_EXCLUDES.contains(material))
+            .map(material -> registry.getOrCreateVanilla(material, wrapperFactory))
+            .toList();
     }
 
     public java.util.Optional<org.bukkit.inventory.ItemStack> createItem(String id) {

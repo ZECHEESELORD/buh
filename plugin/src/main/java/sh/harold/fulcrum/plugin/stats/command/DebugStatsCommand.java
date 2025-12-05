@@ -42,10 +42,22 @@ public final class DebugStatsCommand {
         player.sendMessage(Component.text("Stats for " + player.getName() + ":", NamedTextColor.GOLD));
         for (StatSnapshot snapshot : container.debugView()) {
             player.sendMessage(Component.text(snapshot.statId().value() + ": " + snapshot.finalValue(), NamedTextColor.AQUA));
-            for (Map.Entry<StatSourceId, java.util.List<sh.harold.fulcrum.stats.core.StatModifier>> entry : snapshot.modifiers().getOrDefault(sh.harold.fulcrum.stats.core.ModifierOp.FLAT, Map.of()).entrySet()) {
-                double sum = entry.getValue().stream().mapToDouble(sh.harold.fulcrum.stats.core.StatModifier::value).sum();
-                player.sendMessage(Component.text("  - " + entry.getKey().value() + ": " + sum, NamedTextColor.GRAY));
-            }
+            snapshot.modifiers().forEach((op, bySource) -> {
+                for (Map.Entry<StatSourceId, java.util.List<sh.harold.fulcrum.stats.core.StatModifier>> entry : bySource.entrySet()) {
+                    for (sh.harold.fulcrum.stats.core.StatModifier modifier : entry.getValue()) {
+                        String condition = modifier.condition() == null || modifier.condition().isAlways()
+                            ? ""
+                            : " (" + modifier.condition().describe() + ")";
+                        player.sendMessage(Component.text(
+                            "  - " + entry.getKey().value()
+                                + " [" + op.name() + "] "
+                                + modifier.value()
+                                + condition,
+                            NamedTextColor.GRAY
+                        ));
+                    }
+                }
+            });
         }
         return Command.SINGLE_SUCCESS;
     }

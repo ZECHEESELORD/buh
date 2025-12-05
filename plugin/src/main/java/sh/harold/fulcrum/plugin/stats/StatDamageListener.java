@@ -23,10 +23,12 @@ public final class StatDamageListener implements Listener {
 
     private final StatService statService;
     private final StatMappingConfig config;
+    private final DamageMarkerRenderer damageMarkerRenderer;
 
-    public StatDamageListener(StatService statService, StatMappingConfig config) {
+    public StatDamageListener(StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer) {
         this.statService = statService;
         this.config = config;
+        this.damageMarkerRenderer = damageMarkerRenderer;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -42,18 +44,24 @@ public final class StatDamageListener implements Listener {
         StatContainer defenderContainer = statService.getContainer(EntityKey.fromUuid(defender.getUniqueId()));
 
         double baseDamage = event.getDamage();
+        boolean critical = false;
         if (attacker != null) {
             StatContainer attackerContainer = statService.getContainer(EntityKey.fromUuid(attacker.getUniqueId()));
             baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext);
             double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
             if (attacker instanceof Player player && isCritical(player)) {
                 baseDamage *= critMultiplier;
+                critical = true;
             }
         }
 
         double armor = defenderContainer.getStat(StatIds.ARMOR, defenseContext);
         double finalDamage = applyArmor(baseDamage, armor);
-        applyFinalDamage(event, Math.max(0.0, finalDamage));
+        double clampedDamage = Math.max(0.0, finalDamage);
+        applyFinalDamage(event, clampedDamage);
+        if (attacker instanceof Player playerAttacker && damageMarkerRenderer != null && clampedDamage > 0.0) {
+            damageMarkerRenderer.render(playerAttacker, defender, clampedDamage, critical);
+        }
 
         if (event instanceof EntityDamageByEntityEvent byEntity && attacker != null) {
             attacker.getServer().getLogger().info(
@@ -61,9 +69,9 @@ public final class StatDamageListener implements Listener {
                     + " attacker=" + attacker.getType()
                     + " defender=" + defender.getType()
                     + " armor=" + armor
-                    + " final=" + finalDamage
+                    + " final=" + clampedDamage
                     + " cause=" + byEntity.getCause()
-                    + " critical=" + (attacker instanceof Player player && isCritical(player))
+                    + " critical=" + critical
             );
         }
     }

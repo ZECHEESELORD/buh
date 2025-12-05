@@ -2,9 +2,13 @@ package sh.harold.fulcrum.plugin.item.runtime;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
+import sh.harold.fulcrum.common.data.ledger.item.ItemInstanceRecord;
+import sh.harold.fulcrum.common.data.ledger.item.ItemLedgerRepository;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
 import sh.harold.fulcrum.plugin.item.model.DurabilityComponent;
+import sh.harold.fulcrum.plugin.item.model.ItemCategory;
 import sh.harold.fulcrum.plugin.item.model.StatsComponent;
 import sh.harold.fulcrum.plugin.item.registry.ItemRegistry;
 import sh.harold.fulcrum.plugin.item.registry.VanillaWrapperFactory;
@@ -19,12 +23,15 @@ import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class ItemResolver {
 
@@ -88,13 +95,27 @@ public final class ItemResolver {
     private final ItemPdc itemPdc;
     private final VanillaStatResolver vanillaStatResolver;
     private final EnchantRegistry enchantRegistry;
+    private final ItemLedgerRepository itemLedgerRepository;
+    private final Logger logger;
+    private final BlockedItemMasker blockedItemMasker;
 
-    public ItemResolver(ItemRegistry registry, VanillaWrapperFactory wrapperFactory, ItemPdc itemPdc, VanillaStatResolver vanillaStatResolver, EnchantRegistry enchantRegistry) {
+    public ItemResolver(
+        ItemRegistry registry,
+        VanillaWrapperFactory wrapperFactory,
+        ItemPdc itemPdc,
+        VanillaStatResolver vanillaStatResolver,
+        EnchantRegistry enchantRegistry,
+        ItemLedgerRepository itemLedgerRepository,
+        Logger logger
+    ) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.wrapperFactory = Objects.requireNonNull(wrapperFactory, "wrapperFactory");
         this.itemPdc = Objects.requireNonNull(itemPdc, "itemPdc");
         this.vanillaStatResolver = Objects.requireNonNull(vanillaStatResolver, "vanillaStatResolver");
         this.enchantRegistry = Objects.requireNonNull(enchantRegistry, "enchantRegistry");
+        this.itemLedgerRepository = itemLedgerRepository;
+        this.logger = logger != null ? logger : Logger.getLogger(ItemResolver.class.getName());
+        this.blockedItemMasker = new BlockedItemMasker(registry, itemPdc, itemLedgerRepository, this.logger);
     }
 
     public Optional<ItemInstance> resolve(ItemStack stack) {
@@ -107,6 +128,12 @@ public final class ItemResolver {
         if (definition == null) {
             definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
             working = itemPdc.setIdInPlace(working, definition.id());
+        }
+        if (blockedItemMasker.isBlocked(working)) {
+            ItemStack masked = blockedItemMasker.mask(working);
+            String maskedId = itemPdc.readId(masked).orElse(definition.id());
+            CustomItem maskedDefinition = registry.get(maskedId).orElse(definition);
+            return Optional.of(new ItemInstance(maskedDefinition, masked, Map.of(), Map.of(), enchantRegistry, DurabilityState.from(null)));
         }
         Map<StatId, Double> stats = itemPdc.readStats(working).orElse(null);
         if (stats == null || stats.isEmpty()) {
@@ -123,6 +150,14 @@ public final class ItemResolver {
         Map<String, Integer> enchants = mergeEnchants(working);
         working = itemPdc.writeEnchants(working, enchants);
         working = storeTrim(working);
+        if (shouldTagInstance(definition)) {
+            Optional<UUID> existingInstanceId = itemPdc.readInstanceId(working);
+            if (existingInstanceId.isEmpty()) {
+                UUID instanceId = UUID.randomUUID();
+                working = itemPdc.ensureInstanceId(working, instanceId);
+                logMigrationInstance(definition.id(), instanceId);
+            }
+        }
         working = mirrorAttributes(working, definition, stats);
         working = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(working);
         return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
@@ -145,7 +180,24 @@ public final class ItemResolver {
         if (durability != null) {
             withId = itemPdc.writeDurability(withId, durability);
         }
+        if (shouldTagInstance(definition)) {
+            withId = itemPdc.ensureInstanceId(withId);
+        }
         return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(withId);
+    }
+
+    private boolean shouldTagInstance(CustomItem definition) {
+        if (definition == null) {
+            return false;
+        }
+        if (!definition.id().startsWith("vanilla:")) {
+            return true;
+        }
+        return switch (definition.category()) {
+            case HELMET, CHESTPLATE, LEGGINGS, BOOTS,
+                 SWORD, AXE, BOW, WAND, PICKAXE, SHOVEL, HOE, FISHING_ROD, TRIDENT -> true;
+            default -> false;
+        };
     }
 
     private String readId(ItemStack stack) {
@@ -159,6 +211,17 @@ public final class ItemResolver {
             stats.putAll(vanillaStatResolver.statsFor(definition.material()));
         }
         return Map.copyOf(stats);
+    }
+
+    private void logMigrationInstance(String itemId, UUID instanceId) {
+        if (itemLedgerRepository == null || instanceId == null) {
+            return;
+        }
+        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, ItemCreationSource.MIGRATION, null, Instant.now());
+        itemLedgerRepository.append(record).exceptionally(throwable -> {
+            logger.log(Level.WARNING, "Failed to ledger-log migrated item " + instanceId + " (" + itemId + ")", throwable);
+            return null;
+        });
     }
 
     private Map<String, Integer> mergeEnchants(ItemStack stack) {

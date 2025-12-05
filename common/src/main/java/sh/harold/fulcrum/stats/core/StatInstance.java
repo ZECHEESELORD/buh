@@ -64,6 +64,13 @@ public final class StatInstance {
         return finalValue;
     }
 
+    public double compute(ConditionContext context) {
+        if (context == null || context.isEmpty()) {
+            return getFinalValue();
+        }
+        return recomputeDefault(context);
+    }
+
     public StatSnapshot snapshot() {
         Map<ModifierOp, Map<StatSourceId, List<StatModifier>>> grouped = new EnumMap<>(ModifierOp.class);
         for (ModifierOp op : ModifierOp.values()) {
@@ -103,31 +110,38 @@ public final class StatInstance {
 
     private double recompute() {
         return switch (definition.stackingModel()) {
-            case DEFAULT -> recomputeDefault();
+            case DEFAULT -> recomputeDefault(ConditionContext.empty());
         };
     }
 
-    private double recomputeDefault() {
+    private double recomputeDefault(ConditionContext context) {
         double base = effectiveBase();
 
         double flatSum = base;
-        for (StatModifier modifier : modifiers.get(ModifierOp.FLAT)) {
+        for (StatModifier modifier : applicable(modifiers.get(ModifierOp.FLAT), context)) {
             flatSum += modifier.value();
         }
 
         double percentAddFactor = 1.0;
-        for (StatModifier modifier : modifiers.get(ModifierOp.PERCENT_ADD)) {
+        for (StatModifier modifier : applicable(modifiers.get(ModifierOp.PERCENT_ADD), context)) {
             percentAddFactor += modifier.value();
         }
         double intermediate = flatSum * percentAddFactor;
 
         double multFactor = 1.0;
-        for (StatModifier modifier : modifiers.get(ModifierOp.PERCENT_MULT)) {
+        for (StatModifier modifier : applicable(modifiers.get(ModifierOp.PERCENT_MULT), context)) {
             multFactor *= 1.0 + modifier.value();
         }
         double result = intermediate * multFactor;
 
         return clamp(result, definition.minValue(), definition.maxValue());
+    }
+
+    private java.util.List<StatModifier> applicable(java.util.List<StatModifier> candidates, ConditionContext context) {
+        ConditionContext ctx = context == null ? ConditionContext.empty() : context;
+        return candidates.stream()
+            .filter(modifier -> modifier.condition() == null || modifier.condition().test(ctx))
+            .toList();
     }
 
     private double clamp(double value, double min, double max) {

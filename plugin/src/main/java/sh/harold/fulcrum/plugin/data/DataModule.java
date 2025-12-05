@@ -6,6 +6,9 @@ import sh.harold.fulcrum.common.data.DocumentStore;
 import sh.harold.fulcrum.common.data.impl.JsonDocumentStore;
 import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
 import sh.harold.fulcrum.common.data.ledger.SqliteLedgerRepository;
+import sh.harold.fulcrum.common.data.ledger.item.ItemLedgerRepository;
+import sh.harold.fulcrum.common.data.ledger.item.MySqlItemLedgerRepository;
+import sh.harold.fulcrum.common.data.ledger.item.SqliteItemLedgerRepository;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
@@ -30,6 +33,7 @@ public final class DataModule implements FulcrumModule {
     private ExecutorService executor;
     private DocumentStore store;
     private LedgerRepository ledgerRepository;
+    private ItemLedgerRepository itemLedgerRepository;
     private DataApi dataApi;
     private FeatureConfigService configService;
     private DataConfig config;
@@ -52,7 +56,8 @@ public final class DataModule implements FulcrumModule {
             executor = createExecutor(config);
             store = createStore(config.store(), executor);
             ledgerRepository = createLedger(config, executor);
-            dataApi = DataApi.using(store, executor, ledgerRepository);
+            itemLedgerRepository = createItemLedger(config, executor);
+            dataApi = DataApi.using(store, executor, ledgerRepository, itemLedgerRepository);
             plugin.getLogger().info(() -> "data store: " + config.store()
                 + " at " + storagePath.toAbsolutePath()
                 + " mysql=" + config.mysql().host() + ":" + config.mysql().port() + "/" + config.mysql().database()
@@ -70,6 +75,9 @@ public final class DataModule implements FulcrumModule {
         }
         if (ledgerRepository != null) {
             ledgerRepository.close();
+        }
+        if (itemLedgerRepository != null) {
+            itemLedgerRepository.close();
         }
         if (configService != null) {
             configService.close();
@@ -134,6 +142,23 @@ public final class DataModule implements FulcrumModule {
         Path ledgerPath = plugin.getDataFolder().toPath().resolve(config.ledgerPath());
         String jdbcUrl = "jdbc:sqlite:" + ledgerPath.toAbsolutePath();
         return new SqliteLedgerRepository(jdbcUrl, executor, plugin.getLogger());
+    }
+
+    private ItemLedgerRepository createItemLedger(DataConfig config, ExecutorService executor) {
+        if (config.ledgerStore() == DataConfig.LedgerStore.MYSQL) {
+            return new MySqlItemLedgerRepository(
+                config.mysql().jdbcUrl(),
+                config.mysql().username(),
+                config.mysql().password(),
+                config.mysql().maxPoolSize(),
+                config.mysql().connectionTimeoutMillis(),
+                plugin.getLogger(),
+                executor
+            );
+        }
+        Path ledgerPath = plugin.getDataFolder().toPath().resolve(config.ledgerPath());
+        String jdbcUrl = "jdbc:sqlite:" + ledgerPath.toAbsolutePath();
+        return new SqliteItemLedgerRepository(jdbcUrl, executor, plugin.getLogger());
     }
 
     public DataConfig config() {

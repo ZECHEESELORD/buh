@@ -43,6 +43,18 @@ public enum ItemCategory {
     }
 
     public static ItemCategory fromMaterial(Material material) {
+        String name = material.name();
+        if (name.startsWith("COPPER_")) {
+            if (name.endsWith("_SWORD")) return SWORD;
+            if (name.endsWith("_AXE")) return AXE;
+            if (name.endsWith("_PICKAXE")) return PICKAXE;
+            if (name.endsWith("_SHOVEL")) return SHOVEL;
+            if (name.endsWith("_HOE")) return HOE;
+            if (name.endsWith("_HELMET")) return HELMET;
+            if (name.endsWith("_CHESTPLATE")) return CHESTPLATE;
+            if (name.endsWith("_LEGGINGS")) return LEGGINGS;
+            if (name.endsWith("_BOOTS")) return BOOTS;
+        }
         return switch (material) {
             case NETHERITE_SWORD, DIAMOND_SWORD, GOLDEN_SWORD, IRON_SWORD, STONE_SWORD, WOODEN_SWORD -> SWORD;
             case NETHERITE_AXE, DIAMOND_AXE, GOLDEN_AXE, IRON_AXE, STONE_AXE, WOODEN_AXE -> AXE;
