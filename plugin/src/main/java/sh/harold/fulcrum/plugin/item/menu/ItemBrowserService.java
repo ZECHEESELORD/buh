@@ -301,7 +301,7 @@ public final class ItemBrowserService {
     }
 
     private MenuButton buildBackButton() {
-        int slot = MenuButton.getCloseSlot(6) - 4;
+        int slot = 48;
         return MenuButton.builder(Material.ARROW)
             .name("&aBack to Browser")
             .secondary("Navigation")
