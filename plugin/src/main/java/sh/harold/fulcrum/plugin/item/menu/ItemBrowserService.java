@@ -308,6 +308,10 @@ public final class ItemBrowserService {
     }
 
     private java.util.concurrent.CompletionStage<ItemBrowserSession> buildSession(Player player, ItemBrowserState state) {
+        ItemBrowserSession cached = currentSession(player);
+        if (cached != null) {
+            return CompletableFuture.completedFuture(new ItemBrowserSession(cached.entries(), state));
+        }
         return CompletableFuture.supplyAsync(() -> new ItemBrowserSession(renderEntries(player), state), asyncPool);
     }
 
@@ -387,7 +391,7 @@ public final class ItemBrowserService {
     }
 
     private Component sortLine(String label, boolean selected) {
-        String pointer = selected ? "-> " : "   ";
+        String pointer = selected ? "➜ " : "   ";
         NamedTextColor color = selected ? NamedTextColor.YELLOW : NamedTextColor.GRAY;
         return Component.text(pointer + label, color)
             .decoration(TextDecoration.ITALIC, false);
