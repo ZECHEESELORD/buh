@@ -63,17 +63,6 @@ public final class StatDamageListener implements Listener {
             damageMarkerRenderer.render(playerAttacker, defender, clampedDamage, critical);
         }
 
-        if (event instanceof EntityDamageByEntityEvent byEntity && attacker != null) {
-            attacker.getServer().getLogger().info(
-                "[debug] damage=" + baseDamage
-                    + " attacker=" + attacker.getType()
-                    + " defender=" + defender.getType()
-                    + " armor=" + armor
-                    + " final=" + clampedDamage
-                    + " cause=" + byEntity.getCause()
-                    + " critical=" + critical
-            );
-        }
     }
 
     private ConditionContext buildAttackContext(LivingEntity attacker, LivingEntity defender, EntityDamageEvent.DamageCause cause) {

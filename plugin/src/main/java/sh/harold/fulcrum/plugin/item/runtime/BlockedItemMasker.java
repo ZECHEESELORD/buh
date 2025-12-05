@@ -24,7 +24,7 @@ public final class BlockedItemMasker {
 
     private static final List<String> BLOCKED_MARKERS = List.of("mobcaptains", "stellarity");
     private static final String MASK_ITEM_ID = "fulcrum:null_item";
-    private static final Material FALLBACK_MASK_MATERIAL = Material.GRAY_STAINED_GLASS_PANE;
+    private static final Material FALLBACK_MASK_MATERIAL = Material.STRUCTURE_VOID;
 
     private final ItemRegistry registry;
     private final ItemPdc itemPdc;
@@ -68,6 +68,7 @@ public final class BlockedItemMasker {
             masked = itemPdc.ensureInstanceId(masked);
             instanceId = itemPdc.readInstanceId(masked).orElse(null);
         }
+        masked = itemPdc.ensureProvenance(masked, ItemCreationSource.MIGRATION, Instant.now());
         logMask(masked, instanceId);
         return masked;
     }
@@ -85,8 +86,8 @@ public final class BlockedItemMasker {
         if (meta != null) {
             meta.displayName(Component.text("Null Item", NamedTextColor.DARK_GRAY));
             meta.lore(List.of(
-                Component.text("Removed to keep the world balanced.", NamedTextColor.GRAY),
-                Component.text("If you believe this is a mistake, contact staff.", NamedTextColor.GRAY)
+                Component.text("Gone. Reduced to null.", NamedTextColor.GRAY),
+                Component.text("A small price to pay for balance.", NamedTextColor.GRAY)
             ));
             meta.addItemFlags(
                 org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES,
@@ -96,7 +97,8 @@ public final class BlockedItemMasker {
             masked.setItemMeta(meta);
         }
         masked = itemPdc.setId(masked, MASK_ITEM_ID);
-        return itemPdc.ensureInstanceId(masked);
+        masked = itemPdc.ensureInstanceId(masked);
+        return itemPdc.ensureProvenance(masked, ItemCreationSource.MIGRATION, Instant.now());
     }
 
     private boolean matches(Component component) {

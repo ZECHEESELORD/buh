@@ -109,9 +109,7 @@ public final class ItemLoreRenderer {
         }
         trimTrailingEmptyLines(lore);
         addDurability(lore, instance);
-        if (!lore.isEmpty()) {
-            lore.add(noItalics(Component.empty()));
-        }
+        addId(lore, definition);
         meta.lore(lore.stream().map(this::noItalics).toList());
         mirrorVanillaBar(meta, instance);
         clone.setItemMeta(meta);
@@ -136,11 +134,6 @@ public final class ItemLoreRenderer {
             return;
         }
         lore.add(Component.text(String.join(", ", tags), NamedTextColor.DARK_GRAY));
-        if (definition.id().startsWith("vanilla:")) {
-            String raw = definition.id().substring(definition.id().indexOf(':') + 1);
-            String label = raw.toUpperCase(Locale.ROOT);
-            lore.add(noItalics(Component.text("ID: " + label, NamedTextColor.GRAY)));
-        }
         if (spacerAfter) {
             lore.add(Component.empty());
         }
@@ -327,13 +320,12 @@ public final class ItemLoreRenderer {
 
     private String formattedId(CustomItem definition) {
         String raw = definition.id();
-        if (!raw.contains(":")) {
-            raw = "fulcrum:" + raw;
+        if (raw == null || raw.isBlank()) {
+            return "";
         }
         int colon = raw.indexOf(':');
-        String namespace = colon >= 0 ? raw.substring(0, colon) : raw;
-        String path = colon >= 0 && colon + 1 < raw.length() ? raw.substring(colon + 1) : "";
-        return namespace + ":" + path.toUpperCase(Locale.ROOT);
+        String path = colon >= 0 && colon + 1 < raw.length() ? raw.substring(colon + 1) : raw;
+        return path.toUpperCase(Locale.ROOT);
     }
 
     private StatSnapshot buildStats(ItemInstance instance) {
@@ -352,6 +344,7 @@ public final class ItemLoreRenderer {
     private boolean isMelee(ItemCategory category) {
         return category == ItemCategory.SWORD
             || category == ItemCategory.AXE
+            || category == ItemCategory.MACE
             || category == ItemCategory.WAND
             || category == ItemCategory.TRIDENT;
     }
@@ -663,5 +656,16 @@ public final class ItemLoreRenderer {
             return "Increases defense by " + STAT_FORMAT.format(percent) + ".";
         }
         return "Enhances this item.";
+    }
+
+    private void addId(List<Component> lore, CustomItem definition) {
+        String label = formattedId(definition);
+        if (label.isBlank()) {
+            return;
+        }
+        if (!lore.isEmpty()) {
+            lore.add(Component.empty());
+        }
+        lore.add(noItalics(Component.text("ID: " + label, NamedTextColor.DARK_GRAY)));
     }
 }

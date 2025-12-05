@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ItemResolver {
 
@@ -98,6 +99,7 @@ public final class ItemResolver {
     private final ItemLedgerRepository itemLedgerRepository;
     private final Logger logger;
     private final BlockedItemMasker blockedItemMasker;
+    private final Set<UUID> ledgerChecked = ConcurrentHashMap.newKeySet();
 
     public ItemResolver(
         ItemRegistry registry,
@@ -133,8 +135,11 @@ public final class ItemResolver {
             ItemStack masked = blockedItemMasker.mask(working);
             String maskedId = itemPdc.readId(masked).orElse(definition.id());
             CustomItem maskedDefinition = registry.get(maskedId).orElse(definition);
+            String maskedDefinitionId = maskedDefinition.id();
+            itemPdc.readInstanceId(masked).ifPresent(instanceId -> ensureLedgerRecord(instanceId, maskedDefinitionId));
             return Optional.of(new ItemInstance(maskedDefinition, masked, Map.of(), Map.of(), enchantRegistry, DurabilityState.from(null)));
         }
+        final String resolvedDefinitionId = definition.id();
         Map<StatId, Double> stats = itemPdc.readStats(working).orElse(null);
         if (stats == null || stats.isEmpty()) {
             stats = computeDefinitionStats(definition);
@@ -150,12 +155,15 @@ public final class ItemResolver {
         Map<String, Integer> enchants = mergeEnchants(working);
         working = itemPdc.writeEnchants(working, enchants);
         working = storeTrim(working);
+        final CustomItem finalDefinition = definition;
         if (shouldTagInstance(definition)) {
             Optional<UUID> existingInstanceId = itemPdc.readInstanceId(working);
             if (existingInstanceId.isEmpty()) {
                 UUID instanceId = UUID.randomUUID();
                 working = itemPdc.ensureInstanceId(working, instanceId);
-                logMigrationInstance(definition.id(), instanceId);
+                working = itemPdc.ensureProvenance(working, ItemCreationSource.MIGRATION, Instant.now());
+            } else {
+                existingInstanceId.ifPresent(instanceId -> ensureLedgerRecord(instanceId, finalDefinition.id()));
             }
         }
         working = mirrorAttributes(working, definition, stats);
@@ -186,7 +194,7 @@ public final class ItemResolver {
         return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(withId);
     }
 
-    private boolean shouldTagInstance(CustomItem definition) {
+    public boolean shouldTagInstance(CustomItem definition) {
         if (definition == null) {
             return false;
         }
@@ -195,7 +203,7 @@ public final class ItemResolver {
         }
         return switch (definition.category()) {
             case HELMET, CHESTPLATE, LEGGINGS, BOOTS,
-                 SWORD, AXE, BOW, WAND, PICKAXE, SHOVEL, HOE, FISHING_ROD, TRIDENT -> true;
+                 SWORD, AXE, MACE, BOW, WAND, PICKAXE, SHOVEL, HOE, FISHING_ROD, TRIDENT -> true;
             default -> false;
         };
     }
@@ -213,15 +221,25 @@ public final class ItemResolver {
         return Map.copyOf(stats);
     }
 
-    private void logMigrationInstance(String itemId, UUID instanceId) {
+    private void appendLedger(UUID instanceId, String itemId, ItemCreationSource source) {
         if (itemLedgerRepository == null || instanceId == null) {
             return;
         }
-        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, ItemCreationSource.MIGRATION, null, Instant.now());
-        itemLedgerRepository.append(record).exceptionally(throwable -> {
-            logger.log(Level.WARNING, "Failed to ledger-log migrated item " + instanceId + " (" + itemId + ")", throwable);
-            return null;
-        });
+        if (!ledgerChecked.add(instanceId)) {
+            return;
+        }
+        ItemInstanceRecord record = new ItemInstanceRecord(instanceId, itemId, source, null, Instant.now());
+        // Ledger writes are temporarily disabled while we move to item-first provenance.
+    }
+
+    private void ensureLedgerRecord(UUID instanceId, String itemId) {
+        if (itemLedgerRepository == null || instanceId == null) {
+            return;
+        }
+        if (!ledgerChecked.add(instanceId)) {
+            return;
+        }
+        // Ledger writes are temporarily disabled while we move to item-first provenance.
     }
 
     private Map<String, Integer> mergeEnchants(ItemStack stack) {

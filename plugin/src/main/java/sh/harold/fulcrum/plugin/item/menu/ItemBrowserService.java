@@ -26,6 +26,7 @@ import sh.harold.fulcrum.api.menu.component.MenuDisplayItem;
 import sh.harold.fulcrum.api.menu.component.MenuItem;
 import sh.harold.fulcrum.api.menu.impl.DefaultListMenu;
 import sh.harold.fulcrum.plugin.item.ItemEngine;
+import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
 import sh.harold.fulcrum.plugin.item.model.ComponentType;
 import sh.harold.fulcrum.plugin.item.model.CustomItem;
 import sh.harold.fulcrum.plugin.item.model.ItemCategory;
@@ -168,13 +169,15 @@ public final class ItemBrowserService {
     private MenuItem toDisplayItem(ItemEntry entry) {
         MenuButton button = MenuButton.builder(entry.rendered().getType())
             .onClick(player -> giveItem(player, entry))
+            .skipClickPrompt()
             .build();
         button.setDisplayItem(entry.rendered());
         return button;
     }
 
     private void giveItem(Player player, ItemEntry entry) {
-        ItemStack copy = entry.rendered().clone();
+        ItemStack copy = itemEngine.createItem(entry.definition().id(), ItemCreationSource.CREATIVE, player.getUniqueId())
+            .orElse(entry.rendered().clone());
         var leftover = player.getInventory().addItem(copy);
         leftover.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
         player.sendMessage(Component.text("Spawned " + copy.getAmount() + "x " + entry.definition().id() + ".", NamedTextColor.GREEN));

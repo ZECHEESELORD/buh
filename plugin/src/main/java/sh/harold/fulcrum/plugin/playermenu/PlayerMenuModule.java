@@ -130,5 +130,6 @@ public final class PlayerMenuModule implements FulcrumModule {
         registrar.register(new PlayerMenuCommand(playerMenuService).build(), "menu", java.util.List.of());
         registrar.register(new PlayerSettingsCommand(playerMenuService).build(), "settings", java.util.List.of());
         registrar.register(new StatsMenuCommand(playerMenuService).build(), "stats", java.util.List.of());
+        registrar.register(new ClearCommand(playerMenuService).build(), "clear", java.util.List.of());
     }
 }

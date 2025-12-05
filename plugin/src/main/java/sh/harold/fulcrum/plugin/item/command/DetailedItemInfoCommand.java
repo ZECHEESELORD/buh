@@ -15,6 +15,7 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.common.data.ledger.item.ItemLedgerRepository;
+import sh.harold.fulcrum.common.data.ledger.item.ItemInstanceRecord;
 import sh.harold.fulcrum.plugin.item.ItemEngine;
 
 import java.time.ZoneId;
@@ -131,27 +132,6 @@ public final class DetailedItemInfoCommand {
     }
 
     private void appendLedgerInfo(ItemLedgerRepository ledger, UUID instanceId, Player player) {
-        ledger.find(instanceId).whenComplete((record, throwable) -> {
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (throwable != null) {
-                    player.sendMessage(Component.text("Ledger lookup failed: " + throwable.getMessage(), NamedTextColor.RED));
-                    return;
-                }
-                if (record.isEmpty()) {
-                    player.sendMessage(Component.text("Ledger: no entry for this instance.", NamedTextColor.DARK_GRAY));
-                    return;
-                }
-                var entry = record.get();
-                String createdAt = FORMATTER.format(entry.createdAt());
-                String source = entry.source().name().toLowerCase().replace('_', ' ');
-                String creator = entry.creatorId() == null ? "unknown" : entry.creatorId().toString();
-                player.sendMessage(Component.text("Ledger: ", NamedTextColor.GOLD)
-                    .append(Component.text(source, NamedTextColor.AQUA))
-                    .append(Component.text(" @ ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(createdAt, NamedTextColor.AQUA))
-                    .append(Component.text(" creator=", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(creator, NamedTextColor.AQUA)));
-            });
-        });
+        player.sendMessage(Component.text("Ledger: disabled (item holds authoritative data)", NamedTextColor.DARK_GRAY));
     }
 }
