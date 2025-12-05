@@ -2,6 +2,7 @@ package sh.harold.fulcrum.plugin.item.stat;
 
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.fulcrum.plugin.item.model.SlotGroup;
 import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
@@ -14,6 +15,12 @@ import sh.harold.fulcrum.stats.core.StatSourceId;
 import sh.harold.fulcrum.stats.service.EntityKey;
 import sh.harold.fulcrum.stats.service.StatService;
 import sh.harold.fulcrum.plugin.item.runtime.StatContribution;
+import sh.harold.fulcrum.plugin.item.model.ComponentType;
+import sh.harold.fulcrum.plugin.item.model.VisualComponent;
+import sh.harold.fulcrum.plugin.item.model.ItemRarity;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import java.util.Map;
 import java.util.Objects;
@@ -115,6 +122,7 @@ public final class ItemStatBridge {
 
     private StatSourceContext buildContext(String sourceKey, SlotGroup slot, ItemInstance instance, ItemStack rawStack) {
         ItemStack display = rawStack == null ? new ItemStack(org.bukkit.Material.BARRIER) : ItemSanitizer.normalize(rawStack.clone());
+        display = colorizeDisplay(instance, display);
         if ("base".equalsIgnoreCase(sourceKey)) {
             return new StatSourceContext(
                 "Base Value",
@@ -147,6 +155,38 @@ public final class ItemStatBridge {
             SourceCategory.UNKNOWN,
             slot.name()
         );
+    }
+
+    private ItemStack colorizeDisplay(ItemInstance instance, ItemStack stack) {
+        if (stack == null) {
+            return null;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        boolean hasColor = meta.hasDisplayName() && meta.displayName() != null && meta.displayName().color() != null;
+        VisualComponent visual = instance.definition().component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
+        if (hasColor || visual == null) {
+            return stack;
+        }
+        Component baseName = meta.hasDisplayName() && meta.displayName() != null
+            ? meta.displayName()
+            : Component.translatable(instance.definition().material().translationKey());
+        NamedTextColor color = rarityColor(visual.rarity());
+        meta.displayName(baseName.color(color).decoration(TextDecoration.ITALIC, false));
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private NamedTextColor rarityColor(ItemRarity rarity) {
+        return switch (rarity) {
+            case COMMON -> NamedTextColor.WHITE;
+            case UNCOMMON -> NamedTextColor.GREEN;
+            case RARE -> NamedTextColor.BLUE;
+            case EPIC -> NamedTextColor.DARK_PURPLE;
+            case LEGENDARY -> NamedTextColor.GOLD;
+        };
     }
 
     private String humanizeId(String raw) {
