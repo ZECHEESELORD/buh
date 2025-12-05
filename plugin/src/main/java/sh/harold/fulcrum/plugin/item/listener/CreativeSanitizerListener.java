@@ -4,6 +4,7 @@ import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryCreativeEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.ItemEngine;
@@ -25,6 +26,23 @@ public final class CreativeSanitizerListener implements Listener {
         }
         Player player = event.getPlayer();
         sanitizeInventory(player);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCreativeDrag(InventoryCreativeEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        ItemStack cursor = event.getCursor();
+        ItemStack cleaned = sanitize(cursor, itemEngine.resolver(), itemEngine.loreRenderer(), player);
+        if (cleaned != cursor) {
+            event.setCursor(cleaned);
+        }
+        ItemStack current = event.getCurrentItem();
+        ItemStack cleanedCurrent = sanitize(current, itemEngine.resolver(), itemEngine.loreRenderer(), player);
+        if (cleanedCurrent != current) {
+            event.setCurrentItem(cleanedCurrent);
+        }
     }
 
     private void sanitizeInventory(Player player) {
