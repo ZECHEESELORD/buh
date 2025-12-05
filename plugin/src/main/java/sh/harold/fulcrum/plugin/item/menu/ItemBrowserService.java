@@ -40,9 +40,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import net.kyori.adventure.text.format.TextDecoration;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 public final class ItemBrowserService {
 
@@ -62,6 +64,14 @@ public final class ItemBrowserService {
     private final MenuService menuService;
     private final Map<UUID, ItemBrowserSession> sessions = new ConcurrentHashMap<>();
     private final AtomicBoolean vanillaSeeded = new AtomicBoolean(false);
+    private final java.util.concurrent.Executor asyncPool = java.util.concurrent.Executors.newFixedThreadPool(
+        Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
+        runnable -> {
+            Thread thread = new Thread(runnable, "fulcrum-item-browser");
+            thread.setDaemon(true);
+            return thread;
+        }
+    );
 
     public ItemBrowserService(JavaPlugin plugin, ItemEngine itemEngine, MenuService menuService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -72,8 +82,9 @@ public final class ItemBrowserService {
     public java.util.concurrent.CompletionStage<Void> open(Player player) {
         ItemBrowserSession existing = currentSession(player);
         ItemBrowserState state = existing == null ? ItemBrowserState.defaultState() : existing.state();
-        ItemBrowserSession session = new ItemBrowserSession(renderEntries(player), state);
-        return open(player, session);
+        return buildSession(player, state)
+            .thenCompose(session -> callSync(() -> open(player, session)))
+            .thenCompose(Function.identity());
     }
 
     private java.util.concurrent.CompletionStage<Void> open(Player player, ItemBrowserSession session) {
@@ -244,10 +255,26 @@ public final class ItemBrowserService {
     private void openFilterMenu(Player player) {
         ItemBrowserSession session = currentSession(player);
         if (session == null) {
-            session = new ItemBrowserSession(renderEntries(player), ItemBrowserState.defaultState());
-            storeSession(player, session);
+            buildSession(player, ItemBrowserState.defaultState())
+                .thenComposeAsync(built -> callSync(() -> {
+                    openFilterMenu(player, built);
+                    return null;
+                }), asyncPool)
+                .exceptionally(throwable -> {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to open filter menu for " + player.getUniqueId(), throwable);
+                    player.sendMessage(Component.text("Filters are being shuffled right now; try again shortly.", NamedTextColor.RED));
+                    return null;
+                });
+            return;
         }
-        ItemBrowserSession finalSession = session;
+        openFilterMenu(player, session);
+    }
+
+    private void reopenFilterMenu(Player player) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> openFilterMenu(player));
+    }
+
+    private void openFilterMenu(Player player, ItemBrowserSession session) {
         CustomMenuBuilder builder = menuService.createMenuBuilder()
             .title("Item Filters")
             .viewPort(3)
@@ -255,25 +282,22 @@ public final class ItemBrowserService {
             .addBorder(Material.BLACK_STAINED_GLASS_PANE)
             .autoCloseButton(false);
 
-        builder.addButton(buildSourceFilterButton(finalSession.state()));
-        builder.addButton(buildRarityFilterButton(finalSession.state()));
+        builder.addButton(buildSourceFilterButton(session.state()));
+        builder.addButton(buildRarityFilterButton(session.state()));
         builder.addButton(buildBackButton());
         builder.addButton(MenuButton.createPositionedClose(3));
 
         builder.buildAsync(player)
             .thenAccept(menu -> {
                 menu.setProperty(FILTER_MENU_PROPERTY, true);
-                menu.getContext().setProperty(SESSION_KEY, finalSession);
+                menu.getContext().setProperty(SESSION_KEY, session);
+                storeSession(player, session);
             })
             .exceptionally(throwable -> {
                 plugin.getLogger().log(Level.SEVERE, "Failed to open filter menu for " + player.getUniqueId(), throwable);
                 player.sendMessage(Component.text("Filters are being shuffled right now; try again shortly.", NamedTextColor.RED));
                 return null;
             });
-    }
-
-    private void reopenFilterMenu(Player player) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> openFilterMenu(player));
     }
 
     private MenuButton buildBackButton() {
@@ -288,14 +312,21 @@ public final class ItemBrowserService {
             .build();
     }
 
+    private java.util.concurrent.CompletionStage<ItemBrowserSession> buildSession(Player player, ItemBrowserState state) {
+        return CompletableFuture.supplyAsync(() -> new ItemBrowserSession(renderEntries(player), state), asyncPool);
+    }
+
     private void reopenBrowser(Player player) {
         ItemBrowserSession session = currentSession(player);
-        if (session == null) {
-            open(player);
-            return;
-        }
-        ItemBrowserSession refreshed = new ItemBrowserSession(renderEntries(player), session.state());
-        open(player, refreshed);
+        ItemBrowserState state = session == null ? ItemBrowserState.defaultState() : session.state();
+        buildSession(player, state)
+            .thenCompose(built -> callSync(() -> open(player, built)))
+            .thenCompose(Function.identity())
+            .exceptionally(throwable -> {
+                plugin.getLogger().log(Level.SEVERE, "Failed to reopen item browser for " + player.getUniqueId(), throwable);
+                player.sendMessage(Component.text("Could not reopen the item browser right now.", NamedTextColor.RED));
+                return null;
+            });
     }
 
     private void refresh(DefaultListMenu menu, ItemBrowserSession session) {
@@ -687,5 +718,17 @@ public final class ItemBrowserService {
             String query = Optional.ofNullable(response.getText(SEARCH_INPUT_ID)).orElse("");
             plugin.getServer().getScheduler().runTask(plugin, () -> applySearch(player, query));
         };
+    }
+
+    private <T> java.util.concurrent.CompletionStage<T> callSync(java.util.concurrent.Callable<T> task) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            try {
+                future.complete(task.call());
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+        });
+        return future;
     }
 }
