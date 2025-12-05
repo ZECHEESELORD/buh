@@ -264,7 +264,7 @@ final class StatBreakdownView {
         lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
         lore.add(valueLine);
         if (state.flattenEnabled() && !state.groupingEnabled() && entry.view() == SourceView.INDIVIDUAL) {
-            flattenedFrom(display.displayItem()).ifPresent(lore::add);
+            lore.addAll(flattenedFrom(display.displayItem()));
         }
         if (!entry.children().isEmpty()) {
             lore.add(Component.empty().decoration(TextDecoration.ITALIC, false));
@@ -661,34 +661,22 @@ final class StatBreakdownView {
         };
     }
 
-    private Optional<Component> flattenedFrom(ItemStack displayItem) {
+    private List<Component> flattenedFrom(ItemStack displayItem) {
         if (displayItem == null) {
-            return Optional.empty();
+            return List.of();
         }
-        String name = itemName(displayItem);
-        if (name.isBlank()) {
-            return Optional.empty();
+        ItemMeta meta = displayItem.getItemMeta();
+        if (meta == null) {
+            return List.of();
         }
-        Component line = Component.text()
-            .append(Component.text("Flattened from: ", NamedTextColor.GRAY))
-            .append(Component.text(name, NamedTextColor.DARK_GRAY))
-            .decoration(TextDecoration.ITALIC, false)
-            .build();
-        return Optional.of(line);
-    }
-
-    private String itemName(ItemStack stack) {
-        if (stack == null) {
-            return "";
-        }
-        ItemMeta meta = stack.getItemMeta();
-        if (meta != null && meta.hasDisplayName()) {
-            String plain = PlainTextComponentSerializer.plainText().serialize(meta.displayName());
-            if (!plain.isBlank()) {
-                return plain;
-            }
-        }
-        return humanize(stack.getType().name());
+        Component name = meta.hasDisplayName()
+            ? meta.displayName()
+            : Component.text(humanize(displayItem.getType().name()), NamedTextColor.DARK_GRAY);
+        name = name == null ? Component.text(humanize(displayItem.getType().name()), NamedTextColor.DARK_GRAY) : name;
+        name = name.decoration(TextDecoration.ITALIC, false);
+        Component spacer = Component.empty().decoration(TextDecoration.ITALIC, false);
+        Component label = Component.text("Flattened from:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
+        return List.of(spacer, label, name);
     }
 
     private double scale(StatId id, double rawValue, boolean allowPercentFallback) {
