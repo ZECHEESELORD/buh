@@ -27,6 +27,9 @@ public final class EnchantService {
             return stack;
         }
         Map<String, Integer> enchants = new HashMap<>(itemPdc.readEnchants(stack).orElse(Map.of()));
+        for (String incompatible : definition.get().incompatibleWith()) {
+            enchants.remove(incompatible);
+        }
         enchants.put(enchantId, clamped);
         return itemPdc.writeEnchants(stack, enchants);
     }

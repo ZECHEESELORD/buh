@@ -13,6 +13,7 @@ import sh.harold.fulcrum.plugin.item.model.ItemRarity;
 import sh.harold.fulcrum.plugin.item.model.ItemTrait;
 import sh.harold.fulcrum.plugin.item.model.StatsComponent;
 import sh.harold.fulcrum.plugin.item.model.VisualComponent;
+import sh.harold.fulcrum.plugin.item.model.LoreSection;
 import sh.harold.fulcrum.stats.core.StatIds;
 
 import java.time.Duration;
@@ -46,6 +47,19 @@ public final class SampleItemProvider implements ItemDefinitionProvider {
                 ItemRarity.RARE
             ))
             .build();
-        return List.of(debugBlade);
+        CustomItem mask = CustomItem.builder("fulcrum:null_item")
+            .material(Material.GRAY_STAINED_GLASS_PANE)
+            .category(ItemCategory.MATERIAL)
+            .loreLayout(List.of(LoreSection.HEADER, LoreSection.TAGS, LoreSection.FOOTER))
+            .component(ComponentType.VISUAL, new VisualComponent(
+                Component.text("Null Item", NamedTextColor.DARK_GRAY),
+                List.of(
+                    Component.text("Removed to keep the world balanced.", NamedTextColor.GRAY),
+                    Component.text("If you believe this is a mistake, contact staff.", NamedTextColor.GRAY)
+                ),
+                ItemRarity.COMMON
+            ))
+            .build();
+        return List.of(debugBlade, mask);
     }
 }

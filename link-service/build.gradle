@@ -1,0 +1,69 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(":common")
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    implementation 'com.mysql:mysql-connector-j:8.4.0'
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+}
+
+application {
+    mainClass = "sh.harold.fulcrum.linkservice.LinkServiceApplication"
+}
+
+tasks.named("test", Test) {
+    useJUnitPlatform()
+}
+
+tasks.register("runLinkService", JavaExec) {
+    group = "application"
+    description = "Run the standalone link-service with a local config"
+    dependsOn(tasks.named("classes"))
+    mainClass = application.mainClass
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = layout.buildDirectory.dir("run/link-service").get().asFile
+    doFirst {
+        def dir = workingDir
+        dir.mkdirs()
+        def configFile = new File(dir, "link-service.yml")
+        if (!configFile.exists()) {
+            configFile.text = """\
+http:
+  bindAddress: "0.0.0.0"
+  port: 8081
+  timeout: PT15S
+mysql:
+  host: "localhost"
+  port: 3306
+  database: "fulcrum"
+  username: "root"
+  password: ""
+  maxPoolSize: 5
+  connectionTimeoutMillis: 3000
+oauth:
+  osu:
+    clientId: ""
+    clientSecret: ""
+    authorizeUrl: "https://osu.ppy.sh/oauth/authorize"
+    tokenUrl: "https://osu.ppy.sh/oauth/token"
+    meUrl: "https://osu.ppy.sh/api/v2/me"
+    callbackPath: "/link-account/osu-callback"
+    scopes: ["identify", "public"]
+  discord:
+    clientId: ""
+    clientSecret: ""
+    authorizeUrl: "https://discord.com/api/oauth2/authorize"
+    tokenUrl: "https://discord.com/api/oauth2/token"
+    meUrl: "https://discord.com/api/users/@me"
+    callbackPath: "/link-account/discord-callback"
+    scopes: ["identify"]
+""".stripIndent()
+        }
+    }
+}

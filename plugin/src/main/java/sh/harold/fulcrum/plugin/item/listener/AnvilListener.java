@@ -7,11 +7,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.inventory.AnvilInventory;
-import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
+import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 
 import java.util.Objects;
 

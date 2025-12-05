@@ -82,6 +82,7 @@ public final class BuhPlugin extends JavaPlugin {
     private OsuLinkModule osuLinkModule;
     private UnlockableModule unlockableModule;
     private sh.harold.fulcrum.plugin.item.ItemModule itemModule;
+    private sh.harold.fulcrum.plugin.item.migration.ItemMigrationModule itemMigrationModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -191,12 +192,13 @@ public final class BuhPlugin extends JavaPlugin {
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
         unlockableModule = new UnlockableModule(this, dataModule, economyModule);
-        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService, unlockableModule);
+        statsModule = new StatsModule(this, playerDataModule);
+        playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService, unlockableModule, statsModule);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
-        statsModule = new StatsModule(this);
-        itemModule = new sh.harold.fulcrum.plugin.item.ItemModule(this, statsModule);
+        itemModule = new sh.harold.fulcrum.plugin.item.ItemModule(this, statsModule, dataModule);
+        itemMigrationModule = new sh.harold.fulcrum.plugin.item.migration.ItemMigrationModule(this, itemModule);
         shutdownModule = new ShutdownModule(this, scoreboardService);
         tabFeature = new TabFeature(this);
         scoreboardFeature = new ScoreboardFeature(
@@ -219,13 +221,14 @@ public final class BuhPlugin extends JavaPlugin {
             messageModule,
             stashModule,
             menuModule,
-            playerMenuModule,
             unlockableModule,
+            statsModule,
+            playerMenuModule,
             featureVoteModule,
             funModule,
             staffCommandsModule,
-            statsModule,
             itemModule,
+            itemMigrationModule,
             tabFeature,
             scoreboardFeature
         );

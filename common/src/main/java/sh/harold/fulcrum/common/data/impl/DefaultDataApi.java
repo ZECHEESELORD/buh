@@ -4,6 +4,7 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.common.data.DocumentStore;
 import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
+import sh.harold.fulcrum.common.data.ledger.item.ItemLedgerRepository;
 import sh.harold.fulcrum.common.data.metrics.DataMetrics;
 
 import java.util.Map;
@@ -21,9 +22,14 @@ public final class DefaultDataApi implements DataApi {
     private final Map<String, DocumentCollection> collections = new ConcurrentHashMap<>();
     private final ExecutorService ownedExecutor;
     private final LedgerRepository ledgerRepository;
+    private final ItemLedgerRepository itemLedgerRepository;
     private final DataMetrics metrics;
 
     public DefaultDataApi(DocumentStore store, Executor executor, LedgerRepository ledgerRepository) {
+        this(store, executor, ledgerRepository, null);
+    }
+
+    public DefaultDataApi(DocumentStore store, Executor executor, LedgerRepository ledgerRepository, ItemLedgerRepository itemLedgerRepository) {
         this.store = Objects.requireNonNull(store, "store");
         if (executor == null) {
             this.ownedExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -33,6 +39,7 @@ public final class DefaultDataApi implements DataApi {
             this.ownedExecutor = null;
         }
         this.ledgerRepository = ledgerRepository;
+        this.itemLedgerRepository = itemLedgerRepository;
         this.metrics = new DataMetrics();
     }
 
@@ -48,6 +55,11 @@ public final class DefaultDataApi implements DataApi {
     }
 
     @Override
+    public Optional<ItemLedgerRepository> itemLedger() {
+        return Optional.ofNullable(itemLedgerRepository);
+    }
+
+    @Override
     public DataMetrics metrics() {
         return metrics;
     }
@@ -60,6 +72,9 @@ public final class DefaultDataApi implements DataApi {
         }
         if (ledgerRepository != null) {
             ledgerRepository.close();
+        }
+        if (itemLedgerRepository != null) {
+            itemLedgerRepository.close();
         }
     }
 }

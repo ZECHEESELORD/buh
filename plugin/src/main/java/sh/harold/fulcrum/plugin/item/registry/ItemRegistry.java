@@ -25,4 +25,8 @@ public final class ItemRegistry {
         String id = "vanilla:" + material.getKey().getKey();
         return definitions.computeIfAbsent(id, ignored -> wrapperFactory.wrap(material, id));
     }
+
+    public java.util.Collection<CustomItem> definitions() {
+        return java.util.Collections.unmodifiableCollection(definitions.values());
+    }
 }

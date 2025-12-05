@@ -481,6 +481,7 @@ public final class PlayerMenuService {
                 boolean scoreboardEnabled = settings.scoreboardEnabled();
                 boolean pvpEnabled = settings.pvpEnabled();
                 UsernameView usernameView = settings.usernameView();
+                boolean damageMarkersEnabled = settings.damageMarkersEnabled();
                 int closeSlot = MenuButton.getCloseSlot(MENU_ROWS);
                 MenuButton backButton = MenuButton.builder(Material.ARROW)
                     .name("&7Back")
@@ -510,6 +511,16 @@ public final class PlayerMenuService {
                     .requireConfirmation("&cConfirm PvP toggle; click again.")
                     .sound(Sound.UI_BUTTON_CLICK)
                     .onClick(viewer -> togglePvp(viewer, !pvpEnabled))
+                    .build();
+
+                MenuButton damageMarkersToggle = MenuButton.builder(Material.SPYGLASS)
+                    .name(damageMarkersEnabled ? "&aDamage Markers: Enabled" : "&cDamage Markers: Disabled")
+                    .secondary("Combat Feedback")
+                    .description("Toggle floating damage numbers on your hits.")
+                    .slot(12)
+                    .cooldown(SETTINGS_COOLDOWN)
+                    .sound(Sound.UI_BUTTON_CLICK)
+                    .onClick(viewer -> toggleDamageMarkers(viewer, !damageMarkersEnabled))
                     .build();
 
                 MenuButton usernameViewButton = MenuButton.builder(Material.NAME_TAG)
@@ -542,6 +553,7 @@ public final class PlayerMenuService {
                         .addButton(backButton)
                         .addButton(scoreboardToggle)
                         .addButton(pvpToggle)
+                        .addButton(damageMarkersToggle)
                         .addButton(usernameViewButton)
                         .addButton(relocateButton)
                         .buildAsync(player)
@@ -592,6 +604,20 @@ public final class PlayerMenuService {
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to toggle PvP for " + playerId, throwable);
                 player.sendMessage("§cCould not update your PvP setting.");
+                return null;
+            });
+    }
+
+    private void toggleDamageMarkers(Player player, boolean enable) {
+        UUID playerId = player.getUniqueId();
+        settingsService.setDamageMarkersEnabled(playerId, enable)
+            .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+                player.sendMessage(enable ? "§aDamage markers enabled for your hits." : "§eDamage markers are now hidden.");
+                openSettings(player);
+            }))
+            .exceptionally(throwable -> {
+                logger.log(Level.SEVERE, "Failed to toggle damage markers for " + playerId, throwable);
+                player.sendMessage("§cCould not update your damage marker setting.");
                 return null;
             });
     }

@@ -10,6 +10,7 @@ import sh.harold.fulcrum.stats.core.StatId;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public final class ItemPdc {
 
@@ -54,6 +55,35 @@ public final class ItemPdc {
 
     public Optional<String> readId(ItemStack stack) {
         return read(stack, keys.itemId(), PersistentDataType.STRING);
+    }
+
+    public Optional<Integer> readVersion(ItemStack stack) {
+        return readInt(stack, keys.version());
+    }
+
+    public ItemStack ensureInstanceId(ItemStack stack) {
+        return ensureInstanceId(stack, UUID.randomUUID());
+    }
+
+    public ItemStack ensureInstanceId(ItemStack stack, UUID instanceId) {
+        if (stack == null || instanceId == null) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        PersistentDataContainer container = meta.getPersistentDataContainer();
+        if (container.has(keys.instanceId(), PersistentDataType.STRING)) {
+            return stack;
+        }
+        container.set(keys.instanceId(), PersistentDataType.STRING, instanceId.toString());
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    public Optional<UUID> readInstanceId(ItemStack stack) {
+        return read(stack, keys.instanceId(), PersistentDataType.STRING).map(UUID::fromString);
     }
 
     public ItemStack writeStats(ItemStack stack, Map<StatId, Double> stats) {

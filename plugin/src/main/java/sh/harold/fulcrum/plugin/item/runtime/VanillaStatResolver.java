@@ -62,15 +62,34 @@ public final class VanillaStatResolver {
         registerArmor(Material.IRON_BOOTS, 2.0, 0.0);
 
         double diamondCritPiece = 0.0375;
-        registerArmor(Material.DIAMOND_HELMET, 3.0, diamondCritPiece);
-        registerArmor(Material.DIAMOND_CHESTPLATE, 8.0, diamondCritPiece);
-        registerArmor(Material.DIAMOND_LEGGINGS, 6.0, diamondCritPiece);
-        registerArmor(Material.DIAMOND_BOOTS, 3.0, diamondCritPiece);
+        double diamondHelmetCrit = 0.025;
+        double diamondChestCrit = 0.06;
+        double diamondLegCrit = 0.04;
+        double diamondBootCrit = 0.025;
+        registerArmor(Material.DIAMOND_HELMET, 3.0, diamondHelmetCrit);
+        registerArmor(Material.DIAMOND_CHESTPLATE, 8.0, diamondChestCrit);
+        registerArmor(Material.DIAMOND_LEGGINGS, 6.0, diamondLegCrit);
+        registerArmor(Material.DIAMOND_BOOTS, 3.0, diamondBootCrit);
 
-        registerArmor(Material.NETHERITE_HELMET, 3.0, diamondCritPiece);
-        registerArmor(Material.NETHERITE_CHESTPLATE, 8.0, diamondCritPiece);
-        registerArmor(Material.NETHERITE_LEGGINGS, 6.0, diamondCritPiece);
-        registerArmor(Material.NETHERITE_BOOTS, 3.0, diamondCritPiece);
+        double netheriteHelmetCrit = 0.0325;
+        double netheriteChestCrit = 0.08;
+        double netheriteLegCrit = 0.055;
+        double netheriteBootCrit = 0.0325;
+        registerArmor(Material.NETHERITE_HELMET, 3.0, netheriteHelmetCrit);
+        registerArmor(Material.NETHERITE_CHESTPLATE, 8.0, netheriteChestCrit);
+        registerArmor(Material.NETHERITE_LEGGINGS, 6.0, netheriteLegCrit);
+        registerArmor(Material.NETHERITE_BOOTS, 3.0, netheriteBootCrit);
+
+        registerArmorIfPresent("COPPER_HELMET", 2.0, 0.0);
+        registerArmorIfPresent("COPPER_CHESTPLATE", 5.0, 0.0);
+        registerArmorIfPresent("COPPER_LEGGINGS", 4.0, 0.0);
+        registerArmorIfPresent("COPPER_BOOTS", 1.0, 0.0);
+
+        registerToolIfPresent("COPPER_SWORD", 6.0, 1.6);
+        registerAxeIfPresent("COPPER_AXE", 9.0, 0.9);
+        registerPickaxeIfPresent("COPPER_PICKAXE", 4.0, 1.2);
+        registerShovelIfPresent("COPPER_SHOVEL", 4.5, 1.0);
+        registerHoeIfPresent("COPPER_HOE", 1.0, 3.0);
     }
 
     public Map<StatId, Double> statsFor(Material material) {
@@ -119,6 +138,13 @@ public final class VanillaStatResolver {
         table.put(material, Map.copyOf(stats));
     }
 
+    private void registerArmorIfPresent(String materialName, double armor, double critDamage) {
+        Material material = Material.matchMaterial(materialName);
+        if (material != null) {
+            registerArmor(material, armor, critDamage);
+        }
+    }
+
     private void register(Material material, double attackDamage, double attackSpeed, double critDamage) {
         Map<StatId, Double> stats = new HashMap<>();
         stats.put(StatIds.ATTACK_DAMAGE, attackDamage);
@@ -134,5 +160,28 @@ public final class VanillaStatResolver {
         if (material != null) {
             register(material, attackDamage, attackSpeed, critDamage);
         }
+    }
+
+    private void registerToolIfPresent(String materialName, double damage, double speed) {
+        Material material = Material.matchMaterial(materialName);
+        if (material != null) {
+            register(material, damage, speed, 0.0);
+        }
+    }
+
+    private void registerAxeIfPresent(String materialName, double damage, double speed) {
+        registerToolIfPresent(materialName, damage, speed);
+    }
+
+    private void registerPickaxeIfPresent(String materialName, double damage, double speed) {
+        registerToolIfPresent(materialName, damage, speed);
+    }
+
+    private void registerShovelIfPresent(String materialName, double damage, double speed) {
+        registerToolIfPresent(materialName, damage, speed);
+    }
+
+    private void registerHoeIfPresent(String materialName, double damage, double speed) {
+        registerToolIfPresent(materialName, damage, speed);
     }
 }
