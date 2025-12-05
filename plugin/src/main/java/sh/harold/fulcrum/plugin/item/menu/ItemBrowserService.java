@@ -338,13 +338,14 @@ public final class ItemBrowserService {
     }
 
     private List<Component> filterSummaryLore(ItemBrowserState state) {
-        Component source = Component.text("➜ Source: ", NamedTextColor.YELLOW)
+        Component spacer = Component.text(" ").decoration(TextDecoration.ITALIC, false);
+        Component source = Component.text("Source: ", NamedTextColor.YELLOW)
             .append(sourceDisplay(state.sourceFilter()))
             .decoration(TextDecoration.ITALIC, false);
-        Component rarity = Component.text("➜ Rarity: ", NamedTextColor.YELLOW)
+        Component rarity = Component.text("Rarity: ", NamedTextColor.YELLOW)
             .append(rarityDisplay(state.rarityFilter()))
             .decoration(TextDecoration.ITALIC, false);
-        return List.of(source, rarity);
+        return List.of(spacer, source, rarity);
     }
 
     private List<Component> sourceLore(SourceFilter current) {
@@ -381,13 +382,14 @@ public final class ItemBrowserService {
     }
 
     private List<Component> sortLore(ItemSort current) {
+        Component spacer = Component.text(" ").decoration(TextDecoration.ITALIC, false);
         Component name = sortLine("Sort by Name", current == ItemSort.NAME);
         Component type = sortLine("Sort by Item Type", current == ItemSort.TYPE);
-        return List.of(name, type);
+        return List.of(spacer, name, type);
     }
 
     private Component sortLine(String label, boolean selected) {
-        String pointer = selected ? "➜ " : "   ";
+        String pointer = selected ? "-> " : "   ";
         NamedTextColor color = selected ? NamedTextColor.YELLOW : NamedTextColor.GRAY;
         return Component.text(pointer + label, color)
             .decoration(TextDecoration.ITALIC, false);
