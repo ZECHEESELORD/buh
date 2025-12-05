@@ -182,6 +182,10 @@ public final class PlayerMenuService {
             });
     }
 
+    public void openStats(Player player) {
+        statBreakdownView.open(player);
+    }
+
     public CompletionStage<Void> openMenu(Player player) {
         Objects.requireNonNull(player, "player");
         MenuButton headline = MenuButton.builder(Material.PLAYER_HEAD)

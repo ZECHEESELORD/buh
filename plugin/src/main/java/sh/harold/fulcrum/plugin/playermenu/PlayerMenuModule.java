@@ -20,6 +20,7 @@ import sh.harold.fulcrum.plugin.stash.StashService;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
+import sh.harold.fulcrum.plugin.stats.StatsModule;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.paper.command.brigadier.Commands;
@@ -38,6 +39,7 @@ public final class PlayerMenuModule implements FulcrumModule {
     private final PlayerDataModule playerDataModule;
     private final ScoreboardService scoreboardService;
     private final UnlockableModule unlockableModule;
+    private final StatsModule statsModule;
     private PlayerMenuService playerMenuService;
 
     public PlayerMenuModule(
@@ -47,7 +49,8 @@ public final class PlayerMenuModule implements FulcrumModule {
         MenuModule menuModule,
         PlayerDataModule playerDataModule,
         ScoreboardService scoreboardService,
-        UnlockableModule unlockableModule
+        UnlockableModule unlockableModule,
+        StatsModule statsModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
@@ -56,13 +59,21 @@ public final class PlayerMenuModule implements FulcrumModule {
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.unlockableModule = Objects.requireNonNull(unlockableModule, "unlockableModule");
+        this.statsModule = Objects.requireNonNull(statsModule, "statsModule");
     }
 
     @Override
     public ModuleDescriptor descriptor() {
         return new ModuleDescriptor(
             ModuleId.of("player-menu"),
-            Set.of(ModuleId.of("data"), ModuleId.of("stash"), ModuleId.of("player-data"), ModuleId.of("menu"), ModuleId.of("perks")),
+            Set.of(
+                ModuleId.of("data"),
+                ModuleId.of("stash"),
+                ModuleId.of("player-data"),
+                ModuleId.of("menu"),
+                ModuleId.of("perks"),
+                ModuleId.of("rpg-stats")
+            ),
             ModuleCategory.HUD
         );
     }
@@ -83,6 +94,9 @@ public final class PlayerMenuModule implements FulcrumModule {
             "UnlockableService not available"
         );
         UnlockableRegistry unlockableRegistry = unlockableModule.registry();
+        var statService = Objects.requireNonNull(statsModule.statService(), "StatService not available");
+        var statRegistry = Objects.requireNonNull(statsModule.statRegistry(), "StatRegistry not available");
+        var sourceContextRegistry = Objects.requireNonNull(statsModule.statSourceContextRegistry(), "StatSourceContextRegistry not available");
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         playerMenuService = new PlayerMenuService(
@@ -95,7 +109,10 @@ public final class PlayerMenuModule implements FulcrumModule {
             playerDirectoryService,
             scoreboardService,
             unlockableService,
-            unlockableRegistry
+            unlockableRegistry,
+            statService,
+            statRegistry,
+            sourceContextRegistry
         );
 
         pluginManager.registerEvents(new PlayerMenuListener(playerMenuService), plugin);
@@ -112,5 +129,6 @@ public final class PlayerMenuModule implements FulcrumModule {
         Commands registrar = event.registrar();
         registrar.register(new PlayerMenuCommand(playerMenuService).build(), "menu", java.util.List.of());
         registrar.register(new PlayerSettingsCommand(playerMenuService).build(), "settings", java.util.List.of());
+        registrar.register(new StatsMenuCommand(playerMenuService).build(), "stats", java.util.List.of());
     }
 }
