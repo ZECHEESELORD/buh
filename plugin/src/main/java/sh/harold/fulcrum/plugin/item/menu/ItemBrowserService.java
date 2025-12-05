@@ -252,10 +252,6 @@ public final class ItemBrowserService {
 
     private void clearSearch(Player player) {
         applySearch(player, "");
-        ItemBrowserSession session = currentSession(player);
-        if (session != null) {
-            refreshOpenBrowser(player, session.withState(session.state().withSearchQuery("")));
-        }
     }
 
     private void openFilterMenu(Player player) {
@@ -698,10 +694,6 @@ public final class ItemBrowserService {
     private record ItemBrowserSession(List<ItemEntry> entries, ItemBrowserState state) {
         private ItemBrowserSession {
             entries = List.copyOf(entries);
-        }
-
-        ItemBrowserSession withState(ItemBrowserState next) {
-            return new ItemBrowserSession(entries, next);
         }
     }
 
