@@ -340,10 +340,10 @@ public final class ItemBrowserService {
     }
 
     private List<Component> filterSummaryLore(ItemBrowserState state) {
-        Component source = Component.text("Source: ", NamedTextColor.YELLOW)
+        Component source = Component.text("Source: ", NamedTextColor.GRAY)
             .append(sourceDisplay(state.sourceFilter()))
             .decoration(TextDecoration.ITALIC, false);
-        Component rarity = Component.text("Rarity: ", NamedTextColor.YELLOW)
+        Component rarity = Component.text("Rarity: ", NamedTextColor.GRAY)
             .append(rarityDisplay(state.rarityFilter()))
             .decoration(TextDecoration.ITALIC, false);
         return List.of(spacer(), source, rarity);
