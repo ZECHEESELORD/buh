@@ -361,7 +361,7 @@ public final class ItemBrowserService {
     private Component sourceLoreLine(SourceFilter filter, SourceFilter current) {
         boolean selected = filter == current;
         Component pointer = Component.text(selected ? "➜ " : "   ", NamedTextColor.YELLOW);
-        Component display = sourceDisplay(filter).decoration(TextDecoration.BOLD, selected);
+        Component display = sourceDisplay(filter);
         return pointer.append(display).decoration(TextDecoration.ITALIC, false);
     }
 
@@ -393,19 +393,17 @@ public final class ItemBrowserService {
         String pointer = selected ? "➜ " : "   ";
         NamedTextColor color = selected ? NamedTextColor.YELLOW : NamedTextColor.GRAY;
         return Component.text(pointer + label, color)
-            .decoration(TextDecoration.BOLD, selected)
             .decoration(TextDecoration.ITALIC, false);
     }
 
     private Component sourceDisplay(SourceFilter filter) {
         return Component.text(filter.label(), filter.color())
-            .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false);
     }
 
     private Component rarityDisplay(ItemRarityFilter filter) {
         if (filter == ItemRarityFilter.ANY) {
-            Component label = Component.text("ALL", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true);
+            Component label = Component.text("ALL", NamedTextColor.DARK_GRAY);
             Component stars = Component.text("★★★★★", NamedTextColor.DARK_GRAY);
             return Component.text()
                 .append(stars)
@@ -431,7 +429,6 @@ public final class ItemBrowserService {
             .append(Component.text(emptyStars, NamedTextColor.DARK_GRAY))
             .build();
         Component label = Component.text(rarity.name(), NamedTextColor.DARK_GRAY)
-            .decoration(TextDecoration.BOLD, true)
             .color(color);
         return Component.text()
             .append(stars)
