@@ -450,7 +450,7 @@ final class StatBreakdownView {
             }
             result.add(mergeGroup(
                 "slot:" + slot.toLowerCase(Locale.ROOT),
-                slotContext(slot),
+                slotContext(slot, slotDisplayItem(group)),
                 SourceView.SLOT,
                 group
             ));
@@ -564,17 +564,27 @@ final class StatBreakdownView {
         };
     }
 
-    private StatSourceContext slotContext(String slotTag) {
+    private StatSourceContext slotContext(String slotTag, ItemStack display) {
         String displaySlot = displaySlotName(slotTag);
         String description = "All sources from " + displaySlot.toLowerCase(Locale.ROOT) + ".";
         return new StatSourceContext(
             displaySlot,
             "&8" + displaySlot,
             description,
-            new ItemStack(slotMaterial(slotTag)),
+            display != null ? display : new ItemStack(slotMaterial(slotTag)),
             SourceCategory.UNKNOWN,
             slotTag
         );
+    }
+
+    private ItemStack slotDisplayItem(List<SourceEntry> entries) {
+        for (SourceEntry entry : entries) {
+            StatSourceContext ctx = entry.context();
+            if (ctx != null && ctx.displayItem() != null) {
+                return ctx.displayItem();
+            }
+        }
+        return null;
     }
 
     private StatSourceContext categoryContext(SourceCategory category, String slotTag) {
