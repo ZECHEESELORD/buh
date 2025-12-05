@@ -796,7 +796,7 @@ final class StatBreakdownView {
     }
 
     private String statDescription(StatId id, String color, String icon, String base) {
-        String prefix = color + icon;
+        String prefix = color;
         return switch (id.value()) {
             case "max_health" -> prefix + "Your Health stat increases your maximum health. Base: &f" + base;
             case "attack_damage" -> prefix + "Your Attack Damage raises the damage dealt on hits.";
