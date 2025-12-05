@@ -350,11 +350,11 @@ final class StatBreakdownView {
     private MenuButton filterToggle(StatViewState state, java.util.function.Consumer<StatViewState> action) {
         boolean positiveOnly = state.positiveOnly();
         return MenuButton.builder(Material.PUFFERFISH)
-            .name(positiveOnly ? "&aView: Your Stats" : "&aView: All Stats")
-            .secondary(positiveOnly ? "Stats > 0" : "Every Stat")
-            .description(positiveOnly
-                ? "Show only stats where you have a value above zero."
-                : "Show the full stat list.")
+            .name("&aToggle Show All Stats")
+            .secondary("Show All Stats")
+            .description("Toggle whether you want to see ALL SMP statistics, or just the ones you have.")
+            .lore(Component.text("Show all stats: " + (positiveOnly ? "Nope" : "Yup"), positiveOnly ? NamedTextColor.RED : NamedTextColor.GREEN)
+                .decoration(TextDecoration.ITALIC, false))
             .slot(50)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(player -> action.accept(state.toggleFilter()))
