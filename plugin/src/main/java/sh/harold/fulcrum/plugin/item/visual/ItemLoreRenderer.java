@@ -82,6 +82,16 @@ public final class ItemLoreRenderer {
 
         StatSnapshot stats = buildStats(instance);
         String anvilName = customName(sourceMeta, defaultDisplayName, definition.material());
+        boolean hasStats = !stats.all().isEmpty();
+        boolean hasEnchants = !instance.enchants().isEmpty();
+        boolean hasAbilities = definition.component(ComponentType.ABILITY, AbilityComponent.class)
+            .map(component -> !component.abilities().isEmpty())
+            .orElse(false);
+        boolean hasTrimSlot = instance.stack().getItemMeta() instanceof org.bukkit.inventory.meta.ArmorMeta;
+        VisualComponent visualComponent = visual;
+        boolean hasFlavor = visualComponent != null && !visualComponent.flavor().isEmpty();
+        boolean hasDurability = instance.durability().map(data -> data.data().max() > 0).orElse(false);
+        boolean hasFollowingSections = hasStats || hasEnchants || hasAbilities || hasTrimSlot || hasFlavor || hasDurability;
         List<Component> lore = new ArrayList<>();
         for (LoreSection section : definition.loreLayout()) {
             switch (section) {
@@ -89,7 +99,7 @@ public final class ItemLoreRenderer {
                     // header handled via display name
                 }
                 case RARITY -> addRarity(lore, visual);
-                case TAGS -> addTags(lore, definition, stats, anvilName);
+                case TAGS -> addTags(lore, definition, anvilName, hasFollowingSections);
                 case ENCHANTS -> addEnchants(lore, instance);
                 case SOCKET -> addTrimSlots(lore, instance);
                 case PRIMARY_STATS -> addStats(lore, stats);
@@ -108,7 +118,7 @@ public final class ItemLoreRenderer {
         return clone;
     }
 
-    private void addTags(List<Component> lore, CustomItem definition, StatSnapshot stats, String anvilName) {
+    private void addTags(List<Component> lore, CustomItem definition, String anvilName, boolean spacerAfter) {
         List<String> tags = new ArrayList<>();
         if (definition.id().startsWith("vanilla:")) {
             tags.add("Vanilla");
@@ -126,8 +136,14 @@ public final class ItemLoreRenderer {
             return;
         }
         lore.add(Component.text(String.join(", ", tags), NamedTextColor.DARK_GRAY));
-        lore.add(noItalics(Component.text("ID: " + definition.id(), NamedTextColor.GRAY)));
-        lore.add(Component.empty());
+        if (definition.id().startsWith("vanilla:")) {
+            String raw = definition.id().substring(definition.id().indexOf(':') + 1);
+            String label = raw.toUpperCase(Locale.ROOT);
+            lore.add(noItalics(Component.text("ID: " + label, NamedTextColor.GRAY)));
+        }
+        if (spacerAfter) {
+            lore.add(Component.empty());
+        }
     }
 
     private void addStats(List<Component> lore, StatSnapshot stats) {
