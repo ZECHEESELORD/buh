@@ -758,10 +758,10 @@ final class StatBreakdownView {
         if (meta == null) {
             return List.of();
         }
-        NamedTextColor color = Optional.ofNullable(meta.displayName())
-            .flatMap(component -> Optional.ofNullable(component.color()))
-            .map(raw -> raw instanceof NamedTextColor named ? named : NamedTextColor.nearestTo(raw))
-            .orElse(NamedTextColor.WHITE);
+        Component displayName = meta.displayName();
+        NamedTextColor color = displayName == null
+            ? NamedTextColor.WHITE
+            : extractColor(displayName).orElse(NamedTextColor.WHITE);
         String baseName = Optional.ofNullable(displayItem.getI18NDisplayName())
             .filter(raw -> !raw.isBlank())
             .orElse(humanize(displayItem.getType().name()));
@@ -1016,5 +1016,22 @@ final class StatBreakdownView {
         double flat = 0.0;
         double percentAdd = 0.0;
         double percentMultFactor = 1.0;
+    }
+
+    private Optional<NamedTextColor> extractColor(Component component) {
+        if (component == null) {
+            return Optional.empty();
+        }
+        TextColor direct = component.color();
+        if (direct != null) {
+            return Optional.ofNullable(direct instanceof NamedTextColor named ? named : NamedTextColor.nearestTo(direct));
+        }
+        for (Component child : component.children()) {
+            Optional<NamedTextColor> found = extractColor(child);
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
     }
 }
