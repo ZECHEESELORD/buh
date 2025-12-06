@@ -171,7 +171,8 @@ public final class PlayerMenuService {
             plugin,
             menuService,
             unlockableService,
-            cosmeticRegistry
+            cosmeticRegistry,
+            this::refreshMenuItem
         );
         this.statBreakdownView = new StatBreakdownView(
             plugin,
@@ -194,6 +195,10 @@ public final class PlayerMenuService {
                 logger.log(Level.SEVERE, "Failed to prepare player menu for " + playerId, throwable);
                 return null;
             });
+    }
+
+    public void refreshMenuItem(Player player) {
+        distribute(player);
     }
 
     public void openStats(Player player) {
