@@ -35,6 +35,9 @@ public final class CursorRenderListener implements Listener {
             if (cursor == null || cursor.getType().isAir()) {
                 return;
             }
+            if (cursor.getMaxStackSize() > 1) {
+                return; // keep stackables pristine; render only via packets
+            }
             ItemMeta originalMeta = cursor.getItemMeta();
             ItemStack rendered = renderer.render(cursor, player);
             // Preserve any existing custom name on the server-side stack; we only want

@@ -11,8 +11,8 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.stat.ItemStatBridge;
 
@@ -83,12 +83,22 @@ public final class ItemEquipListener implements Listener {
 
     private void sanitize(Player player) {
         var inventory = player.getInventory();
-        inventory.setItemInMainHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getItemInMainHand()));
-        inventory.setItemInOffHand(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getItemInOffHand()));
-        inventory.setHelmet(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getHelmet()));
-        inventory.setChestplate(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getChestplate()));
-        inventory.setLeggings(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getLeggings()));
-        inventory.setBoots(sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(inventory.getBoots()));
+        inventory.setItemInMainHand(sanitizeEquipSlot(inventory.getItemInMainHand()));
+        inventory.setItemInOffHand(sanitizeEquipSlot(inventory.getItemInOffHand()));
+        inventory.setHelmet(sanitizeEquipSlot(inventory.getHelmet()));
+        inventory.setChestplate(sanitizeEquipSlot(inventory.getChestplate()));
+        inventory.setLeggings(sanitizeEquipSlot(inventory.getLeggings()));
+        inventory.setBoots(sanitizeEquipSlot(inventory.getBoots()));
+    }
+
+    private ItemStack sanitizeEquipSlot(ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) {
+            return stack;
+        }
+        if (stack.getMaxStackSize() > 1) {
+            return stack; // keep stackables pristine
+        }
+        return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(stack);
     }
 
     private void refreshLater(Player player) {

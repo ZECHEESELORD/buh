@@ -19,6 +19,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 
@@ -28,12 +29,12 @@ import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,18 +42,7 @@ public final class ItemResolver {
 
     private static final Map<Enchantment, String> ENCHANT_IDS = buildEnchantIds();
 
-    private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = Set.of(
-        Enchantment.SHARPNESS,
-        Enchantment.SMITE,
-        Enchantment.BANE_OF_ARTHROPODS,
-        Enchantment.PROTECTION,
-        Enchantment.FIRE_PROTECTION,
-        Enchantment.PROJECTILE_PROTECTION,
-        Enchantment.BLAST_PROTECTION,
-        Enchantment.FEATHER_FALLING,
-        Enchantment.POWER,
-        Enchantment.PUNCH
-    );
+    private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = buildOverriddenEnchants();
 
     private final ItemRegistry registry;
     private final VanillaWrapperFactory wrapperFactory;
@@ -111,6 +101,24 @@ public final class ItemResolver {
         return Map.copyOf(ids);
     }
 
+    private static Set<Enchantment> buildOverriddenEnchants() {
+        Set<Enchantment> enchants = new LinkedHashSet<>();
+        enchants.add(Enchantment.SHARPNESS);
+        enchants.add(Enchantment.SMITE);
+        enchants.add(Enchantment.BANE_OF_ARTHROPODS);
+        enchants.add(Enchantment.PROTECTION);
+        enchants.add(Enchantment.FIRE_PROTECTION);
+        enchants.add(Enchantment.PROJECTILE_PROTECTION);
+        enchants.add(Enchantment.BLAST_PROTECTION);
+        enchants.add(Enchantment.FEATHER_FALLING);
+        enchants.add(Enchantment.POWER);
+        enchants.add(Enchantment.PUNCH);
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchants::add);
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchants::add);
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchants::add);
+        return Set.copyOf(enchants);
+    }
+
     public ItemResolver(
         ItemRegistry registry,
         VanillaWrapperFactory wrapperFactory,
@@ -134,47 +142,57 @@ public final class ItemResolver {
         if (stack == null || stack.getType() == Material.AIR) {
             return Optional.empty();
         }
-        ItemStack working = stack;
+        ItemStack working = stack.clone();
         String id = readId(working);
         CustomItem definition = id == null ? null : registry.get(id).orElse(null);
         if (definition == null) {
             definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
-            working = itemPdc.setIdInPlace(working, definition.id());
         }
         if (blockedItemMasker.isBlocked(working)) {
             working = blockedItemMasker.sanitizeToVanilla(working);
             definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
         }
-        final String resolvedDefinitionId = definition.id();
-        Map<StatId, Double> stats = itemPdc.readStats(working).orElse(null);
+        boolean taggingRequired = requiresTagging(working, definition);
+        if (!taggingRequired) {
+            ItemStack pristine = stripStackableMetadata(working);
+            Map<StatId, Double> stats = computeDefinitionStats(definition);
+            Map<String, Integer> enchants = itemPdc.readEnchants(pristine).orElse(Map.of());
+            return Optional.of(new ItemInstance(definition, pristine, stats, enchants, enchantRegistry, DurabilityState.from(null)));
+        }
+        ItemStack tagged = itemPdc.setId(working, definition.id());
+        Map<StatId, Double> stats = itemPdc.readStats(tagged).orElse(null);
         if (stats == null || stats.isEmpty()) {
             stats = computeDefinitionStats(definition);
-            working = itemPdc.writeStats(working, stats);
+            tagged = itemPdc.writeStats(tagged, stats);
         }
-        DurabilityData durabilityData = itemPdc.readDurability(working).orElse(null);
+        DurabilityData durabilityData = itemPdc.readDurability(tagged).orElse(null);
         if (durabilityData == null) {
-            durabilityData = computeDurability(definition, working);
+            durabilityData = computeDurability(definition, tagged);
             if (durabilityData != null) {
-                working = itemPdc.writeDurability(working, durabilityData);
+                tagged = itemPdc.writeDurability(tagged, durabilityData);
             }
         }
-        Map<String, Integer> enchants = mergeEnchants(working);
-        working = itemPdc.writeEnchants(working, enchants);
-        working = storeTrim(working);
+        Map<String, Integer> enchants = mergeEnchants(tagged);
+        if (!enchants.isEmpty()) {
+            tagged = itemPdc.writeEnchants(tagged, enchants);
+        } else {
+            tagged = itemPdc.clearEnchants(tagged);
+        }
+        tagged = storeTrim(tagged);
         final CustomItem finalDefinition = definition;
         if (shouldTagInstance(definition)) {
-            Optional<UUID> existingInstanceId = itemPdc.readInstanceId(working);
+            Optional<UUID> existingInstanceId = itemPdc.readInstanceId(tagged);
             if (existingInstanceId.isEmpty()) {
                 UUID instanceId = UUID.randomUUID();
-                working = itemPdc.ensureInstanceId(working, instanceId);
-                working = itemPdc.ensureProvenance(working, ItemCreationSource.MIGRATION, Instant.now());
+                tagged = itemPdc.ensureInstanceId(tagged, instanceId);
+                tagged = itemPdc.ensureProvenance(tagged, ItemCreationSource.MIGRATION, Instant.now());
             } else {
                 existingInstanceId.ifPresent(instanceId -> ensureLedgerRecord(instanceId, finalDefinition.id()));
             }
         }
-        working = mirrorAttributes(working, definition, stats);
-        working = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(working);
-        return Optional.of(new ItemInstance(definition, working, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
+        tagged = mirrorAttributes(tagged, definition, stats);
+        tagged = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(tagged);
+        return Optional.of(new ItemInstance(definition, tagged, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
     }
 
     public ItemStack applyId(ItemStack stack, String id) {
@@ -187,6 +205,10 @@ public final class ItemResolver {
 
     public ItemStack initializeItem(CustomItem definition) {
         ItemStack base = new ItemStack(definition.material());
+        boolean taggingRequired = requiresTagging(base, definition);
+        if (!taggingRequired) {
+            return stripStackableMetadata(base);
+        }
         ItemStack withId = itemPdc.setId(base, definition.id());
         Map<StatId, Double> stats = computeDefinitionStats(definition);
         withId = itemPdc.writeStats(withId, stats);
@@ -216,6 +238,61 @@ public final class ItemResolver {
 
     private String readId(ItemStack stack) {
         return itemPdc.readId(stack).orElse(null);
+    }
+
+    private boolean requiresTagging(ItemStack stack, CustomItem definition) {
+        if (stack == null || stack.getType() == Material.AIR) {
+            return false;
+        }
+        if (blockedItemMasker.isBlocked(stack)) {
+            return true;
+        }
+        if (stack.getMaxStackSize() <= 1) {
+            return true;
+        }
+        if (definition == null) {
+            return false;
+        }
+        if (!isVanilla(definition)) {
+            return true;
+        }
+        ItemCategory category = definition.category();
+        return switch (category) {
+            case MATERIAL, CONSUMABLE -> false;
+            default -> true;
+        };
+    }
+
+    private boolean isVanilla(CustomItem definition) {
+        return definition != null && definition.id() != null && definition.id().startsWith("vanilla:");
+    }
+
+    private ItemStack stripStackableMetadata(ItemStack stack) {
+        if (stack == null) {
+            return null;
+        }
+        ItemStack working = stack.clone();
+        ItemMeta meta = working.getItemMeta();
+        if (meta != null) {
+            meta.removeItemFlags(
+                ItemFlag.HIDE_ATTRIBUTES,
+                ItemFlag.HIDE_ENCHANTS,
+                ItemFlag.HIDE_ARMOR_TRIM
+            );
+            working.setItemMeta(meta);
+        }
+        working = itemPdc.clear(working, itemPdc.keys().itemId());
+        working = itemPdc.clear(working, itemPdc.keys().version());
+        working = itemPdc.clear(working, itemPdc.keys().stats());
+        working = itemPdc.clear(working, itemPdc.keys().enchants());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityCurrent());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityMax());
+        working = itemPdc.clear(working, itemPdc.keys().trimPattern());
+        working = itemPdc.clear(working, itemPdc.keys().trimMaterial());
+        working = itemPdc.clear(working, itemPdc.keys().instanceId());
+        working = itemPdc.clear(working, itemPdc.keys().createdAt());
+        working = itemPdc.clear(working, itemPdc.keys().source());
+        return working;
     }
 
     private Map<StatId, Double> computeDefinitionStats(CustomItem definition) {

@@ -134,7 +134,7 @@ public final class ItemPdc {
     }
 
     public ItemStack writeEnchants(ItemStack stack, Map<String, Integer> enchants) {
-        if (stack == null || enchants == null) {
+        if (stack == null || enchants == null || enchants.isEmpty()) {
             return stack;
         }
         String encoded = enchantCodec.encode(enchants);

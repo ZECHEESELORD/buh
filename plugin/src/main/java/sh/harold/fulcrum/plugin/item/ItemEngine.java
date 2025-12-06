@@ -179,13 +179,45 @@ public final class ItemEngine {
         if (stack == null || stack.getType().isAir()) {
             return stack;
         }
+        if (stack.getMaxStackSize() > 1) {
+            return stack;
+        }
         java.time.Instant now = java.time.Instant.now();
         var resolved = resolver.resolve(stack).orElse(null);
         org.bukkit.inventory.ItemStack working = resolved == null ? stack.clone() : resolved.stack();
         if (resolved != null && resolver.shouldTagInstance(resolved.definition())) {
             working = itemPdc.ensureInstanceId(working);
         }
-        return itemPdc.ensureProvenance(working, source == null ? ItemCreationSource.UNKNOWN : source, now);
+        working = itemPdc.ensureProvenance(working, source == null ? ItemCreationSource.UNKNOWN : source, now);
+        return working;
+    }
+
+    public org.bukkit.inventory.ItemStack sanitizeStackable(org.bukkit.inventory.ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || stack.getMaxStackSize() <= 1) {
+            return stack;
+        }
+        org.bukkit.inventory.ItemStack working = stack;
+        org.bukkit.inventory.meta.ItemMeta meta = working.getItemMeta();
+        if (meta != null && !meta.getItemFlags().isEmpty()) {
+            meta.removeItemFlags(
+                org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES,
+                org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS,
+                org.bukkit.inventory.ItemFlag.HIDE_ARMOR_TRIM
+            );
+            working.setItemMeta(meta);
+        }
+        working = itemPdc.clear(working, itemPdc.keys().itemId());
+        working = itemPdc.clear(working, itemPdc.keys().version());
+        working = itemPdc.clear(working, itemPdc.keys().stats());
+        working = itemPdc.clear(working, itemPdc.keys().enchants());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityCurrent());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityMax());
+        working = itemPdc.clear(working, itemPdc.keys().trimPattern());
+        working = itemPdc.clear(working, itemPdc.keys().trimMaterial());
+        working = itemPdc.clear(working, itemPdc.keys().instanceId());
+        working = itemPdc.clear(working, itemPdc.keys().createdAt());
+        working = itemPdc.clear(working, itemPdc.keys().source());
+        return working;
     }
 
     public void enable() {
