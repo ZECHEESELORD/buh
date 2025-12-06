@@ -83,7 +83,7 @@ final class CosmeticMenuView {
 
         MenuButton menuSkinButton = buildSectionButton(CosmeticSection.PLAYER_MENU_SKIN, state, 20);
         MenuButton actionsButton = buildSectionButton(CosmeticSection.ACTIONS, state, 21);
-        MenuButton chatPrefixButton = buildSectionButton(CosmeticSection.CHAT_PREFIX, state, 22);
+        MenuButton chatPrefixButton = buildSectionButton(CosmeticSection.CHAT_PREFIX, state, 23);
         MenuButton statusButton = buildSectionButton(CosmeticSection.STATUS, state, 24);
 
         menuService.createMenuBuilder()
