@@ -21,27 +21,33 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
+import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.stats.core.ConditionContext;
 import sh.harold.fulcrum.stats.core.StatContainer;
 import sh.harold.fulcrum.stats.core.StatIds;
 import sh.harold.fulcrum.stats.service.EntityKey;
 import sh.harold.fulcrum.stats.service.StatService;
+import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Map;
 
 public final class StatDamageListener implements Listener {
 
     private final StatService statService;
     private final StatMappingConfig config;
     private final DamageMarkerRenderer damageMarkerRenderer;
+    private final ItemPdc itemPdc;
 
-    public StatDamageListener(StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer) {
+    public StatDamageListener(Plugin plugin, StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer) {
+        Objects.requireNonNull(plugin, "plugin");
         this.statService = statService;
         this.config = config;
         this.damageMarkerRenderer = damageMarkerRenderer;
+        this.itemPdc = new ItemPdc(plugin);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -343,7 +349,17 @@ public final class StatDamageListener implements Listener {
         if (item == null || key == null || key.isBlank()) {
             return 0;
         }
-        Enchantment enchantment = Enchantment.getByKey(NamespacedKey.minecraft(key));
+        Map<String, Integer> stored = itemPdc.readEnchants(item).orElse(Map.of());
+        String namespacedKey = key.contains(":") ? key : "fulcrum:" + key;
+        Integer value = stored.get(namespacedKey);
+        if (value == null && !key.contains(":")) {
+            value = stored.get(key);
+        }
+        if (value != null) {
+            return value;
+        }
+        String vanillaKey = key.contains(":") ? key.substring(key.indexOf(':') + 1) : key;
+        Enchantment enchantment = Enchantment.getByKey(NamespacedKey.minecraft(vanillaKey));
         return enchantment == null ? 0 : item.getEnchantmentLevel(enchantment);
     }
 
