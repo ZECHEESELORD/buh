@@ -16,6 +16,8 @@ import sh.harold.fulcrum.plugin.staff.command.OpenInventoryCommand;
 import sh.harold.fulcrum.plugin.staff.VanishService;
 import sh.harold.fulcrum.plugin.staff.command.DumpDataCommand;
 import sh.harold.fulcrum.plugin.staff.command.EmergencyCreativeCommand;
+import sh.harold.fulcrum.plugin.staff.command.FeedCommand;
+import sh.harold.fulcrum.plugin.staff.command.HealCommand;
 import sh.harold.fulcrum.plugin.staff.command.LoopCommand;
 import sh.harold.fulcrum.plugin.staff.command.StaffGamemodeCommand;
 import sh.harold.fulcrum.plugin.staff.command.SudoCommand;
@@ -80,6 +82,8 @@ public final class StaffCommandsModule implements FulcrumModule {
         registrar.register(new VanishCommand(plugin, staffGuard, vanishService).build(), "vanish", java.util.List.of());
         registrar.register(new OpenInventoryCommand(staffGuard, openInventoryService).build(), "openinv", java.util.List.of("openinventory"));
         registrar.register(new DumpDataCommand(plugin, staffGuard, dataModule).build(), "dumpdata", java.util.List.of());
+        registrar.register(new HealCommand(staffGuard).build(), "heal", java.util.List.of());
+        registrar.register(new FeedCommand(staffGuard).build(), "feed", java.util.List.of());
         StaffGamemodeCommand gmCommand = new StaffGamemodeCommand(staffGuard, staffCreativeService);
         registrar.register(gmCommand.build(), "gamemode", java.util.List.of());
         registrar.register(gmCommand.alias("gmc", "creative"), "gmc", java.util.List.of());
