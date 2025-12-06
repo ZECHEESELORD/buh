@@ -126,7 +126,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         unregisterListeners();
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         statEntityListener = new StatEntityListener(statService);
-        statDamageListener = new StatDamageListener(statService, mappingConfig, damageMarkerRenderer);
+        statDamageListener = new StatDamageListener(plugin, statService, mappingConfig, damageMarkerRenderer);
         pluginManager.registerEvents(statEntityListener, plugin);
         pluginManager.registerEvents(statDamageListener, plugin);
     }

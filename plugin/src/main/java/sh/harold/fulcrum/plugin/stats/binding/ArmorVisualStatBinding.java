@@ -2,6 +2,7 @@ package sh.harold.fulcrum.plugin.stats.binding;
 
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.LivingEntity;
 import sh.harold.fulcrum.plugin.stats.StatEntityResolver;
 import sh.harold.fulcrum.plugin.stats.StatMappingConfig;
@@ -42,7 +43,11 @@ public final class ArmorVisualStatBinding implements StatBinding {
                 ? 0.0
                 : mappingConfig.maxReduction() * (1.0 - Math.exp(-defense / mappingConfig.defenseScale()));
             double barValue = Math.max(0.0, Math.min(20.0, reduction * 20.0)); // armor bar is 10 icons (20 points)
-            armorAttribute.setBaseValue(barValue);
+            double modifierSum = armorAttribute.getModifiers().stream()
+                .mapToDouble(AttributeModifier::getAmount)
+                .sum();
+            double baseValue = Math.max(0.0, barValue - modifierSum);
+            armorAttribute.setBaseValue(baseValue);
         }
 
         AttributeInstance toughnessAttribute = living.getAttribute(Attribute.ARMOR_TOUGHNESS);
