@@ -24,6 +24,9 @@ public final class CraftProvenanceListener implements Listener {
             return;
         }
         ItemStack tagged = itemEngine.tagItem(result, ItemCreationSource.CRAFT);
-        event.getInventory().setResult(tagged);
+        ItemStack normalized = itemEngine.resolver().resolve(tagged)
+            .map(sh.harold.fulcrum.plugin.item.runtime.ItemInstance::stack)
+            .orElse(tagged);
+        event.getInventory().setResult(normalized);
     }
 }

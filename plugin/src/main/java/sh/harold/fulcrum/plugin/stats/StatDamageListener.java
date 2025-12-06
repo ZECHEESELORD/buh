@@ -49,6 +49,9 @@ public final class StatDamageListener implements Listener {
         if (!(event.getEntity() instanceof LivingEntity defender)) {
             return;
         }
+        if (defender.getNoDamageTicks() > defender.getMaximumNoDamageTicks() / 2) {
+            return; // Honor vanilla invulnerability frames to avoid rapid-fire hits (lava, magma, melee multi-hit).
+        }
 
         LivingEntity attacker = resolveAttacker(event);
         MaceSmash maceSmash = attacker == null ? MaceSmash.inactive() : computeMaceSmash(event, attacker);
@@ -59,13 +62,23 @@ public final class StatDamageListener implements Listener {
 
         double baseDamage = event.getDamage();
         boolean critical = false;
-        if (attacker != null) {
+        boolean useStatDamage = attacker != null
+            && (event instanceof EntityDamageByEntityEvent
+                || event.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                || event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK
+                || event.getCause() == EntityDamageEvent.DamageCause.PROJECTILE);
+        if (useStatDamage) {
             StatContainer attackerContainer = statService.getContainer(EntityKey.fromUuid(attacker.getUniqueId()));
-            baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext) + maceSmash.bonusDamage();
-            double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
-            if (attacker instanceof Player player && isCritical(player)) {
-                baseDamage *= critMultiplier;
-                critical = true;
+            boolean hasCustomAttack = attackerContainer.isCustomized(StatIds.ATTACK_DAMAGE) || attackerContainer.isCustomized(StatIds.CRIT_DAMAGE);
+            if (!hasCustomAttack && !(attacker instanceof Player)) {
+                baseDamage = event.getDamage();
+            } else {
+                baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext) + maceSmash.bonusDamage();
+                double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
+                if (attacker instanceof Player player && isCritical(player)) {
+                    baseDamage *= critMultiplier;
+                    critical = true;
+                }
             }
         }
 
@@ -171,16 +184,7 @@ public final class StatDamageListener implements Listener {
     }
 
     private void applyFinalDamage(EntityDamageEvent event, double finalDamage) {
-        for (EntityDamageEvent.DamageModifier modifier : EntityDamageEvent.DamageModifier.values()) {
-            if (!event.isApplicable(modifier)) {
-                continue;
-            }
-            if (modifier == EntityDamageEvent.DamageModifier.BASE) {
-                event.setDamage(modifier, finalDamage);
-            } else {
-                event.setDamage(modifier, 0.0);
-            }
-        }
+        event.setDamage(finalDamage);
     }
 
     private boolean isCritical(Player player) {

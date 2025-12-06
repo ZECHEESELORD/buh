@@ -4,12 +4,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.event.player.PlayerItemMendEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Sound;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.stat.ItemStatBridge;
+import org.bukkit.plugin.Plugin;
 
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
@@ -18,11 +20,13 @@ public final class DurabilityService implements Listener {
 
     private static final String UNBREAKING_ID = "fulcrum:unbreaking";
 
+    private final Plugin plugin;
     private final ItemResolver resolver;
     private final ItemPdc itemPdc;
     private final ItemStatBridge statBridge;
 
-    public DurabilityService(ItemResolver resolver, ItemPdc itemPdc, ItemStatBridge statBridge) {
+    public DurabilityService(Plugin plugin, ItemResolver resolver, ItemPdc itemPdc, ItemStatBridge statBridge) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.resolver = Objects.requireNonNull(resolver, "resolver");
         this.itemPdc = Objects.requireNonNull(itemPdc, "itemPdc");
         this.statBridge = Objects.requireNonNull(statBridge, "statBridge");
@@ -62,6 +66,21 @@ public final class DurabilityService implements Listener {
         }));
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onItemMend(PlayerItemMendEvent event) {
+        ItemStack item = event.getItem();
+        if (item == null || item.getType().isAir()) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTask(plugin, () ->
+            resolver.resolve(item).ifPresent(instance -> instance.durability().ifPresent(durability -> {
+                DurabilityData synced = syncWithDamageMeta(item, durability.data());
+                itemPdc.writeDurability(item, synced);
+                statBridge.refreshPlayer(event.getPlayer());
+            }))
+        );
+    }
+
     private String label(sh.harold.fulcrum.plugin.item.model.ItemCategory category) {
         return switch (category) {
             case HELMET -> "helmet";
@@ -92,5 +111,18 @@ public final class DurabilityService implements Listener {
             }
         }
         return applied;
+    }
+
+    private DurabilityData syncWithDamageMeta(ItemStack item, DurabilityData current) {
+        if (!(item.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+            return current;
+        }
+        int vanillaMax = item.getType().getMaxDurability();
+        if (vanillaMax <= 0) {
+            return current;
+        }
+        int vanillaDamage = Math.max(0, damageable.getDamage());
+        int inferred = Math.max(0, current.max() - vanillaDamage);
+        return new DurabilityData(Math.min(current.max(), inferred), current.max());
     }
 }

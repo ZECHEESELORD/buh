@@ -14,14 +14,23 @@ import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.api.menu.impl.MenuInventoryHolder;
 
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Material;
 
 public final class ProtocolLoreAdapter extends PacketAdapter {
 
     private final ItemLoreRenderer renderer;
+    private final Logger logger;
+    private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
 
     private ProtocolLoreAdapter(Plugin plugin, ItemLoreRenderer renderer) {
-        super(plugin, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS, PacketType.Play.Server.ENTITY_EQUIPMENT);
+        // TODO: re-enable ENTITY_EQUIPMENT once ProtocolLib handles 1.21.10 equipment packets without client decode errors.
+        super(plugin, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS);
         this.renderer = renderer;
+        this.logger = plugin.getLogger();
     }
 
     public static ProtocolLoreAdapter register(Plugin plugin, ItemLoreRenderer renderer) {
@@ -66,17 +75,53 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
             }
             packet.getItemListModifier().write(0, items);
         } else if (packet.getType() == PacketType.Play.Server.ENTITY_EQUIPMENT) {
+            Integer entityId = packet.getIntegers().readSafely(0);
             List<Pair<EnumWrappers.ItemSlot, ItemStack>> list = packet.getSlotStackPairLists().read(0);
             for (int i = 0; i < list.size(); i++) {
                 Pair<EnumWrappers.ItemSlot, ItemStack> pair = list.get(i);
                 ItemStack rendered = renderer.render(pair.getSecond(), viewer);
                 list.set(i, new Pair<>(pair.getFirst(), rendered));
             }
+            logEquipment(viewer, entityId, list);
             packet.getSlotStackPairLists().write(0, list);
         }
     }
 
     public void unregister() {
         ProtocolLibrary.getProtocolManager().removePacketListener(this);
+    }
+
+    private void logEquipment(Player viewer, Integer entityId, List<Pair<EnumWrappers.ItemSlot, ItemStack>> entries) {
+        if (!logger.isLoggable(Level.INFO)) {
+            return;
+        }
+        String joined = entries.stream()
+            .map(pair -> pair.getFirst() + " -> " + summarize(pair.getSecond()))
+            .collect(Collectors.joining(", "));
+        logger.log(
+            Level.INFO,
+            "Entity equipment packet viewer={0}({1}) entityId={2} slots={3}: {4}",
+            new Object[]{
+                viewer.getName(),
+                viewer.getUniqueId(),
+                entityId == null ? "unknown" : entityId,
+                entries.size(),
+                joined
+            }
+        );
+    }
+
+    private String summarize(ItemStack stack) {
+        if (stack == null || stack.getType() == Material.AIR) {
+            return "air";
+        }
+        var meta = stack.getItemMeta();
+        String name = meta != null && meta.hasDisplayName() && meta.displayName() != null
+            ? PLAIN.serialize(meta.displayName())
+            : "";
+        int loreLines = meta != null && meta.hasLore() && meta.lore() != null ? meta.lore().size() : 0;
+        return stack.getType().name() + "x" + stack.getAmount()
+            + (name.isBlank() ? "" : " name=\"" + name + "\"")
+            + " lore=" + loreLines;
     }
 }
