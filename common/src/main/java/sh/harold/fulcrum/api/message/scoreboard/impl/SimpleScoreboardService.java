@@ -7,7 +7,6 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.Team;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardDefinition;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardModule;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
@@ -29,7 +28,6 @@ public class SimpleScoreboardService implements ScoreboardService {
     private static final int MAX_LINES = 15;
     private static final int MAX_ENTRY_LENGTH = 40;
     private static final String BLANK_LINE = ChatColor.RESET.toString();
-    private static final String NO_COLLISION_TEAM = "flc_nocollide";
 
     private final Plugin plugin;
     private final ScoreboardRegistry registry;
@@ -78,11 +76,7 @@ public class SimpleScoreboardService implements ScoreboardService {
         if (player != null && player.isOnline()) {
             Optional.ofNullable(Bukkit.getScoreboardManager())
                     .map(org.bukkit.scoreboard.ScoreboardManager::getMainScoreboard)
-                    .ifPresent(scoreboard -> {
-                        applyNoCollisionTeam(scoreboard);
-                        scoreboard.getTeam(NO_COLLISION_TEAM).addEntry(player.getName());
-                        player.setScoreboard(scoreboard);
-                    });
+                    .ifPresent(player::setScoreboard);
         }
     }
 
@@ -192,7 +186,6 @@ public class SimpleScoreboardService implements ScoreboardService {
 
         Objective objective = scoreboard.registerNewObjective(objectiveName, "dummy", title);
         objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-        applyNoCollisionTeam(scoreboard);
 
         List<String> lines = collectLines(player, state, definition);
         int score = lines.size();
@@ -280,15 +273,6 @@ public class SimpleScoreboardService implements ScoreboardService {
             return "";
         }
         return ChatColor.translateAlternateColorCodes('&', text);
-    }
-
-    private void applyNoCollisionTeam(Scoreboard scoreboard) {
-        Team existing = scoreboard.getTeam(NO_COLLISION_TEAM);
-        Team collisionTeam = existing != null ? existing : scoreboard.registerNewTeam(NO_COLLISION_TEAM);
-        collisionTeam.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            collisionTeam.addEntry(online.getName());
-        }
     }
 
     private Player requireOnline(UUID playerId) {
