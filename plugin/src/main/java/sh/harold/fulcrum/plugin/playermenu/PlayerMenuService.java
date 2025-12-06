@@ -983,6 +983,7 @@ public final class PlayerMenuService {
     private ItemStack buildDisplayItem(Material displayMaterial) {
         ItemStack stack = new ItemStack(normalizeDisplayMaterial(displayMaterial));
         applyMenuMeta(stack, false, displayMaterial);
+        applyGlint(stack);
         return stack;
     }
 
@@ -1001,6 +1002,17 @@ public final class PlayerMenuService {
             meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
             meta.getPersistentDataContainer().set(displayMaterialKey, PersistentDataType.STRING, normalizeDisplayMaterial(displayMaterial).name());
         }
+        stack.setItemMeta(meta);
+    }
+
+    private void applyGlint(ItemStack stack) {
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+        meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
+        org.bukkit.enchantments.Enchantment glint = org.bukkit.enchantments.Enchantment.UNBREAKING;
+        meta.addEnchant(glint, 1, true);
         stack.setItemMeta(meta);
     }
 
