@@ -36,6 +36,7 @@ final class CosmeticMenuView {
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
     private final Logger logger;
+    private final Consumer<Player> menuItemRefresher;
     private Consumer<Player> hubBackAction = player -> {
     };
 
@@ -43,13 +44,16 @@ final class CosmeticMenuView {
         JavaPlugin plugin,
         MenuService menuService,
         UnlockableService unlockableService,
-        CosmeticRegistry cosmeticRegistry
+        CosmeticRegistry cosmeticRegistry,
+        Consumer<Player> menuItemRefresher
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.menuService = Objects.requireNonNull(menuService, "menuService");
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
         this.logger = plugin.getLogger();
+        this.menuItemRefresher = menuItemRefresher != null ? menuItemRefresher : player -> {
+        };
     }
 
     void openHub(Player player, Consumer<Player> backAction) {
@@ -244,6 +248,9 @@ final class CosmeticMenuView {
                     return;
                 }
                 player.sendMessage("§aEquipped " + cosmetic.definition().name() + ".");
+                if (cosmetic.section() == CosmeticSection.PLAYER_MENU_SKIN) {
+                    menuItemRefresher.accept(player);
+                }
                 openSection(player, cosmetic.section());
             });
     }
@@ -271,6 +278,9 @@ final class CosmeticMenuView {
                     return;
                 }
                 player.sendMessage("§aCleared your " + sectionSecondary(section).toLowerCase() + ".");
+                if (section == CosmeticSection.PLAYER_MENU_SKIN) {
+                    menuItemRefresher.accept(player);
+                }
                 openSection(player, section);
             });
     }
