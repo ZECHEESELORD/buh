@@ -7,6 +7,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardDefinition;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardModule;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
@@ -28,6 +29,7 @@ public class SimpleScoreboardService implements ScoreboardService {
     private static final int MAX_LINES = 15;
     private static final int MAX_ENTRY_LENGTH = 40;
     private static final String BLANK_LINE = ChatColor.RESET.toString();
+    private static final String LEGACY_NO_COLLISION_TEAM = "flc_nocollide";
 
     private final Plugin plugin;
     private final ScoreboardRegistry registry;
@@ -37,6 +39,7 @@ public class SimpleScoreboardService implements ScoreboardService {
         this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
         this.registry = Objects.requireNonNull(registry, "Scoreboard registry cannot be null");
         this.playerManager = Objects.requireNonNull(playerManager, "Player scoreboard manager cannot be null");
+        purgeLegacyNoCollisionTeam();
     }
 
     public SimpleScoreboardService(Plugin plugin) {
@@ -61,6 +64,7 @@ public class SimpleScoreboardService implements ScoreboardService {
     @Override
     public void showScoreboard(UUID playerId, String scoreboardId) {
         Player player = requireOnline(playerId);
+        cleanupLegacyNoCollision(player);
         ScoreboardDefinition definition = registry.get(scoreboardId)
                 .orElseThrow(() -> new IllegalArgumentException("Scoreboard not found: " + scoreboardId));
 
@@ -74,6 +78,7 @@ public class SimpleScoreboardService implements ScoreboardService {
         Player player = Bukkit.getPlayer(playerId);
         playerManager.clear(playerId);
         if (player != null && player.isOnline()) {
+            cleanupLegacyNoCollision(player);
             Optional.ofNullable(Bukkit.getScoreboardManager())
                     .map(org.bukkit.scoreboard.ScoreboardManager::getMainScoreboard)
                     .ifPresent(player::setScoreboard);
@@ -273,6 +278,33 @@ public class SimpleScoreboardService implements ScoreboardService {
             return "";
         }
         return ChatColor.translateAlternateColorCodes('&', text);
+    }
+
+    private void cleanupLegacyNoCollision(Player player) {
+        removeLegacyNoCollisionTeam(player.getScoreboard(), player.getName());
+        Optional.ofNullable(Bukkit.getScoreboardManager())
+                .map(org.bukkit.scoreboard.ScoreboardManager::getMainScoreboard)
+                .ifPresent(board -> removeLegacyNoCollisionTeam(board, player.getName()));
+    }
+
+    private void purgeLegacyNoCollisionTeam() {
+        Optional.ofNullable(Bukkit.getScoreboardManager())
+                .map(org.bukkit.scoreboard.ScoreboardManager::getMainScoreboard)
+                .map(board -> board.getTeam(LEGACY_NO_COLLISION_TEAM))
+                .ifPresent(Team::unregister);
+    }
+
+    private void removeLegacyNoCollisionTeam(Scoreboard scoreboard, String entry) {
+        if (scoreboard == null) {
+            return;
+        }
+        Team team = scoreboard.getTeam(LEGACY_NO_COLLISION_TEAM);
+        if (team != null) {
+            team.removeEntry(entry);
+            if (team.getEntries().isEmpty()) {
+                team.unregister();
+            }
+        }
     }
 
     private Player requireOnline(UUID playerId) {
