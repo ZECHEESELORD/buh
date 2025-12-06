@@ -23,6 +23,7 @@ import sh.harold.fulcrum.common.loader.ModuleCategory;
 import sh.harold.fulcrum.common.loader.ModuleDescriptor;
 import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.item.ItemModule;
+import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer;
 
@@ -42,6 +43,7 @@ public final class ItemMigrationModule implements FulcrumModule, Listener, Runna
     private final ItemModule itemModule;
     private final Deque<ContainerTarget> pending = new ArrayDeque<>();
     private ItemResolver resolver;
+    private ItemPdc itemPdc;
     private BukkitTask pumpTask;
 
     public ItemMigrationModule(Plugin plugin, ItemModule itemModule) {
@@ -61,6 +63,7 @@ public final class ItemMigrationModule implements FulcrumModule, Listener, Runna
     @Override
     public CompletionStage<Void> enable() {
         resolver = itemModule.engine() == null ? null : itemModule.engine().resolver();
+        itemPdc = itemModule.engine() == null ? null : itemModule.engine().itemPdc();
         if (resolver == null) {
             return CompletableFuture.failedStage(new IllegalStateException("Item engine not available for migration"));
         }
@@ -143,9 +146,13 @@ public final class ItemMigrationModule implements FulcrumModule, Listener, Runna
             return stack;
         }
         ItemStack working = processNestedContainers(stack);
-        return resolver.resolve(working)
+        ItemStack normalized = resolver.resolve(working)
             .map(sh.harold.fulcrum.plugin.item.runtime.ItemInstance::stack)
             .orElse(working);
+        if (itemPdc != null && normalized != null && normalized.getMaxStackSize() > 1) {
+            normalized = stripStackableProvenance(normalized);
+        }
+        return normalized;
     }
 
     private ItemStack processNestedContainers(ItemStack stack) {
@@ -184,7 +191,46 @@ public final class ItemMigrationModule implements FulcrumModule, Listener, Runna
         if (changed) {
             stack.setItemMeta(meta);
         }
-        return ItemSanitizer.normalize(stack);
+        if (stack.getMaxStackSize() <= 1) {
+            return ItemSanitizer.normalize(stack);
+        }
+        return stripStackableProvenance(stack);
+    }
+
+    private ItemStack stripStackableProvenance(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || stack.getMaxStackSize() <= 1) {
+            return stack;
+        }
+        String id = itemPdc.readId(stack).orElse(null);
+        if (id != null && !id.startsWith("vanilla:")) {
+            return stack;
+        }
+        ItemStack working = stack;
+        ItemMeta meta = working.getItemMeta();
+        if (meta == null) {
+            return working;
+        }
+        // Remove per-item uniqueness and Fulcrum metadata to allow stacking for bulk items.
+        meta.removeItemFlags(
+            org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES,
+            org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS,
+            org.bukkit.inventory.ItemFlag.HIDE_ARMOR_TRIM
+        );
+        meta.displayName(null);
+        meta.lore(null);
+        working.setItemMeta(meta);
+        working = itemPdc.clear(working, itemPdc.keys().itemId());
+        working = itemPdc.clear(working, itemPdc.keys().version());
+        working = itemPdc.clear(working, itemPdc.keys().stats());
+        working = itemPdc.clear(working, itemPdc.keys().enchants());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityCurrent());
+        working = itemPdc.clear(working, itemPdc.keys().durabilityMax());
+        working = itemPdc.clear(working, itemPdc.keys().trimPattern());
+        working = itemPdc.clear(working, itemPdc.keys().trimMaterial());
+        working = itemPdc.clear(working, itemPdc.keys().createdAt());
+        working = itemPdc.clear(working, itemPdc.keys().source());
+        working = itemPdc.clear(working, itemPdc.keys().instanceId());
+        return working;
     }
 
     private record ContainerTarget(InventoryHolder holder, Runnable afterWrite) {

@@ -71,8 +71,11 @@ public final class ItemLoreRenderer {
         if (meta == null) {
             return clone;
         }
-        meta.setAttributeModifiers(null);
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
+        boolean stackable = clone.getMaxStackSize() > 1;
+        if (!stackable) {
+            meta.setAttributeModifiers(null);
+            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
+        }
 
         CustomItem definition = instance.definition();
         VisualComponent visual = definition.component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
