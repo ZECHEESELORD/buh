@@ -8,7 +8,8 @@ public enum CosmeticSection {
     PLAYER_MENU_SKIN("menu-skin"),
     PARTICLE_TRAIL("particle-trail"),
     CHAT_PREFIX("chat-prefix"),
-    STATUS("status");
+    STATUS("status"),
+    ACTIONS("actions");
 
     private final String dataKey;
 

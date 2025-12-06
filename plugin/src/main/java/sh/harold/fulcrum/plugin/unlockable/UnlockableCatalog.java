@@ -1,7 +1,6 @@
 package sh.harold.fulcrum.plugin.unlockable;
 
 import org.bukkit.Material;
-import org.bukkit.Particle;
 
 import java.util.List;
 import java.util.Map;
@@ -10,10 +9,9 @@ import java.util.Objects;
 public final class UnlockableCatalog {
 
     public static final UnlockableId POCKET_CRAFTER = UnlockableId.of("pocket-crafter");
-    public static final UnlockableId MENU_SKIN_VERDANT = UnlockableId.of("menu-skin-verdant");
-    public static final UnlockableId PARTICLE_TRAIL_AURORA = UnlockableId.of("particle-trail-aurora");
-    public static final UnlockableId CHAT_PREFIX_SCOUT = UnlockableId.of("chat-prefix-scout");
-    public static final UnlockableId STATUS_EXPLORER = UnlockableId.of("status-explorer");
+    public static final UnlockableId SIT_ACTION = UnlockableId.of("action-sit");
+    public static final UnlockableId CRAWL_ACTION = UnlockableId.of("action-crawl");
+    public static final UnlockableId RIDE_ACTION = UnlockableId.of("action-ride");
 
     private UnlockableCatalog() {
     }
@@ -43,84 +41,58 @@ public final class UnlockableCatalog {
     }
 
     private static void registerCosmetics(UnlockableRegistry registry, CosmeticRegistry cosmeticRegistry) {
-        UnlockableDefinition verdantMenu = new UnlockableDefinition(
-            MENU_SKIN_VERDANT,
+        UnlockableDefinition sit = new UnlockableDefinition(
+            SIT_ACTION,
             UnlockableType.COSMETIC,
-            "Verdant Menu Skin",
-            "Wrap the player menu in mossy greens and warm planks.",
+            "Sit Action",
+            "Right-click a block with headroom to plop down.",
             List.of(new UnlockableTier(
                 1,
-                "Verdant Menu Skin",
-                "Unlocks a lush player menu frame.",
-                150L,
+                "Sit",
+                "Unlocks the sit emote.",
+                500L,
                 Map.of()
             )),
-            Material.MOSS_BLOCK,
+            Material.OAK_STAIRS,
             false
         );
-        registry.register(verdantMenu);
-        cosmeticRegistry.register(new MenuSkinCosmetic(verdantMenu, "verdant-menu"));
+        registry.register(sit);
+        cosmeticRegistry.register(new ActionCosmetic(sit, "sit"));
 
-        UnlockableDefinition auroraTrail = new UnlockableDefinition(
-            PARTICLE_TRAIL_AURORA,
+        UnlockableDefinition crawl = new UnlockableDefinition(
+            CRAWL_ACTION,
             UnlockableType.COSMETIC,
-            "Aurora Trail",
-            "Leave a pastel ribbon of particles while sprinting.",
+            "Crawl Action",
+            "Double-tap sneak to drop into a crawl.",
             List.of(new UnlockableTier(
                 1,
-                "Aurora Trail",
-                "Paint your path with shimmer.",
-                400L,
+                "Crawl",
+                "Unlocks the crawl emote.",
+                750L,
                 Map.of()
             )),
-            Material.FIREWORK_ROCKET,
+            Material.TURTLE_HELMET,
             false
         );
-        registry.register(auroraTrail);
-        cosmeticRegistry.register(new ParticleTrailCosmetic(auroraTrail, player -> player.getWorld().spawnParticle(
-            Particle.END_ROD,
-            player.getLocation().add(0, 0.15, 0),
-            6,
-            0.25,
-            0.1,
-            0.25,
-            0.01
-        )));
+        registry.register(crawl);
+        cosmeticRegistry.register(new ActionCosmetic(crawl, "crawl"));
 
-        UnlockableDefinition scoutPrefix = new UnlockableDefinition(
-            CHAT_PREFIX_SCOUT,
+        UnlockableDefinition ride = new UnlockableDefinition(
+            RIDE_ACTION,
             UnlockableType.COSMETIC,
-            "Scout Prefix",
-            "Add a crisp scout tag to your chat handle.",
+            "Ride Action",
+            "Sneak + right-click a player to climb aboard.",
             List.of(new UnlockableTier(
                 1,
-                "Scout Prefix",
-                "Unlocks a simple [Scout] prefix.",
-                120L,
+                "Ride",
+                "Unlocks stacking piggyback rides.",
+                1350L,
                 Map.of()
             )),
-            Material.NAME_TAG,
+            Material.SADDLE,
             false
         );
-        registry.register(scoutPrefix);
-        cosmeticRegistry.register(new ChatPrefixCosmetic(scoutPrefix, "[Scout]"));
-
-        UnlockableDefinition explorerStatus = new UnlockableDefinition(
-            STATUS_EXPLORER,
-            UnlockableType.COSMETIC,
-            "Explorer Status",
-            "Broadcast that you live for wandering.",
-            List.of(new UnlockableTier(
-                1,
-                "Explorer Status",
-                "Unlocks the Explorer status line.",
-                100L,
-                Map.of()
-            )),
-            Material.COMPASS,
-            false
-        );
-        registry.register(explorerStatus);
-        cosmeticRegistry.register(new StatusCosmetic(explorerStatus, "Explorer"));
+        registry.register(ride);
+        cosmeticRegistry.register(new ActionCosmetic(ride, "ride"));
     }
 }

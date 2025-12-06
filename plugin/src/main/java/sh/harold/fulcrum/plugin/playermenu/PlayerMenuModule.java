@@ -17,6 +17,7 @@ import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
+import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
@@ -93,6 +94,10 @@ public final class PlayerMenuModule implements FulcrumModule {
             unlockableModule.unlockableService(),
             "UnlockableService not available"
         );
+        CosmeticRegistry cosmeticRegistry = java.util.Objects.requireNonNull(
+            unlockableModule.cosmeticRegistry(),
+            "CosmeticRegistry not available"
+        );
         UnlockableRegistry unlockableRegistry = unlockableModule.registry();
         var statService = Objects.requireNonNull(statsModule.statService(), "StatService not available");
         var statRegistry = Objects.requireNonNull(statsModule.statRegistry(), "StatRegistry not available");
@@ -109,6 +114,7 @@ public final class PlayerMenuModule implements FulcrumModule {
             playerDirectoryService,
             scoreboardService,
             unlockableService,
+            cosmeticRegistry,
             unlockableRegistry,
             statService,
             statRegistry,

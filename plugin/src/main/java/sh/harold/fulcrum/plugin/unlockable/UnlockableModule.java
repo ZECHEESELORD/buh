@@ -31,6 +31,7 @@ public final class UnlockableModule implements FulcrumModule {
     private CosmeticRegistry cosmeticRegistry;
     private UnlockableService unlockableService;
     private CooldownRegistry cooldownRegistry;
+    private ActionCosmeticListener actionCosmeticListener;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -64,12 +65,17 @@ public final class UnlockableModule implements FulcrumModule {
         );
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
+        actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin.getLogger());
+        pluginManager.registerEvents(actionCosmeticListener, plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletionStage<Void> disable() {
+        if (actionCosmeticListener != null) {
+            actionCosmeticListener.clearSeats();
+        }
         if (cooldownRegistry != null) {
             cooldownRegistry.close();
         }
@@ -92,5 +98,6 @@ public final class UnlockableModule implements FulcrumModule {
         Commands registrar = event.registrar();
         registrar.register(new PerkCommand(unlockableService, registry).build(), "perks", List.of("perk", "upgrade"));
         registrar.register(new CraftCommand(plugin, unlockableService).build(), "craft", List.of("workbench"));
+        registrar.register(new GetOffMyHeadCommand().build(), "getoffmyhead", List.of("offmyhead", "unstack"));
     }
 }
