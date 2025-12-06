@@ -78,9 +78,8 @@ final class CosmeticMenuView {
             .build();
 
         MenuButton menuSkinButton = buildSectionButton(CosmeticSection.PLAYER_MENU_SKIN, state, 20);
-        MenuButton trailButton = buildSectionButton(CosmeticSection.PARTICLE_TRAIL, state, 21);
-        MenuButton actionsButton = buildSectionButton(CosmeticSection.ACTIONS, state, 22);
-        MenuButton chatPrefixButton = buildSectionButton(CosmeticSection.CHAT_PREFIX, state, 23);
+        MenuButton actionsButton = buildSectionButton(CosmeticSection.ACTIONS, state, 21);
+        MenuButton chatPrefixButton = buildSectionButton(CosmeticSection.CHAT_PREFIX, state, 22);
         MenuButton statusButton = buildSectionButton(CosmeticSection.STATUS, state, 24);
 
         menuService.createMenuBuilder()
@@ -90,7 +89,6 @@ final class CosmeticMenuView {
             .addButton(MenuButton.createPositionedClose(HUB_ROWS))
             .addButton(backButton)
             .addButton(menuSkinButton)
-            .addButton(trailButton)
             .addButton(actionsButton)
             .addButton(chatPrefixButton)
             .addButton(statusButton)
@@ -107,7 +105,7 @@ final class CosmeticMenuView {
         long unlocked = cosmetics.stream()
             .filter(cosmetic -> state.unlockable(cosmetic.id()).map(PlayerUnlockable::unlocked).orElse(false))
             .count();
-        boolean equipped = state.equippedCosmetic(section).isPresent();
+        boolean equipped = !state.equippedCosmetics(section).isEmpty();
         String description = cosmetics.isEmpty()
             ? "No cosmetics are available here yet."
             : "Unlocked: " + unlocked + "/" + cosmetics.size();
@@ -139,7 +137,7 @@ final class CosmeticMenuView {
 
     private void renderSection(Player player, CosmeticSection section, PlayerUnlockableState state) {
         List<Cosmetic> cosmetics = cosmeticRegistry.cosmetics(section);
-        boolean hasEquipped = state.equippedCosmetic(section).isPresent();
+        boolean hasEquipped = !state.equippedCosmetics(section).isEmpty();
 
         MenuButton back = MenuButton.builder(Material.ARROW)
             .name("&7Back")
@@ -183,9 +181,7 @@ final class CosmeticMenuView {
         PlayerUnlockable unlockable = state.unlockable(definition.id())
             .orElse(new PlayerUnlockable(definition, 0, false));
         boolean unlocked = unlockable.unlocked();
-        boolean equipped = state.equippedCosmetic(cosmetic.section())
-            .filter(definition.id()::equals)
-            .isPresent();
+        boolean equipped = state.equippedCosmetics(cosmetic.section()).contains(definition.id());
         long cost = definition.tier(1).map(UnlockableTier::costInShards).orElse(0L);
 
         String displayName = unlocked
@@ -199,11 +195,7 @@ final class CosmeticMenuView {
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> {
                 if (unlockable.unlocked()) {
-                    if (equipped) {
-                        clearCosmetic(viewer, cosmetic.section());
-                    } else {
-                        handleCosmeticClick(viewer, cosmetic);
-                    }
+                    handleCosmeticToggle(viewer, cosmetic, equipped);
                 } else {
                     handleUnlock(viewer, cosmetic);
                 }
@@ -217,18 +209,34 @@ final class CosmeticMenuView {
         lore.add("&f");
         if (!unlocked) {
             lore.add("&7Cost: &3" + cost + " Shards");
-            lore.add("&f");
         } else {
             lore.add("&7Status: " + (equipped ? "&aEquipped" : "&cNot Equipped"));
-            lore.add("&f");
         }
         lore.forEach(builder::lore);
 
         return builder.build();
     }
 
-    private void handleCosmeticClick(Player player, Cosmetic cosmetic) {
+    private void handleCosmeticToggle(Player player, Cosmetic cosmetic, boolean equipped) {
         UUID playerId = player.getUniqueId();
+        if (cosmetic.section() == CosmeticSection.ACTIONS) {
+            if (equipped) {
+                unlockableService.removeActionCosmetic(playerId, cosmetic.id())
+                    .whenComplete((ignored, throwable) -> {
+                        if (throwable != null) {
+                            player.sendMessage("§c" + cleanError(throwable));
+                            return;
+                        }
+                        player.sendMessage("§eUnequipped " + cosmetic.definition().name() + ".");
+                        openSection(player, cosmetic.section());
+                    });
+                return;
+            }
+        } else if (equipped) {
+            clearCosmetic(player, cosmetic.section());
+            return;
+        }
+
         unlockableService.equipCosmetic(playerId, cosmetic.section(), cosmetic.id())
             .whenComplete((ignored, throwable) -> {
                 if (throwable != null) {
@@ -324,7 +332,8 @@ final class CosmeticMenuView {
     private List<String> sectionLore(PlayerUnlockableState state, CosmeticSection section, List<Cosmetic> cosmetics) {
         List<String> lore = new ArrayList<>();
         lore.add("&f");
-        state.equippedCosmetic(section)
+        state.equippedCosmetics(section).stream()
+            .findFirst()
             .flatMap(id -> cosmetics.stream().filter(cosmetic -> cosmetic.id().equals(id)).findFirst())
             .ifPresentOrElse(
                 equipped -> lore.add("&7Equipped: &a" + equipped.definition().name()),

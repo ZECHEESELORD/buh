@@ -36,6 +36,9 @@ public final class HelmetEquipListener implements Listener {
         }
 
         resolver.resolve(stack).ifPresent(instance -> {
+            if (instance.definition().id().startsWith("vanilla:")) {
+                return;
+            }
             if (instance.definition().category() != ItemCategory.HELMET) {
                 return;
             }

@@ -6,9 +6,11 @@ import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.plugin.economy.EconomyService;
 import sh.harold.fulcrum.plugin.economy.MoneyChange;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -225,6 +227,16 @@ public final class UnlockableService {
             });
     }
 
+    public CompletionStage<PlayerUnlockableState> removeActionCosmetic(UUID playerId, UnlockableId cosmeticId) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(cosmeticId, "cosmeticId");
+        return players.load(playerId.toString())
+            .thenCompose(document -> persistActionUpdate(document, playerId, cosmeticId, false))
+            .exceptionally(throwable -> {
+                throw new CompletionException("Failed to remove action cosmetic " + cosmeticId + " for " + playerId, throwable);
+            });
+    }
+
     private UnlockableDefinition requireDefinition(UnlockableId unlockableId) {
         return registry.definition(unlockableId)
             .orElseThrow(() -> new IllegalArgumentException("Unknown unlockable: " + unlockableId));
@@ -303,6 +315,9 @@ public final class UnlockableService {
         CosmeticSection section,
         Optional<UnlockableId> cosmeticId
     ) {
+        if (section == CosmeticSection.ACTIONS) {
+            return persistActionUpdate(document, playerId, cosmeticId.orElse(null), cosmeticId.isPresent());
+        }
         sh.harold.fulcrum.plugin.data.DocumentPatch patch = new sh.harold.fulcrum.plugin.data.DocumentPatch();
         if (cosmeticId.isPresent()) {
             patch.set(cosmeticPath(section), cosmeticId.get().value());
@@ -312,9 +327,41 @@ public final class UnlockableService {
         return patch.apply(document).thenApply(ignored -> cacheState(playerId, document));
     }
 
+    private CompletionStage<PlayerUnlockableState> persistActionUpdate(
+        Document document,
+        UUID playerId,
+        UnlockableId cosmeticId,
+        boolean add
+    ) {
+        Map<String, Boolean> current = new LinkedHashMap<>();
+        Object raw = document.get(cosmeticPath(CosmeticSection.ACTIONS), Object.class).orElse(null);
+        if (raw instanceof String single) {
+            current.put(single, true);
+        } else if (raw instanceof List<?> list) {
+            list.stream().filter(String.class::isInstance).map(String.class::cast).forEach(id -> current.put(id, true));
+        }
+        if (cosmeticId != null) {
+            if (add) {
+                current.put(cosmeticId.value(), true);
+            } else {
+                current.remove(cosmeticId.value());
+            }
+        } else if (!add) {
+            current.clear();
+        }
+        List<String> updated = new ArrayList<>(current.keySet());
+        sh.harold.fulcrum.plugin.data.DocumentPatch patch = new sh.harold.fulcrum.plugin.data.DocumentPatch();
+        if (updated.isEmpty()) {
+            patch.remove(cosmeticPath(CosmeticSection.ACTIONS));
+        } else {
+            patch.set(cosmeticPath(CosmeticSection.ACTIONS), updated);
+        }
+        return patch.apply(document).thenApply(ignored -> cacheState(playerId, document));
+    }
+
     private PlayerUnlockableState buildState(Document document) {
         Map<UnlockableId, PlayerUnlockable> unlockables = new LinkedHashMap<>();
-        Map<CosmeticSection, UnlockableId> cosmetics = new EnumMap<>(CosmeticSection.class);
+        Map<CosmeticSection, Set<UnlockableId>> cosmetics = new EnumMap<>(CosmeticSection.class);
         Map<?, ?> raw = document.get(UNLOCKABLES_ROOT, Map.class).orElse(Map.of());
         Map<?, ?> cosmeticsRaw = document.get(COSMETICS_ROOT, Map.class).orElse(Map.of());
 
@@ -335,14 +382,14 @@ public final class UnlockableService {
 
     private void parseCosmetics(
         Map<?, ?> raw,
-        Map<CosmeticSection, UnlockableId> cosmetics,
+        Map<CosmeticSection, Set<UnlockableId>> cosmetics,
         Map<UnlockableId, PlayerUnlockable> unlockables
     ) {
         if (raw.isEmpty()) {
             return;
         }
         for (Map.Entry<?, ?> entry : raw.entrySet()) {
-            if (!(entry.getKey() instanceof String rawSection) || !(entry.getValue() instanceof String rawId)) {
+            if (!(entry.getKey() instanceof String rawSection)) {
                 continue;
             }
             Optional<CosmeticSection> section = CosmeticSection.fromKey(rawSection);
@@ -350,21 +397,51 @@ public final class UnlockableService {
                 logger.fine(() -> "Ignoring unknown cosmetic section in data: " + rawSection);
                 continue;
             }
-            try {
-                UnlockableId cosmeticId = new UnlockableId(rawId);
-                if (cosmeticRegistry.cosmetic(cosmeticId).isEmpty()) {
-                    logger.fine(() -> "Ignoring unknown cosmetic entry in data: " + rawId);
+            parseSectionCosmetics(section.get(), entry.getValue(), cosmetics, unlockables);
+        }
+    }
+
+    private void parseSectionCosmetics(
+        CosmeticSection section,
+        Object rawValue,
+        Map<CosmeticSection, Set<UnlockableId>> cosmetics,
+        Map<UnlockableId, PlayerUnlockable> unlockables
+    ) {
+        if (section == CosmeticSection.ACTIONS) {
+            List<?> list = rawValue instanceof List<?> rawList ? rawList : List.of(rawValue);
+            for (Object raw : list) {
+                if (!(raw instanceof String rawId)) {
                     continue;
                 }
-                PlayerUnlockable unlockable = unlockables.get(cosmeticId);
-                if (unlockable == null || !unlockable.unlocked()) {
-                    logger.fine(() -> "Ignoring cosmetic that is not unlocked: " + rawId);
-                    continue;
-                }
-                cosmetics.put(section.get(), cosmeticId);
-            } catch (IllegalArgumentException ignored) {
-                logger.fine(() -> "Ignoring malformed cosmetic entry in data: " + rawId);
+                addCosmeticIfValid(section, rawId, cosmetics, unlockables);
             }
+            return;
+        }
+        if (rawValue instanceof String rawId) {
+            addCosmeticIfValid(section, rawId, cosmetics, unlockables);
+        }
+    }
+
+    private void addCosmeticIfValid(
+        CosmeticSection section,
+        String rawId,
+        Map<CosmeticSection, Set<UnlockableId>> cosmetics,
+        Map<UnlockableId, PlayerUnlockable> unlockables
+    ) {
+        try {
+            UnlockableId cosmeticId = new UnlockableId(rawId);
+            if (cosmeticRegistry.cosmetic(cosmeticId).isEmpty()) {
+                logger.fine(() -> "Ignoring unknown cosmetic entry in data: " + rawId);
+                return;
+            }
+            PlayerUnlockable unlockable = unlockables.get(cosmeticId);
+            if (unlockable == null || !unlockable.unlocked()) {
+                logger.fine(() -> "Ignoring cosmetic that is not unlocked: " + rawId);
+                return;
+            }
+            cosmetics.computeIfAbsent(section, ignored -> new java.util.HashSet<>()).add(cosmeticId);
+        } catch (IllegalArgumentException ignored) {
+            logger.fine(() -> "Ignoring malformed cosmetic entry in data: " + rawId);
         }
     }
 

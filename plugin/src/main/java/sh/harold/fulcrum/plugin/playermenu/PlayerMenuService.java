@@ -43,6 +43,10 @@ import sh.harold.fulcrum.plugin.playerdata.UsernameView;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
 import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
+import sh.harold.fulcrum.plugin.unlockable.CosmeticSection;
+import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockableState;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableId;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableDefinition;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import sh.harold.fulcrum.stats.core.StatId;
@@ -64,6 +68,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -903,10 +908,15 @@ public final class PlayerMenuService {
     }
 
     private CompletionStage<Void> placeMenuItem(Player player, PlayerMenuItemConfig config) {
-        return CompletableFuture.runAsync(() -> placeMenuItemSync(player, config), plugin.getServer().getScheduler().getMainThreadExecutor(plugin));
+        return unlockableService.loadState(player.getUniqueId())
+            .exceptionally(throwable -> new PlayerUnlockableState(Map.of()))
+            .thenCompose(state -> CompletableFuture.runAsync(
+                () -> placeMenuItemSync(player, config, state),
+                plugin.getServer().getScheduler().getMainThreadExecutor(plugin)
+            ));
     }
 
-    private void placeMenuItemSync(Player player, PlayerMenuItemConfig config) {
+    private void placeMenuItemSync(Player player, PlayerMenuItemConfig config, PlayerUnlockableState unlockableState) {
         if (!player.isOnline()) {
             return;
         }
@@ -921,11 +931,12 @@ public final class PlayerMenuService {
         }
         int targetSlot = config.slot();
         ItemStack current = inventory.getItem(targetSlot);
-        ItemStack menuItem = buildMenuItem(config.material());
+        Material skinMaterial = resolveSkinMaterial(unlockableState).orElse(config.material());
+        ItemStack menuItem = buildMenuItem(skinMaterial);
 
         if (existingMenuSlot == targetSlot) {
             inventory.setItem(targetSlot, menuItem);
-            spoofMenuItemAppearance(player, targetSlot, config.material());
+            spoofMenuItemAppearance(player, targetSlot, skinMaterial);
             return;
         }
 
@@ -943,7 +954,7 @@ public final class PlayerMenuService {
             stashDisplaced(player, displaced);
         }
 
-        spoofMenuItemAppearance(player, targetSlot, config.material());
+        spoofMenuItemAppearance(player, targetSlot, skinMaterial);
     }
 
     public boolean isMenuItem(ItemStack item) {
@@ -1056,6 +1067,16 @@ public final class PlayerMenuService {
             return null;
         }
         return Material.matchMaterial(raw);
+    }
+
+    private Optional<Material> resolveSkinMaterial(PlayerUnlockableState unlockableState) {
+        return unlockableState.equippedCosmetics(CosmeticSection.PLAYER_MENU_SKIN).stream()
+            .findFirst()
+            .map(unlockableRegistry::definition)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .map(UnlockableDefinition::displayMaterial)
+            .filter(material -> material != null && !material.isAir());
     }
 
     private int findMenuItemSlot(PlayerInventory inventory) {

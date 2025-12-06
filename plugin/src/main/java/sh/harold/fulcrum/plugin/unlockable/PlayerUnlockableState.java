@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 public record PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockables, PlayerCosmeticLoadout cosmetics) {
 
@@ -40,5 +41,9 @@ public record PlayerUnlockableState(Map<UnlockableId, PlayerUnlockable> unlockab
 
     public Optional<UnlockableId> equippedCosmetic(CosmeticSection section) {
         return cosmetics.equipped(section);
+    }
+
+    public Set<UnlockableId> equippedCosmetics(CosmeticSection section) {
+        return cosmetics.equippedAll(section);
     }
 }

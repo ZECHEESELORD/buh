@@ -52,23 +52,17 @@ final class ActionCosmeticListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && !event.getPlayer().isSneaking()) {
+            Block clicked = event.getClickedBlock();
+            if (clicked != null && clicked.getType().isInteractable()) {
+                return;
+            }
+        }
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
         Player player = event.getPlayer();
-        Optional<PlayerUnlockableState> state = unlockableService.cachedState(player.getUniqueId());
-        if (state.isEmpty()) {
-            return;
-        }
-        Optional<UnlockableId> actionId = state.get().equippedCosmetic(CosmeticSection.ACTIONS);
-        if (actionId.isEmpty()) {
-            return;
-        }
-        Optional<Cosmetic> cosmetic = cosmeticRegistry.cosmetic(actionId.get());
-        if (cosmetic.isEmpty() || !(cosmetic.get() instanceof ActionCosmetic actionCosmetic)) {
-            return;
-        }
-        if (SIT_ACTION_KEY.equalsIgnoreCase(actionCosmetic.actionKey())) {
+        if (hasAction(player.getUniqueId(), SIT_ACTION_KEY)) {
             handleSit(event, player);
         }
     }
@@ -85,22 +79,9 @@ final class ActionCosmeticListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        Optional<PlayerUnlockableState> state = unlockableService.cachedState(player.getUniqueId());
-        if (state.isEmpty()) {
-            return;
+        if (hasAction(player.getUniqueId(), RIDE_ACTION_KEY)) {
+            handleRide(event, player, target);
         }
-        Optional<UnlockableId> actionId = state.get().equippedCosmetic(CosmeticSection.ACTIONS);
-        if (actionId.isEmpty()) {
-            return;
-        }
-        Optional<Cosmetic> cosmetic = cosmeticRegistry.cosmetic(actionId.get());
-        if (cosmetic.isEmpty() || !(cosmetic.get() instanceof ActionCosmetic actionCosmetic)) {
-            return;
-        }
-        if (!RIDE_ACTION_KEY.equalsIgnoreCase(actionCosmetic.actionKey())) {
-            return;
-        }
-        handleRide(event, player, target);
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -147,19 +128,7 @@ final class ActionCosmeticListener implements Listener {
         if (!event.isSneaking()) {
             return;
         }
-        Optional<PlayerUnlockableState> state = unlockableService.cachedState(player.getUniqueId());
-        if (state.isEmpty()) {
-            return;
-        }
-        Optional<UnlockableId> actionId = state.get().equippedCosmetic(CosmeticSection.ACTIONS);
-        if (actionId.isEmpty()) {
-            return;
-        }
-        Optional<Cosmetic> cosmetic = cosmeticRegistry.cosmetic(actionId.get());
-        if (cosmetic.isEmpty() || !(cosmetic.get() instanceof ActionCosmetic actionCosmetic)) {
-            return;
-        }
-        if (!CRAWL_ACTION_KEY.equalsIgnoreCase(actionCosmetic.actionKey())) {
+        if (!hasAction(player.getUniqueId(), CRAWL_ACTION_KEY)) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -185,11 +154,18 @@ final class ActionCosmeticListener implements Listener {
         if (clicked == null) {
             return;
         }
-        Block above = clicked.getRelative(BlockFace.UP);
+        if (!playerIsGrounded(player) && player.getLocation().getPitch() > 0.0f) {
+            return;
+        }
+        Block target = resolveSitTarget(clicked, event.getPlayer().isSneaking());
+        if (target == null) {
+            return;
+        }
+        Block above = target.getRelative(BlockFace.UP);
         if (!above.isPassable()) {
             return;
         }
-        Location seatLocation = clicked.getLocation().add(0.5, 1.0, 0.5);
+        Location seatLocation = target.getLocation().add(0.5, seatYOffset(target), 0.5);
         try {
             removeSeat(player.getUniqueId());
             ArmorStand seat = spawnSeat(player, seatLocation);
@@ -203,6 +179,17 @@ final class ActionCosmeticListener implements Listener {
         } catch (Throwable throwable) {
             logger.fine(() -> "Failed to place sit seat for " + player.getUniqueId() + ": " + throwable.getMessage());
         }
+    }
+
+    private Block resolveSitTarget(Block clicked, boolean sneaking) {
+        if (clicked.isSolid()) {
+            return clicked;
+        }
+        Block below = clicked.getRelative(BlockFace.DOWN);
+        if (below.isSolid()) {
+            return below;
+        }
+        return null;
     }
 
     private ArmorStand spawnSeat(Player player, Location seatLocation) {
@@ -325,5 +312,33 @@ final class ActionCosmeticListener implements Listener {
         } catch (Throwable throwable) {
             logger.fine(() -> "Failed to knock player off stack for " + player.getUniqueId() + ": " + throwable.getMessage());
         }
+    }
+
+    private boolean hasAction(UUID playerId, String actionKey) {
+        Optional<PlayerUnlockableState> state = unlockableService.cachedState(playerId);
+        if (state.isEmpty()) {
+            return false;
+        }
+        return state.get().equippedCosmetics(CosmeticSection.ACTIONS).stream()
+            .map(cosmeticRegistry::cosmetic)
+            .flatMap(Optional::stream)
+            .filter(ActionCosmetic.class::isInstance)
+            .map(ActionCosmetic.class::cast)
+            .anyMatch(action -> actionKey.equalsIgnoreCase(action.actionKey()));
+    }
+
+    private boolean playerIsGrounded(Player player) {
+        Location below = player.getLocation().clone().subtract(0, 0.1, 0);
+        return !below.getBlock().isPassable();
+    }
+
+    private double seatYOffset(Block target) {
+        if (target.getBlockData() instanceof org.bukkit.block.data.type.Stairs) {
+            return 0.5;
+        }
+        if (target.getBlockData() instanceof org.bukkit.block.data.type.Slab slab && slab.getType() == org.bukkit.block.data.type.Slab.Type.BOTTOM) {
+            return 0.5;
+        }
+        return 1.0;
     }
 }

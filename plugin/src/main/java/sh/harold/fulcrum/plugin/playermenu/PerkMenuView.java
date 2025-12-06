@@ -75,8 +75,12 @@ final class PerkMenuView {
             .filter(definition -> !definition.singleTier())
             .toList();
 
-        long unlockedSingle = state.unlocked().stream().filter(perk -> perk.definition().singleTier()).count();
-        long unlockedTiered = state.unlocked().stream().filter(perk -> !perk.definition().singleTier()).count();
+        long unlockedSingle = state.unlocked().stream()
+            .filter(perk -> perk.definition().type() == UnlockableType.PERK && perk.definition().singleTier())
+            .count();
+        long unlockedTiered = state.unlocked().stream()
+            .filter(perk -> perk.definition().type() == UnlockableType.PERK && !perk.definition().singleTier())
+            .count();
 
         MenuButton backButton = MenuButton.builder(Material.ARROW)
             .name("&7Back")
