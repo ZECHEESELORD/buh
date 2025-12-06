@@ -65,7 +65,7 @@ public final class UnlockableModule implements FulcrumModule {
         );
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
-        actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin.getLogger());
+        actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin, plugin.getLogger());
         pluginManager.registerEvents(actionCosmeticListener, plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);

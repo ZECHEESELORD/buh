@@ -15,8 +15,10 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,12 +36,14 @@ final class ActionCosmeticListener implements Listener {
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
     private final Logger logger;
+    private final JavaPlugin plugin;
     private final Map<UUID, ArmorStand> seats = new HashMap<>();
     private final Map<UUID, Long> crouchTaps = new HashMap<>();
 
-    ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, Logger logger) {
+    ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, JavaPlugin plugin, Logger logger) {
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -97,6 +101,23 @@ final class ActionCosmeticListener implements Listener {
             return;
         }
         handleRide(event, player, target);
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onPassengerMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        if (!isPassengerOfPlayer(player)) {
+            return;
+        }
+        if (event.getTo() == null) {
+            return;
+        }
+        if (!movedHorizontally(event)) {
+            return;
+        }
+        if (isColliding(event.getTo(), player)) {
+            knockOffStack(player);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -205,10 +226,34 @@ final class ActionCosmeticListener implements Listener {
     }
 
     private void toggleCrawl(Player player) {
+        boolean targetSwim = !player.isSwimming();
+        if (targetSwim) {
+            forceCrawl(player);
+            return;
+        }
         try {
-            player.setSwimming(!player.isSwimming());
+            player.setSwimming(false);
         } catch (Throwable throwable) {
-            logger.fine(() -> "Failed to toggle crawl for " + player.getUniqueId() + ": " + throwable.getMessage());
+            logger.fine(() -> "Failed to exit crawl for " + player.getUniqueId() + ": " + throwable.getMessage());
+        }
+    }
+
+    private void forceCrawl(Player player) {
+        for (int delay = 0; delay <= 8; delay += 2) {
+            int scheduleDelay = delay;
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline() || player.isInsideVehicle()) {
+                    return;
+                }
+                if (!player.isSneaking()) {
+                    return;
+                }
+                try {
+                    player.setSwimming(true);
+                } catch (Throwable throwable) {
+                    logger.fine(() -> "Failed to force crawl for " + player.getUniqueId() + " (delay=" + scheduleDelay + "): " + throwable.getMessage());
+                }
+            });
         }
     }
 
@@ -248,5 +293,37 @@ final class ActionCosmeticListener implements Listener {
             }
         }
         return false;
+    }
+
+    private boolean isPassengerOfPlayer(Player player) {
+        Entity vehicle = player.getVehicle();
+        while (vehicle != null) {
+            if (vehicle instanceof Player) {
+                return true;
+            }
+            vehicle = vehicle.getVehicle();
+        }
+        return false;
+    }
+
+    private boolean movedHorizontally(PlayerMoveEvent event) {
+        return event.getFrom().getBlockX() != event.getTo().getBlockX()
+            || event.getFrom().getBlockZ() != event.getTo().getBlockZ();
+    }
+
+    private boolean isColliding(Location to, Player player) {
+        Location head = to.clone().add(0, player.getEyeHeight(), 0);
+        return !head.getBlock().isPassable();
+    }
+
+    private void knockOffStack(Player player) {
+        try {
+            player.leaveVehicle();
+            player.sendMessage("§eYou bonked into a wall and fell off.");
+            Location safe = player.getLocation().add(player.getLocation().getDirection().multiply(-0.5));
+            player.teleportAsync(safe);
+        } catch (Throwable throwable) {
+            logger.fine(() -> "Failed to knock player off stack for " + player.getUniqueId() + ": " + throwable.getMessage());
+        }
     }
 }

@@ -12,8 +12,10 @@ import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
 import sh.harold.fulcrum.plugin.unlockable.CosmeticSection;
 import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockable;
 import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockableState;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableId;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableDefinition;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
+import sh.harold.fulcrum.plugin.unlockable.UnlockableTier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -108,7 +110,7 @@ final class CosmeticMenuView {
         boolean equipped = state.equippedCosmetic(section).isPresent();
         String description = cosmetics.isEmpty()
             ? "No cosmetics are available here yet."
-            : "Unlocked " + unlocked + "/" + cosmetics.size() + " click to browse.";
+            : "Unlocked: " + unlocked + "/" + cosmetics.size();
 
         MenuButton.Builder builder = MenuButton.builder(sectionIcon(section))
             .name(sectionName(section))
@@ -184,6 +186,7 @@ final class CosmeticMenuView {
         boolean equipped = state.equippedCosmetic(cosmetic.section())
             .filter(definition.id()::equals)
             .isPresent();
+        long cost = definition.tier(1).map(UnlockableTier::costInShards).orElse(0L);
 
         String displayName = unlocked
             ? "&a" + definition.name()
@@ -194,17 +197,32 @@ final class CosmeticMenuView {
             .secondary(sectionSecondary(cosmetic.section()))
             .description(definition.description())
             .sound(Sound.UI_BUTTON_CLICK)
-            .skipClickPrompt()
-            .onClick(viewer -> handleCosmeticClick(viewer, cosmetic));
+            .onClick(viewer -> {
+                if (unlockable.unlocked()) {
+                    if (equipped) {
+                        clearCosmetic(viewer, cosmetic.section());
+                    } else {
+                        handleCosmeticClick(viewer, cosmetic);
+                    }
+                } else {
+                    handleUnlock(viewer, cosmetic);
+                }
+            });
 
         if (equipped) {
             builder.glow(true);
         }
 
-        builder.lore("&f");
-        builder.lore("&7Status: " + (unlocked ? "&aUnlocked" : "&cLocked"));
-        builder.lore("&f");
-        builder.lore("&7Equipped: " + (equipped ? "&aYes" : "&cNo"));
+        List<String> lore = new ArrayList<>();
+        lore.add("&f");
+        if (!unlocked) {
+            lore.add("&7Cost: &3" + cost + " Shards");
+            lore.add("&f");
+        } else {
+            lore.add("&7Status: " + (equipped ? "&aEquipped" : "&cNot Equipped"));
+            lore.add("&f");
+        }
+        lore.forEach(builder::lore);
 
         return builder.build();
     }
@@ -218,6 +236,20 @@ final class CosmeticMenuView {
                     return;
                 }
                 player.sendMessage("§aEquipped " + cosmetic.definition().name() + ".");
+                openSection(player, cosmetic.section());
+            });
+    }
+
+    private void handleUnlock(Player player, Cosmetic cosmetic) {
+        UUID playerId = player.getUniqueId();
+        UnlockableId id = cosmetic.id();
+        unlockableService.unlockToTier(playerId, id, 1)
+            .whenComplete((updated, throwable) -> {
+                if (throwable != null) {
+                    player.sendMessage("§c" + cleanError(throwable));
+                    return;
+                }
+                player.sendMessage("§aUnlocked " + updated.definition().name() + ".");
                 openSection(player, cosmetic.section());
             });
     }
@@ -291,6 +323,7 @@ final class CosmeticMenuView {
 
     private List<String> sectionLore(PlayerUnlockableState state, CosmeticSection section, List<Cosmetic> cosmetics) {
         List<String> lore = new ArrayList<>();
+        lore.add("&f");
         state.equippedCosmetic(section)
             .flatMap(id -> cosmetics.stream().filter(cosmetic -> cosmetic.id().equals(id)).findFirst())
             .ifPresentOrElse(
