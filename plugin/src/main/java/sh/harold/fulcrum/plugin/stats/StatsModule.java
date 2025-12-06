@@ -97,6 +97,10 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         return mappingConfig;
     }
 
+    public PlayerSettingsService playerSettingsService() {
+        return playerSettingsService;
+    }
+
     private void refreshConfiguration(StatMappingConfig newConfig) {
         mappingConfig = newConfig;
         rebuildBindings();
@@ -113,7 +117,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         bindingManager.registerBinding(new MaxHealthStatBinding(entityResolver));
         bindingManager.registerBinding(new sh.harold.fulcrum.plugin.stats.binding.AttackSpeedStatBinding(entityResolver));
         if (mappingConfig.mirrorArmorAttributes()) {
-            bindingManager.registerBinding(new ArmorVisualStatBinding(entityResolver));
+            bindingManager.registerBinding(new ArmorVisualStatBinding(entityResolver, mappingConfig));
         }
         statService.addListener(bindingManager);
     }

@@ -482,6 +482,7 @@ public final class PlayerMenuService {
                 boolean pvpEnabled = settings.pvpEnabled();
                 UsernameView usernameView = settings.usernameView();
                 boolean damageMarkersEnabled = settings.damageMarkersEnabled();
+                boolean customItemNamesEnabled = settings.customItemNamesEnabled();
                 int closeSlot = MenuButton.getCloseSlot(MENU_ROWS);
                 MenuButton backButton = MenuButton.builder(Material.ARROW)
                     .name("&7Back")
@@ -523,6 +524,18 @@ public final class PlayerMenuService {
                     .onClick(viewer -> toggleDamageMarkers(viewer, !damageMarkersEnabled))
                     .build();
 
+                MenuButton customItemNamesToggle = MenuButton.builder(Material.NAME_TAG)
+                    .name(customItemNamesEnabled ? "&aCustom Names: Suffix Title" : "&cCustom Names: Hidden")
+                    .secondary("Items")
+                    .description(customItemNamesEnabled
+                        ? "Show anvil names inline as a gray suffix on item titles."
+                        : "Hide anvil names from titles; they stay in the tag line.")
+                    .slot(13)
+                    .cooldown(SETTINGS_COOLDOWN)
+                    .sound(Sound.UI_BUTTON_CLICK)
+                    .onClick(viewer -> toggleCustomItemNames(viewer, !customItemNamesEnabled))
+                    .build();
+
                 MenuButton usernameViewButton = MenuButton.builder(Material.NAME_TAG)
                     .name("&bUsername View: " + usernameView.label())
                     .secondary("Name Display")
@@ -551,10 +564,11 @@ public final class PlayerMenuService {
                         .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
                         .addButton(MenuButton.createPositionedClose(MENU_ROWS))
                         .addButton(backButton)
-                        .addButton(scoreboardToggle)
-                        .addButton(pvpToggle)
-                        .addButton(damageMarkersToggle)
-                        .addButton(usernameViewButton)
+                    .addButton(scoreboardToggle)
+                    .addButton(pvpToggle)
+                    .addButton(damageMarkersToggle)
+                    .addButton(customItemNamesToggle)
+                    .addButton(usernameViewButton)
                         .addButton(relocateButton)
                         .buildAsync(player)
                         .whenComplete((menu, openError) -> {
@@ -618,6 +632,22 @@ public final class PlayerMenuService {
             .exceptionally(throwable -> {
                 logger.log(Level.SEVERE, "Failed to toggle damage markers for " + playerId, throwable);
                 player.sendMessage("§cCould not update your damage marker setting.");
+                return null;
+            });
+    }
+
+    private void toggleCustomItemNames(Player player, boolean enable) {
+        UUID playerId = player.getUniqueId();
+        settingsService.setCustomItemNamesEnabled(playerId, enable)
+            .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+                player.sendMessage(enable
+                    ? "§aItem titles now show custom names as gray suffixes."
+                    : "§eItem titles will hide custom names; check tags for renames.");
+                openSettings(player);
+            }))
+            .exceptionally(throwable -> {
+                logger.log(Level.SEVERE, "Failed to toggle custom item names for " + playerId, throwable);
+                player.sendMessage("§cCould not update your item name display setting.");
                 return null;
             });
     }

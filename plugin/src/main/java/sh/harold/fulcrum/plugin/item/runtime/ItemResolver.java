@@ -20,6 +20,7 @@ import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.meta.trim.ArmorTrim;
 
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
@@ -152,7 +153,7 @@ public final class ItemResolver {
         }
         DurabilityData durabilityData = itemPdc.readDurability(working).orElse(null);
         if (durabilityData == null) {
-            durabilityData = computeDurability(definition);
+            durabilityData = computeDurability(definition, working);
             if (durabilityData != null) {
                 working = itemPdc.writeDurability(working, durabilityData);
             }
@@ -189,7 +190,7 @@ public final class ItemResolver {
         ItemStack withId = itemPdc.setId(base, definition.id());
         Map<StatId, Double> stats = computeDefinitionStats(definition);
         withId = itemPdc.writeStats(withId, stats);
-        DurabilityData durability = computeDurability(definition);
+        DurabilityData durability = computeDurability(definition, withId);
         if (durability != null) {
             withId = itemPdc.writeDurability(withId, durability);
         }
@@ -306,13 +307,19 @@ public final class ItemResolver {
         return stack;
     }
 
-    private DurabilityData computeDurability(CustomItem definition) {
+    private DurabilityData computeDurability(CustomItem definition, ItemStack stack) {
         DurabilityComponent component = definition.component(ComponentType.DURABILITY, DurabilityComponent.class).orElse(null);
         int max = component != null ? component.max() : definition.material().getMaxDurability();
         if (max <= 0) {
             return null;
         }
-        int current = component != null ? component.seededCurrentOrMax() : max;
+        int seeded = component != null ? component.seededCurrentOrMax() : max;
+        int inferredFromDamage = seeded;
+        if (stack != null && stack.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damageable) {
+            int vanillaDamage = Math.max(0, damageable.getDamage());
+            inferredFromDamage = Math.max(0, max - vanillaDamage);
+        }
+        int current = Math.min(seeded, inferredFromDamage);
         return new DurabilityData(current, max);
     }
 

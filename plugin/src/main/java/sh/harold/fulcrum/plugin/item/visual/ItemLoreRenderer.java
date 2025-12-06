@@ -27,6 +27,7 @@ import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
 import sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry;
+import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
 import sh.harold.fulcrum.stats.core.StatRegistry;
@@ -49,12 +50,14 @@ public final class ItemLoreRenderer {
     private final EnchantRegistry enchantRegistry;
     private final sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc;
     private final StatRegistry statRegistry;
+    private final PlayerSettingsService playerSettingsService;
 
-    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry, sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc, StatRegistry statRegistry) {
+    public ItemLoreRenderer(ItemResolver resolver, EnchantRegistry enchantRegistry, sh.harold.fulcrum.plugin.item.runtime.ItemPdc itemPdc, StatRegistry statRegistry, PlayerSettingsService playerSettingsService) {
         this.resolver = resolver;
         this.enchantRegistry = enchantRegistry;
         this.itemPdc = itemPdc;
         this.statRegistry = statRegistry;
+        this.playerSettingsService = playerSettingsService;
     }
 
     public ItemStack render(ItemStack stack, Player viewer) {
@@ -77,11 +80,20 @@ public final class ItemLoreRenderer {
             ? visual.displayName()
             : Component.text(definition.id(), NamedTextColor.WHITE);
         Component defaultDisplayName = rarityColorize(baseName, visual);
-        meta.displayName(noItalics(defaultDisplayName));
+        String customName = customName(sourceMeta, defaultDisplayName, definition.material());
+        boolean showCustomInline = playerSettingsService != null
+            && playerSettingsService.cachedCustomItemNames(viewer.getUniqueId())
+            && customName != null;
+        Component displayName = noItalics(showCustomInline
+            ? defaultDisplayName.append(Component.text(" (", NamedTextColor.DARK_GRAY))
+                .append(Component.text(customName, NamedTextColor.DARK_GRAY))
+                .append(Component.text(")", NamedTextColor.DARK_GRAY))
+            : defaultDisplayName);
+        meta.displayName(displayName);
         ensureGlint(meta, instance);
 
         StatSnapshot stats = buildStats(instance);
-        String anvilName = customName(sourceMeta, defaultDisplayName, definition.material());
+        String anvilName = showCustomInline ? null : customName(sourceMeta, defaultDisplayName, definition.material());
         boolean hasStats = !stats.all().isEmpty();
         boolean hasEnchants = !instance.enchants().isEmpty();
         boolean hasAbilities = definition.component(ComponentType.ABILITY, AbilityComponent.class)
@@ -188,15 +200,11 @@ public final class ItemLoreRenderer {
         }
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchants.entrySet());
         entries.sort(Map.Entry.comparingByKey());
-        if (entries.size() <= 4) {
-            boolean first = true;
+        if (entries.size() <= 3) {
             for (Map.Entry<String, Integer> entry : entries) {
                 EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
                 if (definition == null) {
                     continue;
-                }
-                if (!first) {
-                    lore.add(Component.empty());
                 }
                 int level = entry.getValue();
                 String levelLabel = roman(level);
@@ -206,10 +214,9 @@ public final class ItemLoreRenderer {
                 lore.add(title);
                 String description = enchantDescription(definition, level);
                 wrap(Component.text(description, NamedTextColor.GRAY), 40).forEach(lore::add);
-                first = false;
             }
         } else {
-            List<Component> labels = new ArrayList<>();
+            List<Component> labels = new ArrayList<>(entries.size());
             for (Map.Entry<String, Integer> entry : entries) {
                 EnchantDefinition definition = enchantRegistry.get(entry.getKey()).orElse(null);
                 if (definition == null) {
@@ -224,7 +231,11 @@ public final class ItemLoreRenderer {
             if (labels.isEmpty()) {
                 return;
             }
-            lore.addAll(wrapComponents(labels, 40));
+            if (entries.size() <= 4) {
+                lore.addAll(labels);
+            } else {
+                lore.addAll(wrapComponents(labels, 40));
+            }
         }
         lore.add(Component.empty());
     }

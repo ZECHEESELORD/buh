@@ -24,6 +24,7 @@ import sh.harold.fulcrum.plugin.item.enchant.EnchantDefinition;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
 import sh.harold.fulcrum.plugin.item.listener.AbilityListener;
+import sh.harold.fulcrum.plugin.item.listener.CraftProvenanceListener;
 import sh.harold.fulcrum.plugin.item.listener.HelmetEquipListener;
 import sh.harold.fulcrum.plugin.item.listener.AnvilListener;
 import sh.harold.fulcrum.plugin.item.listener.ItemEquipListener;
@@ -97,8 +98,8 @@ public final class ItemEngine {
         );
         this.abilityService = new AbilityService();
         this.statBridge = new ItemStatBridge(resolver, statsModule.statService(), statsModule.statSourceContextRegistry());
-        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry, itemPdc, statsModule.statRegistry());
-        this.durabilityService = new DurabilityService(resolver, itemPdc, statBridge);
+        this.loreRenderer = new ItemLoreRenderer(resolver, enchantRegistry, itemPdc, statsModule.statRegistry(), statsModule.playerSettingsService());
+        this.durabilityService = new DurabilityService(plugin, resolver, itemPdc, statBridge);
         this.armorTrimRecipeBlocker = new ArmorTrimRecipeBlocker(plugin);
         this.itemLedgerRepository = itemLedgerRepository;
         this.blockedItemMasker = new sh.harold.fulcrum.plugin.item.runtime.BlockedItemMasker(registry, itemPdc, itemLedgerRepository, plugin.getLogger());
@@ -106,6 +107,8 @@ public final class ItemEngine {
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new CreativeSanitizerListener(this), plugin);
+        pluginManager.registerEvents(new CraftProvenanceListener(this), plugin);
+        pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.listener.ItemLifecycleListener(this), plugin);
     }
 
     public ItemResolver resolver() {
@@ -133,6 +136,10 @@ public final class ItemEngine {
     }
     public sh.harold.fulcrum.plugin.item.visual.ItemLoreRenderer loreRenderer() {
         return loreRenderer;
+    }
+
+    public JavaPlugin plugin() {
+        return plugin;
     }
 
     public java.util.Optional<ItemLedgerRepository> itemLedger() {

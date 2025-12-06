@@ -4,6 +4,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.LivingEntity;
 import sh.harold.fulcrum.plugin.stats.StatEntityResolver;
+import sh.harold.fulcrum.plugin.stats.StatMappingConfig;
 import sh.harold.fulcrum.stats.binding.StatBinding;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
@@ -14,9 +15,11 @@ import java.util.Optional;
 public final class ArmorVisualStatBinding implements StatBinding {
 
     private final StatEntityResolver entityResolver;
+    private final StatMappingConfig mappingConfig;
 
-    public ArmorVisualStatBinding(StatEntityResolver entityResolver) {
+    public ArmorVisualStatBinding(StatEntityResolver entityResolver, StatMappingConfig mappingConfig) {
         this.entityResolver = entityResolver;
+        this.mappingConfig = mappingConfig;
     }
 
     @Override
@@ -34,7 +37,12 @@ public final class ArmorVisualStatBinding implements StatBinding {
         LivingEntity living = entity.get();
         AttributeInstance armorAttribute = living.getAttribute(Attribute.ARMOR);
         if (armorAttribute != null) {
-            armorAttribute.setBaseValue(Math.max(0.0, change.newValue()));
+            double defense = Math.max(0.0, change.newValue());
+            double reduction = mappingConfig == null
+                ? 0.0
+                : mappingConfig.maxReduction() * (1.0 - Math.exp(-defense / mappingConfig.defenseScale()));
+            double barValue = Math.max(0.0, Math.min(20.0, reduction * 20.0)); // armor bar is 10 icons (20 points)
+            armorAttribute.setBaseValue(barValue);
         }
 
         AttributeInstance toughnessAttribute = living.getAttribute(Attribute.ARMOR_TOUGHNESS);

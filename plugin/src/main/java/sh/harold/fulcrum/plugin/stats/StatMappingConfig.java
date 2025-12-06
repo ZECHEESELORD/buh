@@ -7,8 +7,8 @@ import sh.harold.fulcrum.plugin.config.FeatureConfiguration;
 
 public record StatMappingConfig(double defenseScale, double maxReduction, boolean mirrorArmorAttributes) {
 
-    static final FeatureConfigOption<Double> DEFENSE_SCALE_OPTION = FeatureConfigOptions.doubleOption("damage.defense_scale", 16.0);
-    static final FeatureConfigOption<Double> MAX_REDUCTION_OPTION = FeatureConfigOptions.doubleOption("damage.max_reduction", 0.90);
+    static final FeatureConfigOption<Double> DEFENSE_SCALE_OPTION = FeatureConfigOptions.doubleOption("damage.defense_scale", 32.0);
+    static final FeatureConfigOption<Double> MAX_REDUCTION_OPTION = FeatureConfigOptions.doubleOption("damage.max_reduction", 0.80);
     static final FeatureConfigOption<Boolean> MIRROR_ARMOR_OPTION = FeatureConfigOptions.booleanOption("visuals.mirror_armor_attributes", true);
 
     static final FeatureConfigDefinition CONFIG_DEFINITION = FeatureConfigDefinition.feature("stats")
