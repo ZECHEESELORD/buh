@@ -42,6 +42,7 @@ import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameView;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.stash.StashService;
+import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableRegistry;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import sh.harold.fulcrum.stats.core.StatId;
@@ -103,6 +104,7 @@ public final class PlayerMenuService {
     private final StatRegistry statRegistry;
     private final StatSourceContextRegistry statSourceContextRegistry;
     private final PerkMenuView perkMenuView;
+    private final CosmeticMenuView cosmeticMenuView;
     private final NamespacedKey markerKey;
     private final NamespacedKey displayMaterialKey;
     private final ProtocolManager protocolManager;
@@ -119,6 +121,7 @@ public final class PlayerMenuService {
         PlayerDirectoryService playerDirectoryService,
         ScoreboardService scoreboardService,
         UnlockableService unlockableService,
+        CosmeticRegistry cosmeticRegistry,
         UnlockableRegistry unlockableRegistry,
         StatService statService,
         StatRegistry statRegistry,
@@ -158,6 +161,12 @@ public final class PlayerMenuService {
             unlockableService,
             unlockableRegistry,
             this.players
+        );
+        this.cosmeticMenuView = new CosmeticMenuView(
+            plugin,
+            menuService,
+            unlockableService,
+            cosmeticRegistry
         );
         this.statBreakdownView = new StatBreakdownView(
             plugin,
@@ -237,8 +246,16 @@ public final class PlayerMenuService {
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> perkMenuView.openHub(viewer, this::openMenu))
             .build();
+        MenuButton cosmeticsButton = MenuButton.builder(Material.FIREWORK_STAR)
+            .name("&6Cosmetics")
+            .secondary("Style")
+            .description("Browse trails, prefixes, statuses, and player menu skins.")
+            .slot(22)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(viewer -> cosmeticMenuView.openHub(viewer, this::openMenu))
+            .build();
         List<MenuDisplayItem> comingSoon = new ArrayList<>();
-        for (int slot = 22; slot <= 25; slot++) {
+        for (int slot = 23; slot <= 25; slot++) {
             MenuDisplayItem placeholder = MenuDisplayItem.builder(Material.GRAY_STAINED_GLASS_PANE)
                 .name("&7???")
                 .secondary("Coming Soon")
@@ -259,6 +276,7 @@ public final class PlayerMenuService {
                 .addButton(directoryButton)
                 .addButton(bankButton)
                 .addButton(perksButton)
+                .addButton(cosmeticsButton)
                 .addButton(headline);
 
             comingSoon.forEach(item -> builder.addItem(item, item.getSlot()));
