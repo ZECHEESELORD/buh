@@ -384,6 +384,5 @@ final class ActionCosmeticListener implements Listener {
         String msg = "[crawl:" + phase + "] swim=" + player.isSwimming() + " sneak=" + player.isSneaking()
             + " sprint=" + player.isSprinting() + " grounded=" + grounded + " head=" + headBlock + " passable=" + headPassable;
         logger.fine(msg + " player=" + player.getUniqueId());
-        player.sendMessage("§7" + msg);
     }
 }

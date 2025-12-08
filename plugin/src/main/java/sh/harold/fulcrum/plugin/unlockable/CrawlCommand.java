@@ -50,7 +50,6 @@ public final class CrawlCommand {
         player.sendMessage(target
             ? Component.text("You drop into a crawl.", NamedTextColor.GREEN)
             : Component.text("You stand back up.", NamedTextColor.YELLOW));
-        player.sendMessage(Component.text("Debug: setSwimming=" + target, NamedTextColor.GRAY));
         return Command.SINGLE_SUCCESS;
     }
 }
