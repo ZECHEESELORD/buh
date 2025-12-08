@@ -3,24 +3,28 @@ package sh.harold.fulcrum.plugin.unlockable;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Pose;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
+import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,15 +43,17 @@ final class ActionCosmeticListener implements Listener {
     private final CosmeticRegistry cosmeticRegistry;
     private final Logger logger;
     private final JavaPlugin plugin;
+    private final CrawlManager crawlManager;
     private final Map<UUID, ArmorStand> seats = new HashMap<>();
     private final Map<UUID, Long> crouchTaps = new HashMap<>();
     private final Map<UUID, Long> rideGrace = new HashMap<>();
 
-    ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, JavaPlugin plugin, Logger logger) {
+    ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, JavaPlugin plugin, Logger logger, CrawlManager crawlManager) {
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.crawlManager = Objects.requireNonNull(crawlManager, "crawlManager");
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -129,11 +135,45 @@ final class ActionCosmeticListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         removeSeat(event.getPlayer().getUniqueId());
+        crawlManager.stop(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onKick(PlayerKickEvent event) {
         removeSeat(event.getPlayer().getUniqueId());
+        crawlManager.stop(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent event) {
+        removeSeat(event.getEntity().getUniqueId());
+        crawlManager.stop(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRespawn(PlayerRespawnEvent event) {
+        crawlManager.stop(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        crawlManager.stop(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (event.getTo() != null && !Objects.equals(event.getFrom().getWorld(), event.getTo().getWorld())) {
+            crawlManager.stop(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onJump(PlayerJumpEvent event) {
+        if (!crawlManager.isCrawling(event.getPlayer().getUniqueId())) {
+            return;
+        }
+        event.setCancelled(true);
+        crawlManager.hopIfCrawling(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -160,6 +200,7 @@ final class ActionCosmeticListener implements Listener {
         seats.clear();
         crouchTaps.clear();
         rideGrace.clear();
+        crawlManager.stopAll();
     }
 
     private void handleSit(PlayerInteractEvent event, Player player) {
@@ -229,39 +270,9 @@ final class ActionCosmeticListener implements Listener {
     }
 
     private void toggleCrawl(Player player) {
-        boolean targetSwim = !player.isSwimming();
-        if (targetSwim) {
-            forceCrawl(player);
-            return;
-        }
-        try {
-            player.setSwimming(false);
-        } catch (Throwable throwable) {
-            logger.fine(() -> "Failed to exit crawl for " + player.getUniqueId() + ": " + throwable.getMessage());
-        }
-    }
-
-    private void forceCrawl(Player player) {
-        for (int delay = 0; delay <= 10; delay += 2) {
-            int scheduleDelay = delay;
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!player.isOnline() || player.isInsideVehicle()) {
-                    return;
-                }
-                if (!player.isSneaking()) {
-                    return;
-                }
-                try {
-                    player.setSwimming(true);
-                    player.setPose(Pose.SWIMMING);
-                    player.setSneaking(true);
-                    player.setSprinting(false);
-                    player.setVelocity(player.getVelocity().setY(-0.08));
-                    debugCrawlState(player, "force-step-" + scheduleDelay);
-                } catch (Throwable throwable) {
-                    logger.fine(() -> "Failed to force crawl for " + player.getUniqueId() + " (delay=" + scheduleDelay + "): " + throwable.getMessage());
-                }
-            });
+        CrawlManager.CrawlToggleResult result = crawlManager.toggle(player);
+        if (result == CrawlManager.CrawlToggleResult.FAILED) {
+            logger.fine(() -> "Failed to toggle crawl for " + player.getUniqueId());
         }
     }
 
@@ -375,16 +386,5 @@ final class ActionCosmeticListener implements Listener {
             return 0.5;
         }
         return 1.0;
-    }
-
-    private void debugCrawlState(Player player, String phase) {
-        Location loc = player.getLocation();
-        Location head = loc.clone().add(0, player.getEyeHeight(), 0);
-        String headBlock = head.getBlock().getType().name();
-        boolean headPassable = head.getBlock().isPassable();
-        boolean grounded = playerIsGrounded(player);
-        String msg = "[crawl:" + phase + "] swim=" + player.isSwimming() + " sneak=" + player.isSneaking()
-            + " sprint=" + player.isSprinting() + " grounded=" + grounded + " head=" + headBlock + " passable=" + headPassable;
-        logger.fine(msg + " player=" + player.getUniqueId());
     }
 }

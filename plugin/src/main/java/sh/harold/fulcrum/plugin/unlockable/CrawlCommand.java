@@ -17,9 +17,11 @@ import static io.papermc.paper.command.brigadier.Commands.literal;
 public final class CrawlCommand {
 
     private final UnlockableService unlockableService;
+    private final CrawlManager crawlManager;
 
-    public CrawlCommand(UnlockableService unlockableService) {
+    public CrawlCommand(UnlockableService unlockableService, CrawlManager crawlManager) {
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
+        this.crawlManager = Objects.requireNonNull(crawlManager, "crawlManager");
     }
 
     public LiteralCommandNode<CommandSourceStack> build() {
@@ -45,14 +47,12 @@ public final class CrawlCommand {
             return 0;
         }
 
-        boolean target = !player.isSwimming();
-        player.setSwimming(target);
-        try {
-            player.setPose(org.bukkit.entity.Pose.SWIMMING);
-        } catch (Throwable ignored) {
+        CrawlManager.CrawlToggleResult result = crawlManager.toggle(player);
+        if (result == CrawlManager.CrawlToggleResult.FAILED) {
+            player.sendMessage(Component.text("Crawl fizzled; try again in a moment.", NamedTextColor.RED));
+            return 0;
         }
-        player.setSneaking(target);
-        player.setVelocity(player.getVelocity().setY(-0.08));
+        boolean target = result == CrawlManager.CrawlToggleResult.STARTED;
         player.sendMessage(target
             ? Component.text("You drop into a crawl.", NamedTextColor.GREEN)
             : Component.text("You stand back up.", NamedTextColor.YELLOW));

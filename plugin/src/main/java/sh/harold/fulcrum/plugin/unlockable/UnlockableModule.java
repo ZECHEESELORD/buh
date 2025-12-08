@@ -32,6 +32,7 @@ public final class UnlockableModule implements FulcrumModule {
     private UnlockableService unlockableService;
     private CooldownRegistry cooldownRegistry;
     private ActionCosmeticListener actionCosmeticListener;
+    private CrawlManager crawlManager;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -63,9 +64,10 @@ public final class UnlockableModule implements FulcrumModule {
             economyModule::economyService,
             plugin.getLogger()
         );
+        crawlManager = new CrawlManager(plugin, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
-        actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin, plugin.getLogger());
+        actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin, plugin.getLogger(), crawlManager);
         pluginManager.registerEvents(actionCosmeticListener, plugin);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         return CompletableFuture.completedFuture(null);
@@ -75,6 +77,9 @@ public final class UnlockableModule implements FulcrumModule {
     public CompletionStage<Void> disable() {
         if (actionCosmeticListener != null) {
             actionCosmeticListener.clearSeats();
+        }
+        if (crawlManager != null) {
+            crawlManager.stopAll();
         }
         if (cooldownRegistry != null) {
             cooldownRegistry.close();
@@ -98,7 +103,7 @@ public final class UnlockableModule implements FulcrumModule {
         Commands registrar = event.registrar();
         registrar.register(new PerkCommand(unlockableService, registry).build(), "perks", List.of("perk", "upgrade"));
         registrar.register(new CraftCommand(plugin, unlockableService).build(), "craft", List.of("workbench"));
-        registrar.register(new CrawlCommand(unlockableService).build(), "crawl", List.of());
+        registrar.register(new CrawlCommand(unlockableService, crawlManager).build(), "crawl", List.of());
         registrar.register(new GetOffMyHeadCommand().build(), "getoffmyhead", List.of("offmyhead", "unstack"));
     }
 }
