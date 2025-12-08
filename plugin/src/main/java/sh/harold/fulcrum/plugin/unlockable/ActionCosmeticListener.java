@@ -150,7 +150,7 @@ final class ActionCosmeticListener implements Listener {
         if (now - last > 350) {
             return;
         }
-        logger.fine(() -> "Forcing crawl for " + player.getUniqueId() + " via double-sneak");
+        debugCrawlState(player, "pre-toggle");
         toggleCrawl(player);
     }
 
@@ -255,7 +255,7 @@ final class ActionCosmeticListener implements Listener {
                     player.setSneaking(true);
                     player.setSprinting(true);
                     player.setVelocity(player.getVelocity().setY(-0.08));
-                    logger.fine(() -> "Set swimming for crawl: " + player.getUniqueId() + " delay=" + scheduleDelay);
+                    debugCrawlState(player, "force-step-" + scheduleDelay);
                 } catch (Throwable throwable) {
                     logger.fine(() -> "Failed to force crawl for " + player.getUniqueId() + " (delay=" + scheduleDelay + "): " + throwable.getMessage());
                 }
@@ -373,5 +373,17 @@ final class ActionCosmeticListener implements Listener {
             return 0.5;
         }
         return 1.0;
+    }
+
+    private void debugCrawlState(Player player, String phase) {
+        Location loc = player.getLocation();
+        Location head = loc.clone().add(0, player.getEyeHeight(), 0);
+        String headBlock = head.getBlock().getType().name();
+        boolean headPassable = head.getBlock().isPassable();
+        boolean grounded = playerIsGrounded(player);
+        String msg = "[crawl:" + phase + "] swim=" + player.isSwimming() + " sneak=" + player.isSneaking()
+            + " sprint=" + player.isSprinting() + " grounded=" + grounded + " head=" + headBlock + " passable=" + headPassable;
+        logger.fine(msg + " player=" + player.getUniqueId());
+        player.sendMessage("§7" + msg);
     }
 }
