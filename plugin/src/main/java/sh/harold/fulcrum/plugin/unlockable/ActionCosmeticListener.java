@@ -150,6 +150,7 @@ final class ActionCosmeticListener implements Listener {
         if (now - last > 350) {
             return;
         }
+        logger.fine(() -> "Forcing crawl for " + player.getUniqueId() + " via double-sneak");
         toggleCrawl(player);
     }
 
@@ -251,6 +252,7 @@ final class ActionCosmeticListener implements Listener {
                 }
                 try {
                     player.setSwimming(true);
+                    logger.fine(() -> "Set swimming for crawl: " + player.getUniqueId() + " delay=" + scheduleDelay);
                 } catch (Throwable throwable) {
                     logger.fine(() -> "Failed to force crawl for " + player.getUniqueId() + " (delay=" + scheduleDelay + "): " + throwable.getMessage());
                 }
