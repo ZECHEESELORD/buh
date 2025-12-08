@@ -83,6 +83,7 @@ public final class BuhPlugin extends JavaPlugin {
     private UnlockableModule unlockableModule;
     private sh.harold.fulcrum.plugin.item.ItemModule itemModule;
     private sh.harold.fulcrum.plugin.item.migration.ItemMigrationModule itemMigrationModule;
+    private sh.harold.fulcrum.plugin.playerhead.PlayerHeadModule playerHeadModule;
     private ChatChannelService chatChannelService;
     private MessageService messageService;
     private VersionService versionService;
@@ -198,6 +199,7 @@ public final class BuhPlugin extends JavaPlugin {
         funModule = new FunModule(this, luckPermsModule);
         staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
         itemModule = new sh.harold.fulcrum.plugin.item.ItemModule(this, statsModule, dataModule);
+        playerHeadModule = new sh.harold.fulcrum.plugin.playerhead.PlayerHeadModule(this, itemModule);
         itemMigrationModule = new sh.harold.fulcrum.plugin.item.migration.ItemMigrationModule(this, itemModule);
         shutdownModule = new ShutdownModule(this, scoreboardService);
         tabFeature = new TabFeature(this);
@@ -228,6 +230,7 @@ public final class BuhPlugin extends JavaPlugin {
             funModule,
             staffCommandsModule,
             itemModule,
+            playerHeadModule,
             itemMigrationModule,
             tabFeature,
             scoreboardFeature
