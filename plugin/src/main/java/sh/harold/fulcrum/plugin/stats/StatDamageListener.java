@@ -23,17 +23,23 @@ import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.stats.core.ConditionContext;
+import sh.harold.fulcrum.stats.core.ModifierOp;
 import sh.harold.fulcrum.stats.core.StatContainer;
 import sh.harold.fulcrum.stats.core.StatIds;
+import sh.harold.fulcrum.stats.core.StatModifier;
+import sh.harold.fulcrum.stats.core.StatSnapshot;
+import sh.harold.fulcrum.stats.core.StatSourceId;
 import sh.harold.fulcrum.stats.service.EntityKey;
 import sh.harold.fulcrum.stats.service.StatService;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
 
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Map;
+import java.util.function.Predicate;
 
 public final class StatDamageListener implements Listener {
 
@@ -79,7 +85,11 @@ public final class StatDamageListener implements Listener {
             if (!hasCustomAttack && !(attacker instanceof Player)) {
                 baseDamage = event.getDamage();
             } else {
-                baseDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext) + maceSmash.bonusDamage();
+                double attackDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext);
+                double nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
+                double enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
+                double basePortion = nonEnchantDamage + maceSmash.bonusDamage();
+                baseDamage = scaleForAttackCooldown(basePortion, enchantDamage, attackStrength(attacker));
                 double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
                 if (attacker instanceof Player player && isCritical(player)) {
                     baseDamage *= critMultiplier;
@@ -369,6 +379,88 @@ public final class StatDamageListener implements Listener {
 
     private boolean isUndead(LivingEntity entity) {
         return UNDEAD.contains(entity.getType());
+    }
+
+    private double attackStrength(LivingEntity attacker) {
+        if (attacker instanceof Player player) {
+            return clamp(player.getAttackCooldown(), 0.0, 1.0);
+        }
+        return 1.0;
+    }
+
+    private double scaleForAttackCooldown(double baseDamage, double enchantDamage, double attackStrength) {
+        double clampedStrength = clamp(attackStrength, 0.0, 1.0);
+        double baseMultiplier = 0.2 + 0.8 * clampedStrength * clampedStrength;
+        double enchantMultiplier = 0.2 + 0.8 * clampedStrength;
+        return baseDamage * baseMultiplier + enchantDamage * enchantMultiplier;
+    }
+
+    private double attackDamageExcludingEnchants(StatContainer container, ConditionContext context) {
+        return computeAttackDamage(container, context, sourceId -> !isEnchantSource(sourceId));
+    }
+
+    private double computeAttackDamage(StatContainer container, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
+        StatSnapshot snapshot = container.debugView().stream()
+            .filter(entry -> StatIds.ATTACK_DAMAGE.equals(entry.statId()))
+            .findFirst()
+            .orElse(null);
+        if (snapshot == null) {
+            return container.getStat(StatIds.ATTACK_DAMAGE, context);
+        }
+        return computeDamageFromSnapshot(snapshot, context, sourceFilter);
+    }
+
+    private double computeDamageFromSnapshot(StatSnapshot snapshot, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
+        double flatSum = snapshot.baseValue() + sumModifiers(snapshot, ModifierOp.FLAT, context, sourceFilter);
+        double percentAddFactor = 1.0 + sumModifiers(snapshot, ModifierOp.PERCENT_ADD, context, sourceFilter);
+        double percentMultFactor = productModifiers(snapshot, ModifierOp.PERCENT_MULT, context, sourceFilter);
+        return Math.max(0.0, flatSum * percentAddFactor * percentMultFactor);
+    }
+
+    private double sumModifiers(StatSnapshot snapshot, ModifierOp op, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
+        Map<StatSourceId, List<StatModifier>> grouped = snapshot.modifiers().get(op);
+        if (grouped == null || grouped.isEmpty()) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        for (Map.Entry<StatSourceId, List<StatModifier>> entry : grouped.entrySet()) {
+            if (!sourceFilter.test(entry.getKey())) {
+                continue;
+            }
+            for (StatModifier modifier : entry.getValue()) {
+                if (modifier.condition() == null || modifier.condition().test(context)) {
+                    sum += modifier.value();
+                }
+            }
+        }
+        return sum;
+    }
+
+    private double productModifiers(StatSnapshot snapshot, ModifierOp op, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
+        Map<StatSourceId, List<StatModifier>> grouped = snapshot.modifiers().get(op);
+        if (grouped == null || grouped.isEmpty()) {
+            return 1.0;
+        }
+        double product = 1.0;
+        for (Map.Entry<StatSourceId, List<StatModifier>> entry : grouped.entrySet()) {
+            if (!sourceFilter.test(entry.getKey())) {
+                continue;
+            }
+            for (StatModifier modifier : entry.getValue()) {
+                if (modifier.condition() == null || modifier.condition().test(context)) {
+                    product *= 1.0 + modifier.value();
+                }
+            }
+        }
+        return product;
+    }
+
+    private boolean isEnchantSource(StatSourceId sourceId) {
+        return sourceId != null && sourceId.value().contains(":enchant:");
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static final EnumSet<org.bukkit.entity.EntityType> ARTHROPODS = EnumSet.of(
