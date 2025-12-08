@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.item.runtime;
 
 import org.bukkit.Material;
+import org.bukkit.Registry;
 import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.common.data.ledger.item.ItemCreationSource;
 import sh.harold.fulcrum.common.data.ledger.item.ItemInstanceRecord;
@@ -19,9 +20,12 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
+import org.bukkit.inventory.meta.trim.TrimMaterial;
+import org.bukkit.inventory.meta.trim.TrimPattern;
 
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityData;
 import sh.harold.fulcrum.plugin.item.runtime.DurabilityState;
@@ -354,34 +358,58 @@ public final class ItemResolver {
             return null;
         }
         ItemMeta meta = stack.getItemMeta();
-        if (!(meta instanceof org.bukkit.inventory.meta.ArmorMeta armorMeta)) {
+        if (!(meta instanceof ArmorMeta armorMeta)) {
             return stack;
         }
-        if (itemPdc.readTrim(stack).isPresent()) {
-            armorMeta.setTrim(null);
+        ArmorTrim vanillaTrim = armorMeta.getTrim();
+        Optional<TrimData> storedTrim = itemPdc.readTrim(stack);
+        if (vanillaTrim != null) {
+            persistTrim(armorMeta, vanillaTrim);
             stack.setItemMeta(armorMeta);
             return stack;
         }
-        if (!armorMeta.hasTrim()) {
+        if (storedTrim.isEmpty()) {
             return stack;
         }
-        var trim = armorMeta.getTrim();
-        if (trim == null) {
+        ArmorTrim resolved = resolveTrim(storedTrim.get());
+        if (resolved == null) {
             return stack;
         }
-        armorMeta.setTrim(null);
-        armorMeta.getPersistentDataContainer().set(
+        armorMeta.setTrim(resolved);
+        persistTrim(armorMeta, resolved);
+        stack.setItemMeta(armorMeta);
+        return stack;
+    }
+
+    private void persistTrim(ArmorMeta meta, ArmorTrim trim) {
+        if (meta == null || trim == null) {
+            return;
+        }
+        meta.getPersistentDataContainer().set(
             itemPdc.keys().trimPattern(),
             org.bukkit.persistence.PersistentDataType.STRING,
             trim.getPattern().getKey().getKey()
         );
-        armorMeta.getPersistentDataContainer().set(
+        meta.getPersistentDataContainer().set(
             itemPdc.keys().trimMaterial(),
             org.bukkit.persistence.PersistentDataType.STRING,
             trim.getMaterial().getKey().getKey()
         );
-        stack.setItemMeta(armorMeta);
-        return stack;
+    }
+
+    private ArmorTrim resolveTrim(TrimData data) {
+        TrimPattern pattern = Registry.TRIM_PATTERN.stream()
+            .filter(candidate -> candidate.getKey().getKey().equalsIgnoreCase(data.patternKey()))
+            .findFirst()
+            .orElse(null);
+        TrimMaterial material = Registry.TRIM_MATERIAL.stream()
+            .filter(candidate -> candidate.getKey().getKey().equalsIgnoreCase(data.materialKey()))
+            .findFirst()
+            .orElse(null);
+        if (pattern == null || material == null) {
+            return null;
+        }
+        return new ArmorTrim(material, pattern);
     }
 
     private DurabilityData computeDurability(CustomItem definition, ItemStack stack) {
