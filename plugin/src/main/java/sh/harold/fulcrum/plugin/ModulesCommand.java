@@ -8,6 +8,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import sh.harold.fulcrum.common.loader.ConfigurableModule;
 import sh.harold.fulcrum.common.loader.FulcrumModule;
 import sh.harold.fulcrum.common.loader.ModuleId;
@@ -20,6 +21,8 @@ import java.util.concurrent.CompletionException;
 
 public final class ModulesCommand {
 
+    private static final String MODULE_MANAGE_PERMISSION = "fulcrum.module.manage";
+
     private final ModuleLoader moduleLoader;
 
     public ModulesCommand(ModuleLoader moduleLoader) {
@@ -28,6 +31,7 @@ public final class ModulesCommand {
 
     public LiteralCommandNode<CommandSourceStack> build() {
         return Commands.literal("module")
+            .requires(this::canManageModules)
             .executes(context -> execute(context.getSource()))
             .then(Commands.literal("list").executes(context -> execute(context.getSource())))
             .then(Commands.literal("reload")
@@ -37,6 +41,14 @@ public final class ModulesCommand {
                         StringArgumentType.getString(context, "module")
                     ))))
             .build();
+    }
+
+    private boolean canManageModules(CommandSourceStack source) {
+        CommandSender sender = source.getSender();
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        return player.hasPermission(MODULE_MANAGE_PERMISSION);
     }
 
     private int execute(CommandSourceStack source) {

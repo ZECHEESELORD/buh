@@ -27,6 +27,8 @@ import java.util.stream.Stream;
 
 public final class ItemBrowserCommand {
 
+    private static final String ITEM_COMMAND_PERMISSION = "fulcrum.item.spawn";
+
     private final ItemBrowserService browserService;
     private final ItemEngine itemEngine;
     private final SuggestionProvider<CommandSourceStack> itemSuggestions;
@@ -49,7 +51,7 @@ public final class ItemBrowserCommand {
 
     public LiteralCommandNode<CommandSourceStack> build() {
         return Commands.literal("item")
-            .requires(stack -> stack.getSender() instanceof Player)
+            .requires(this::canUseItemCommand)
             .executes(context -> openBrowser(context.getSource()))
             .then(Commands.argument("id", StringArgumentType.word())
                 .suggests(itemSuggestions)
@@ -64,6 +66,11 @@ public final class ItemBrowserCommand {
                 )
             )
             .build();
+    }
+
+    private boolean canUseItemCommand(CommandSourceStack source) {
+        CommandSender sender = source.getSender();
+        return sender instanceof Player player && player.hasPermission(ITEM_COMMAND_PERMISSION);
     }
 
     private int openBrowser(CommandSourceStack source) {
