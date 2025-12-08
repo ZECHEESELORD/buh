@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -115,6 +116,17 @@ final class ActionCosmeticListener implements Listener {
         ArmorStand seat = seats.get(player.getUniqueId());
         if (seat != null && event.getVehicle().getUniqueId().equals(seat.getUniqueId())) {
             removeSeat(player.getUniqueId());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onDismount(EntityDismountEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        Long graceUntil = rideGrace.get(player.getUniqueId());
+        if (graceUntil != null && System.currentTimeMillis() < graceUntil) {
+            event.setCancelled(true);
         }
     }
 
