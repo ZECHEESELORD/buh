@@ -98,6 +98,7 @@ public final class UnlockableModule implements FulcrumModule {
         Commands registrar = event.registrar();
         registrar.register(new PerkCommand(unlockableService, registry).build(), "perks", List.of("perk", "upgrade"));
         registrar.register(new CraftCommand(plugin, unlockableService).build(), "craft", List.of("workbench"));
+        registrar.register(new CrawlCommand(unlockableService).build(), "crawl", List.of("crouch"));
         registrar.register(new GetOffMyHeadCommand().build(), "getoffmyhead", List.of("offmyhead", "unstack"));
     }
 }
