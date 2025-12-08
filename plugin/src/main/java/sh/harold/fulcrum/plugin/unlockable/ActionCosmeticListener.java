@@ -87,20 +87,15 @@ final class ActionCosmeticListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onPassengerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        if (!isPassengerOfPlayer(player)) {
-            return;
-        }
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Player mover = event.getPlayer();
         if (event.getTo() == null) {
             return;
         }
-        if (!movedHorizontally(event)) {
-            return;
-        }
-        if (isColliding(event.getTo(), player)) {
-            knockOffStack(player);
-        }
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            checkCollision(mover);
+            mover.getPassengers().forEach(this::checkCollisionDeep);
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -318,9 +313,22 @@ final class ActionCosmeticListener implements Listener {
             || event.getFrom().getBlockZ() != event.getTo().getBlockZ();
     }
 
-    private boolean isColliding(Location to, Player player) {
-        Location head = to.clone().add(0, player.getEyeHeight(), 0);
-        return !head.getBlock().isPassable();
+    private void checkCollisionDeep(Entity entity) {
+        checkCollision(entity);
+        entity.getPassengers().forEach(this::checkCollisionDeep);
+    }
+
+    private void checkCollision(Entity entity) {
+        if (!(entity instanceof Player player)) {
+            return;
+        }
+        if (player.getVehicle() == null) {
+            return;
+        }
+        Location head = player.getLocation().add(0, player.getEyeHeight(), 0);
+        if (!head.getBlock().isPassable()) {
+            knockOffStack(player);
+        }
     }
 
     private void knockOffStack(Player player) {
