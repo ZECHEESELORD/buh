@@ -39,6 +39,7 @@ final class ActionCosmeticListener implements Listener {
     private final JavaPlugin plugin;
     private final Map<UUID, ArmorStand> seats = new HashMap<>();
     private final Map<UUID, Long> crouchTaps = new HashMap<>();
+    private final Map<UUID, Long> rideGrace = new HashMap<>();
 
     ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, JavaPlugin plugin, Logger logger) {
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
@@ -106,6 +107,11 @@ final class ActionCosmeticListener implements Listener {
         if (!(event.getExited() instanceof Player player)) {
             return;
         }
+        Long graceUntil = rideGrace.get(player.getUniqueId());
+        if (graceUntil != null && System.currentTimeMillis() < graceUntil) {
+            event.setCancelled(true);
+            return;
+        }
         ArmorStand seat = seats.get(player.getUniqueId());
         if (seat != null && event.getVehicle().getUniqueId().equals(seat.getUniqueId())) {
             removeSeat(player.getUniqueId());
@@ -144,6 +150,7 @@ final class ActionCosmeticListener implements Listener {
         seats.values().forEach(ArmorStand::remove);
         seats.clear();
         crouchTaps.clear();
+        rideGrace.clear();
     }
 
     private void handleSit(PlayerInteractEvent event, Player player) {
@@ -259,6 +266,7 @@ final class ActionCosmeticListener implements Listener {
         boolean mounted = top.addPassenger(player);
         if (mounted) {
             event.setCancelled(true);
+            rideGrace.put(player.getUniqueId(), System.currentTimeMillis() + 500L);
         }
     }
 
