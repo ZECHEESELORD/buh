@@ -252,6 +252,9 @@ final class ActionCosmeticListener implements Listener {
                 }
                 try {
                     player.setSwimming(true);
+                    player.setSneaking(true);
+                    player.setSprinting(true);
+                    player.setVelocity(player.getVelocity().setY(-0.08));
                     logger.fine(() -> "Set swimming for crawl: " + player.getUniqueId() + " delay=" + scheduleDelay);
                 } catch (Throwable throwable) {
                     logger.fine(() -> "Failed to force crawl for " + player.getUniqueId() + " (delay=" + scheduleDelay + "): " + throwable.getMessage());
