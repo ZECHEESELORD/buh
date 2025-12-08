@@ -6,6 +6,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Pose;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -150,7 +151,7 @@ final class ActionCosmeticListener implements Listener {
         if (now - last > 350) {
             return;
         }
-        debugCrawlState(player, "pre-toggle");
+        logger.info(() -> "Crawl toggle requested by " + player.getUniqueId());
         toggleCrawl(player);
     }
 
@@ -241,7 +242,7 @@ final class ActionCosmeticListener implements Listener {
     }
 
     private void forceCrawl(Player player) {
-        for (int delay = 0; delay <= 8; delay += 2) {
+        for (int delay = 0; delay <= 10; delay += 2) {
             int scheduleDelay = delay;
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline() || player.isInsideVehicle()) {
@@ -252,8 +253,9 @@ final class ActionCosmeticListener implements Listener {
                 }
                 try {
                     player.setSwimming(true);
+                    player.setPose(Pose.SWIMMING);
                     player.setSneaking(true);
-                    player.setSprinting(true);
+                    player.setSprinting(false);
                     player.setVelocity(player.getVelocity().setY(-0.08));
                     debugCrawlState(player, "force-step-" + scheduleDelay);
                 } catch (Throwable throwable) {

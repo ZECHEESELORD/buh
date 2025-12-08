@@ -47,9 +47,16 @@ public final class CrawlCommand {
 
         boolean target = !player.isSwimming();
         player.setSwimming(target);
+        try {
+            player.setPose(org.bukkit.entity.Pose.SWIMMING);
+        } catch (Throwable ignored) {
+        }
+        player.setSneaking(target);
+        player.setVelocity(player.getVelocity().setY(-0.08));
         player.sendMessage(target
             ? Component.text("You drop into a crawl.", NamedTextColor.GREEN)
             : Component.text("You stand back up.", NamedTextColor.YELLOW));
+        context.getSource().getSender().getServer().getLogger().info("Crawl command toggled swimming=" + target + " for " + player.getUniqueId());
         return Command.SINGLE_SUCCESS;
     }
 }
