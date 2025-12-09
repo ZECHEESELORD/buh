@@ -1,5 +1,7 @@
 package sh.harold.fulcrum.plugin.item.listener;
 
+import org.bukkit.GameMode;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -7,6 +9,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.ability.AbilityContext;
 import sh.harold.fulcrum.plugin.item.ability.AbilityDefinition;
 import sh.harold.fulcrum.plugin.item.ability.AbilityService;
@@ -32,11 +35,21 @@ public final class AbilityListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && !event.getPlayer().isSneaking()) {
+            Block clicked = event.getClickedBlock();
+            if (clicked != null && clicked.getType().isInteractable()) {
+                return; // allow vanilla block interactions such as lecterns
+            }
+        }
+        ItemStack inHand = event.getItem();
+        if (inHand == null || inHand.getType().isAir()) {
+            return; // nothing to trigger, keep vanilla behavior intact
+        }
         Player player = event.getPlayer();
-        if (player.getGameMode() == org.bukkit.GameMode.CREATIVE) {
+        if (player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
-        resolver.resolve(player.getInventory().getItemInMainHand()).ifPresent(instance -> {
+        resolver.resolve(inHand).ifPresent(instance -> {
             boolean defunct = instance.durability().map(sh.harold.fulcrum.plugin.item.runtime.DurabilityState::defunct).orElse(false);
             if (defunct) {
                 player.sendMessage(net.kyori.adventure.text.Component.text("Your item is defunct and cannot be used.", net.kyori.adventure.text.format.NamedTextColor.RED));

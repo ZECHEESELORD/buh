@@ -22,6 +22,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.ItemFlag;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimMaterial;
@@ -45,6 +46,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ItemResolver {
 
     private static final Map<Enchantment, String> ENCHANT_IDS = buildEnchantIds();
+
+    private static final Map<String, Enchantment> ENCHANTS_BY_ID = invertEnchantIds();
 
     private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = buildOverriddenEnchants();
 
@@ -103,6 +106,12 @@ public final class ItemResolver {
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:breach"));
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:wind_burst"));
         return Map.copyOf(ids);
+    }
+
+    private static Map<String, Enchantment> invertEnchantIds() {
+        Map<String, Enchantment> inverse = new HashMap<>();
+        ENCHANT_IDS.forEach((enchant, id) -> inverse.put(id, enchant));
+        return Map.copyOf(inverse);
     }
 
     private static Set<Enchantment> buildOverriddenEnchants() {
@@ -176,7 +185,8 @@ public final class ItemResolver {
                 tagged = itemPdc.writeDurability(tagged, durabilityData);
             }
         }
-        Map<String, Integer> enchants = mergeEnchants(tagged);
+        EnchantMerge merge = mergeEnchants(tagged);
+        Map<String, Integer> enchants = merge.enchants();
         if (!enchants.isEmpty()) {
             tagged = itemPdc.writeEnchants(tagged, enchants);
         } else {
@@ -329,28 +339,113 @@ public final class ItemResolver {
         // Ledger writes are temporarily disabled while we move to item-first provenance.
     }
 
-    private Map<String, Integer> mergeEnchants(ItemStack stack) {
+    public EnchantMerge mergeEnchants(ItemStack stack) {
         Map<String, Integer> enchants = new HashMap<>(itemPdc.readEnchants(stack).orElse(Map.of()));
         var meta = stack.getItemMeta();
-        if (meta != null && !meta.getEnchants().isEmpty()) {
+        boolean removedIncompatibles = false;
+        if (meta != null) {
+            boolean isBook = meta instanceof EnchantmentStorageMeta;
+            boolean allowRemoval = !isBook;
             boolean metaChanged = false;
-            for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                String customId = ENCHANT_IDS.get(entry.getKey());
-                if (customId == null) {
-                    continue;
+            scrubLegacyLuck(meta);
+            if (!meta.getEnchants().isEmpty()) {
+                for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                    String customId = ENCHANT_IDS.get(entry.getKey());
+                    if (customId == null) {
+                        continue;
+                    }
+                    enchants.merge(customId, entry.getValue(), Math::max);
+                    if (allowRemoval && OVERRIDDEN_ENCHANTS.contains(entry.getKey())) {
+                        metaChanged |= meta.removeEnchant(entry.getKey());
+                    }
                 }
-                int level = entry.getValue();
-                enchants.merge(customId, level, Math::max);
-                if (OVERRIDDEN_ENCHANTS.contains(entry.getKey())) {
-                    meta.removeEnchant(entry.getKey());
-                    metaChanged = true;
+            }
+            if (meta instanceof EnchantmentStorageMeta storage && !storage.getStoredEnchants().isEmpty()) {
+                for (Map.Entry<Enchantment, Integer> entry : storage.getStoredEnchants().entrySet()) {
+                    String customId = ENCHANT_IDS.get(entry.getKey());
+                    if (customId == null) {
+                        continue;
+                    }
+                    enchants.merge(customId, entry.getValue(), Math::max);
                 }
+            }
+            Map<String, Integer> sanitized = enforceIncompatibilities(enchants);
+            if (!sanitized.equals(enchants)) {
+                removedIncompatibles = true;
+                java.util.Set<String> removed = new java.util.HashSet<>(enchants.keySet());
+                removed.removeAll(sanitized.keySet());
+                for (String removedId : removed) {
+                    Enchantment vanilla = ENCHANTS_BY_ID.get(removedId);
+                    if (vanilla == null) {
+                        continue;
+                    }
+                    if (isBook && meta instanceof EnchantmentStorageMeta storage) {
+                        metaChanged |= storage.removeStoredEnchant(vanilla);
+                    } else {
+                        metaChanged |= meta.removeEnchant(vanilla);
+                    }
+                }
+                enchants = new HashMap<>(sanitized);
             }
             if (metaChanged) {
                 stack.setItemMeta(meta);
             }
         }
-        return Map.copyOf(enchants);
+        return new EnchantMerge(Map.copyOf(enchants), removedIncompatibles);
+    }
+
+    private void scrubLegacyLuck(ItemMeta meta) {
+        if (meta == null || meta.hasEnchants()) {
+            return;
+        }
+        if (!(meta instanceof EnchantmentStorageMeta storage)) {
+            return;
+        }
+        if (storage.getStoredEnchants().size() != 1) {
+            return;
+        }
+        var entry = storage.getStoredEnchants().entrySet().iterator().next();
+        boolean isLegacyLuck = entry.getKey() == Enchantment.LUCK_OF_THE_SEA && entry.getValue() == 1;
+        if (!isLegacyLuck) {
+            return;
+        }
+        storage.removeStoredEnchant(entry.getKey());
+    }
+
+    private Map<String, Integer> enforceIncompatibilities(Map<String, Integer> enchants) {
+        if (enchants == null || enchants.size() <= 1) {
+            return enchants == null ? Map.of() : Map.copyOf(enchants);
+        }
+        Map<String, Integer> working = new HashMap<>(enchants);
+        java.util.List<String> ids = new java.util.ArrayList<>(working.keySet());
+        ids.sort(String::compareTo);
+        for (String id : ids) {
+            if (!working.containsKey(id)) {
+                continue;
+            }
+            var definition = enchantRegistry.get(id).orElse(null);
+            if (definition == null) {
+                continue;
+            }
+            int level = working.get(id);
+            for (String other : definition.incompatibleWith()) {
+                if (!working.containsKey(other)) {
+                    continue;
+                }
+                int otherLevel = working.getOrDefault(other, 0);
+                boolean keepCurrent = level > otherLevel || (level == otherLevel && id.compareTo(other) <= 0);
+                if (keepCurrent) {
+                    working.remove(other);
+                } else {
+                    working.remove(id);
+                    break;
+                }
+            }
+        }
+        return Map.copyOf(working);
+    }
+
+    public record EnchantMerge(Map<String, Integer> enchants, boolean removedIncompatibles) {
     }
 
     private ItemStack storeTrim(ItemStack stack) {
@@ -441,7 +536,6 @@ public final class ItemResolver {
             .map(DurabilityData::defunct)
             .orElse(false);
         double attackDamage = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_DAMAGE, 0.0);
-        double attackSpeed = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED, 0.0);
         double armor = defunct ? 0.0 : stats.getOrDefault(sh.harold.fulcrum.stats.core.StatIds.ARMOR, 0.0);
         boolean applyHand = definition.category().defaultSlot() == sh.harold.fulcrum.plugin.item.model.SlotGroup.MAIN_HAND;
 
@@ -453,8 +547,8 @@ public final class ItemResolver {
                 case BOOTS -> addAttribute(meta, Attribute.ARMOR, armor, EquipmentSlot.FEET);
                 default -> {
                     if (applyHand) {
+                        // Attack speed is mirrored through stat bindings to avoid double-counting old vanilla modifiers.
                         addAttribute(meta, Attribute.ATTACK_DAMAGE, attackDamage, EquipmentSlot.HAND);
-                        addAttribute(meta, Attribute.ATTACK_SPEED, attackSpeed, EquipmentSlot.HAND);
                     }
                 }
             }

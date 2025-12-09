@@ -46,6 +46,7 @@ public final class ItemStatBridge {
         apply(key, container, SlotGroup.CHESTPLATE, player.getInventory().getChestplate());
         apply(key, container, SlotGroup.LEGGINGS, player.getInventory().getLeggings());
         apply(key, container, SlotGroup.BOOTS, player.getInventory().getBoots());
+        mirrorAttackSpeedAttribute(player, container);
     }
 
     private void apply(EntityKey key, StatContainer container, SlotGroup slot, ItemStack stack) {
@@ -110,6 +111,20 @@ public final class ItemStatBridge {
                 ));
             }
         });
+    }
+
+    private void mirrorAttackSpeedAttribute(Player player, StatContainer container) {
+        var attribute = player.getAttribute(org.bukkit.attribute.Attribute.ATTACK_SPEED);
+        if (attribute == null) {
+            return;
+        }
+        double attackSpeed = container.getStat(sh.harold.fulcrum.stats.core.StatIds.ATTACK_SPEED);
+        var modifiers = attribute.getModifiers();
+        if (modifiers != null && !modifiers.isEmpty()) {
+            java.util.List<org.bukkit.attribute.AttributeModifier> copy = java.util.List.copyOf(modifiers);
+            copy.forEach(attribute::removeModifier);
+        }
+        attribute.setBaseValue(Math.max(0.0, attackSpeed));
     }
 
     private void clearSlotSources(StatContainer container, String slotPrefix) {

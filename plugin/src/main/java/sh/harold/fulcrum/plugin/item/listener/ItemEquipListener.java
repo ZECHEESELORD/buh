@@ -11,6 +11,8 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.inventory.ItemStack;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
@@ -20,10 +22,12 @@ public final class ItemEquipListener implements Listener {
 
     private final Plugin plugin;
     private final ItemStatBridge statBridge;
+    private final ItemResolver resolver;
 
-    public ItemEquipListener(Plugin plugin, ItemStatBridge statBridge) {
+    public ItemEquipListener(Plugin plugin, ItemStatBridge statBridge, ItemResolver resolver) {
         this.plugin = plugin;
         this.statBridge = statBridge;
+        this.resolver = resolver;
     }
 
     @EventHandler
@@ -81,6 +85,15 @@ public final class ItemEquipListener implements Listener {
         refreshLater(player);
     }
 
+    @EventHandler
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        sanitize(event.getPlayer());
+        refreshLater(event.getPlayer());
+    }
+
     private void sanitize(Player player) {
         var inventory = player.getInventory();
         inventory.setItemInMainHand(sanitizeEquipSlot(inventory.getItemInMainHand()));
@@ -98,7 +111,9 @@ public final class ItemEquipListener implements Listener {
         if (stack.getMaxStackSize() > 1) {
             return stack; // keep stackables pristine
         }
-        return sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(stack);
+        return resolver.resolve(stack)
+            .map(sh.harold.fulcrum.plugin.item.runtime.ItemInstance::stack)
+            .orElseGet(() -> sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(stack));
     }
 
     private void refreshLater(Player player) {

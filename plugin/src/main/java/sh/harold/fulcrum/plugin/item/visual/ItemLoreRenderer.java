@@ -4,7 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.format.TextColor;
-import org.bukkit.enchantments.Enchantment;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -578,12 +578,15 @@ public final class ItemLoreRenderer {
         if (meta == null) {
             return;
         }
-        if (!meta.getEnchants().isEmpty()) {
+        if (meta.hasEnchants()) {
+            meta.setEnchantmentGlintOverride(null);
             return;
         }
-        if (!instance.enchants().isEmpty()) {
-            meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
+        if (instance.stack().getType() == Material.ENCHANTED_BOOK) {
+            meta.setEnchantmentGlintOverride(null);
+            return;
         }
+        meta.setEnchantmentGlintOverride(instance.enchants().isEmpty() ? null : Boolean.TRUE);
     }
 
     private void mirrorVanillaBar(ItemMeta meta, ItemInstance instance) {
