@@ -223,8 +223,9 @@ public final class ItemEngine {
     public void enable() {
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         loreAdapter = ProtocolLoreAdapter.register(plugin, loreRenderer);
-        pluginManager.registerEvents(new ItemEquipListener(plugin, statBridge), plugin);
+        pluginManager.registerEvents(new ItemEquipListener(plugin, statBridge, resolver), plugin);
         pluginManager.registerEvents(new AbilityListener(abilityService, resolver), plugin);
+        pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.listener.LecternBypassListener(), plugin);
         pluginManager.registerEvents(new HelmetEquipListener(resolver, statBridge), plugin);
         pluginManager.registerEvents(durabilityService, plugin);
         pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
@@ -258,13 +259,13 @@ public final class ItemEngine {
 
     private void registerDefaultEnchants() {
         register("fulcrum:sharpness", "Sharpness", "Increases melee damage.", 7, StatIds.ATTACK_DAMAGE, 0.05, sharpnessCurve(), true, java.util.Set.of("fulcrum:smite", "fulcrum:bane_of_arthropods"));
-        register("fulcrum:smite", "Smite", "More damage to undead foes.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"), StatCondition.whenTag("target:undead"));
-        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to arthropods.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"), StatCondition.whenTag("target:arthropod"));
+        register("fulcrum:smite", "Smite", "More damage to undead foes only.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"), StatCondition.whenTag("target:undead"));
+        register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to spiders and arthropods only.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"), StatCondition.whenTag("target:arthropod"));
 
         register("fulcrum:protection", "Protection", "Reduces incoming damage.", 4, StatIds.ARMOR, 1.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
-        register("fulcrum:fire_protection", "Fire Protection", "Reduces fire and lava damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:fire"));
-        register("fulcrum:projectile_protection", "Projectile Protection", "Reduces projectile damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:projectile"));
-        register("fulcrum:blast_protection", "Blast Protection", "Reduces explosion damage.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:explosion"));
+        register("fulcrum:fire_protection", "Fire Protection", "Reduces fire and lava damage only.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:fire"));
+        register("fulcrum:projectile_protection", "Projectile Protection", "Reduces projectile damage only.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:projectile"));
+        register("fulcrum:blast_protection", "Blast Protection", "Reduces explosion damage only.", 4, StatIds.ARMOR, 1.0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(), StatCondition.whenTag("cause:explosion"));
         register("fulcrum:feather_falling", "Feather Falling", "Softer landings from falls.", 4, StatIds.ARMOR, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
 
         register("fulcrum:power", "Power", "Increases bow damage.", 5, StatIds.ATTACK_DAMAGE, 0.5, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());

@@ -9,6 +9,9 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -90,7 +93,9 @@ public final class EnchantCommand {
         }
 
         ItemStack target = resolver.resolve(stack).map(ItemInstance::stack).orElse(stack);
+        Enchantment vanillaEnchant = resolveVanillaEnchant(enchantId);
         ItemStack enchanted = enchantService.applyEnchant(target, enchantId, level);
+        enchanted = writeVanillaEnchant(enchanted, vanillaEnchant, level);
         if (slot == EquipmentSlot.OFF_HAND) {
             player.getInventory().setItemInOffHand(enchanted);
         } else {
@@ -118,6 +123,34 @@ public final class EnchantCommand {
             return candidate;
         }
         return registry.ids().stream().filter(id -> id.endsWith(":" + normalized)).findFirst().orElse(null);
+    }
+
+    private Enchantment resolveVanillaEnchant(String enchantId) {
+        if (enchantId == null) {
+            return null;
+        }
+        String key = enchantId.contains(":")
+            ? enchantId.substring(enchantId.indexOf(':') + 1)
+            : enchantId;
+        return Enchantment.getByKey(NamespacedKey.minecraft(key));
+    }
+
+    private ItemStack writeVanillaEnchant(ItemStack stack, Enchantment enchantment, int level) {
+        if (stack == null || enchantment == null) {
+            return stack;
+        }
+        var meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        if (meta instanceof EnchantmentStorageMeta storage) {
+            storage.addStoredEnchant(enchantment, level, true);
+            stack.setItemMeta(storage);
+            return stack;
+        }
+        meta.addEnchant(enchantment, level, true);
+        stack.setItemMeta(meta);
+        return stack;
     }
 
     private String roman(int value) {

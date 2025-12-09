@@ -1,9 +1,9 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -18,6 +18,7 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.block.Block;
 import sh.harold.fulcrum.plugin.staff.StaffCreativeService;
 
 import java.util.Objects;
@@ -48,6 +49,12 @@ final class PlayerMenuListener implements Listener {
         }
         if (!menuService.isMenuItem(event.getItem())) {
             return;
+        }
+        if (action == Action.RIGHT_CLICK_BLOCK && !event.getPlayer().isSneaking()) {
+            Block clicked = event.getClickedBlock();
+            if (clicked != null && clicked.getType().isInteractable()) {
+                return; // let vanilla block interactions (like lecterns) proceed
+            }
         }
         if (isRegistrationLocked(event.getPlayer())) {
             event.setCancelled(true);
