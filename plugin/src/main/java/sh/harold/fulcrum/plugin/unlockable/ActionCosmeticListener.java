@@ -38,6 +38,7 @@ final class ActionCosmeticListener implements Listener {
     private static final String SIT_ACTION_KEY = "sit";
     private static final String CRAWL_ACTION_KEY = "crawl";
     private static final String RIDE_ACTION_KEY = "ride";
+    private static final double RIDE_DISMOUNT_HEALTH_THRESHOLD = 2.0D;
 
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
@@ -157,12 +158,14 @@ final class ActionCosmeticListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onWorldChange(PlayerChangedWorldEvent event) {
+        removeSeat(event.getPlayer().getUniqueId());
         crawlManager.stop(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         if (event.getTo() != null && !Objects.equals(event.getFrom().getWorld(), event.getTo().getWorld())) {
+            removeSeat(event.getPlayer().getUniqueId());
             crawlManager.stop(event.getPlayer());
         }
     }
@@ -205,6 +208,9 @@ final class ActionCosmeticListener implements Listener {
         }
         Block clicked = event.getClickedBlock();
         if (clicked == null) {
+            return;
+        }
+        if (event.getBlockFace() == BlockFace.DOWN) {
             return;
         }
         if (!playerIsGrounded(player) && player.getLocation().getPitch() > 0.0f) {
@@ -340,7 +346,7 @@ final class ActionCosmeticListener implements Listener {
             return;
         }
         Location head = player.getLocation().add(0, player.getEyeHeight(), 0);
-        if (!head.getBlock().isPassable()) {
+        if (!head.getBlock().isPassable() && player.getHealth() <= RIDE_DISMOUNT_HEALTH_THRESHOLD) {
             knockOffStack(player);
         }
     }
