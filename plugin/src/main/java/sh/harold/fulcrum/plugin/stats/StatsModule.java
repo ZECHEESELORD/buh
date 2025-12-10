@@ -33,6 +33,8 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
     private StatBindingManager bindingManager;
     private PlayerSettingsService playerSettingsService;
     private DamageMarkerRenderer damageMarkerRenderer;
+    private BowDrawTracker bowDrawTracker;
+    private BowDrawListener bowDrawListener;
     private StatEntityListener statEntityListener;
     private StatDamageListener statDamageListener;
     private MovementSpeedListener movementSpeedListener;
@@ -126,15 +128,23 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
     private void registerListeners() {
         unregisterListeners();
         PluginManager pluginManager = plugin.getServer().getPluginManager();
+        bowDrawTracker = new BowDrawTracker(plugin);
+        bowDrawListener = new BowDrawListener(bowDrawTracker);
         statEntityListener = new StatEntityListener(statService);
-        statDamageListener = new StatDamageListener(plugin, statService, mappingConfig, damageMarkerRenderer);
+        statDamageListener = new StatDamageListener(plugin, statService, mappingConfig, damageMarkerRenderer, bowDrawTracker);
         movementSpeedListener = new MovementSpeedListener(plugin, statService);
+        pluginManager.registerEvents(bowDrawListener, plugin);
         pluginManager.registerEvents(statEntityListener, plugin);
         pluginManager.registerEvents(statDamageListener, plugin);
         pluginManager.registerEvents(movementSpeedListener, plugin);
     }
 
     private void unregisterListeners() {
+        if (bowDrawListener != null) {
+            HandlerList.unregisterAll(bowDrawListener);
+            bowDrawListener = null;
+            bowDrawTracker = null;
+        }
         if (statEntityListener != null) {
             HandlerList.unregisterAll(statEntityListener);
             statEntityListener = null;

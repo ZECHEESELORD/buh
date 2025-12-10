@@ -22,6 +22,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.entity.AbstractArrow;
 import sh.harold.fulcrum.stats.core.ConditionContext;
 import sh.harold.fulcrum.stats.core.ModifierOp;
 import sh.harold.fulcrum.stats.core.StatContainer;
@@ -48,13 +49,15 @@ public final class StatDamageListener implements Listener {
     private final StatMappingConfig config;
     private final DamageMarkerRenderer damageMarkerRenderer;
     private final ItemPdc itemPdc;
+    private final BowDrawTracker bowDrawTracker;
 
-    public StatDamageListener(Plugin plugin, StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer) {
+    public StatDamageListener(Plugin plugin, StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer, BowDrawTracker bowDrawTracker) {
         Objects.requireNonNull(plugin, "plugin");
         this.statService = statService;
         this.config = config;
         this.damageMarkerRenderer = damageMarkerRenderer;
         this.itemPdc = new ItemPdc(plugin);
+        this.bowDrawTracker = bowDrawTracker;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -75,6 +78,7 @@ public final class StatDamageListener implements Listener {
 
         double baseDamage = event.getDamage();
         boolean critical = false;
+        AbstractArrow arrow = arrowFromEvent(event);
         boolean useStatDamage = attacker != null
             && (event instanceof EntityDamageByEntityEvent
                 || event.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK
@@ -87,14 +91,21 @@ public final class StatDamageListener implements Listener {
                 baseDamage = event.getDamage();
             } else {
                 double attackDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext);
-                double nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
-                double enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
-                double basePortion = nonEnchantDamage + maceSmash.bonusDamage();
-                baseDamage = scaleForAttackCooldown(basePortion, enchantDamage, attackStrength(attacker));
-                double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
-                if (attacker instanceof Player player && isCritical(player)) {
-                    baseDamage *= critMultiplier;
-                    critical = true;
+                if (arrow != null) {
+                    double drawForce = drawForce(arrow);
+                    double rangedBase = scaleForBowDraw(attackDamage, drawForce);
+                    baseDamage = applyArrowCritical(arrow, rangedBase);
+                    critical = critical || arrow.isCritical();
+                } else {
+                    double nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
+                    double enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
+                    double basePortion = nonEnchantDamage + maceSmash.bonusDamage();
+                    baseDamage = scaleForAttackCooldown(basePortion, enchantDamage, attackStrength(attacker));
+                    double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
+                    if (attacker instanceof Player player && isCritical(player)) {
+                        baseDamage *= critMultiplier;
+                        critical = true;
+                    }
                 }
             }
         }
@@ -427,6 +438,12 @@ public final class StatDamageListener implements Listener {
         return baseDamage * baseMultiplier + enchantDamage * enchantMultiplier;
     }
 
+    private double scaleForBowDraw(double attackDamage, double drawForce) {
+        double clampedForce = clamp(drawForce, 0.0, 1.0);
+        double velocity = clampedForce * 3.0;
+        return Math.max(0.0, attackDamage * velocity);
+    }
+
     private double attackDamageExcludingEnchants(StatContainer container, ConditionContext context) {
         return computeAttackDamage(container, context, sourceId -> !isEnchantSource(sourceId));
     }
@@ -485,6 +502,34 @@ public final class StatDamageListener implements Listener {
             }
         }
         return product;
+    }
+
+    private AbstractArrow arrowFromEvent(EntityDamageEvent event) {
+        if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
+            return null;
+        }
+        if (byEntity.getDamager() instanceof AbstractArrow arrow) {
+            return arrow;
+        }
+        return null;
+    }
+
+    private double drawForce(AbstractArrow arrow) {
+        double stored = bowDrawTracker == null ? -1.0 : bowDrawTracker.readForce(arrow);
+        if (stored >= 0.0) {
+            return stored;
+        }
+        double inferred = arrow.getVelocity() == null ? -1.0 : arrow.getVelocity().length() / 3.0;
+        return clamp(inferred, 0.0, 1.0);
+    }
+
+    private double applyArrowCritical(AbstractArrow arrow, double baseDamage) {
+        if (arrow == null || !arrow.isCritical()) {
+            return baseDamage;
+        }
+        double maxBonus = Math.max(0.0, baseDamage / 2.0 + 2.0);
+        double bonus = ThreadLocalRandom.current().nextDouble(0.0, maxBonus);
+        return baseDamage + bonus;
     }
 
     private boolean isEnchantSource(StatSourceId sourceId) {
