@@ -240,6 +240,33 @@ public final class ItemEngine {
         }
     }
 
+    public boolean hasPacketLoreAdapter() {
+        return loreAdapter != null;
+    }
+
+    public boolean setPacketLoreEnabled(UUID playerId, boolean enabled) {
+        if (loreAdapter == null || playerId == null) {
+            return false;
+        }
+        if (enabled) {
+            loreAdapter.enable(playerId);
+        } else {
+            loreAdapter.disable(playerId);
+        }
+        return true;
+    }
+
+    public boolean togglePacketLore(UUID playerId) {
+        if (loreAdapter == null || playerId == null) {
+            return false;
+        }
+        return loreAdapter.toggle(playerId);
+    }
+
+    public boolean isPacketLoreDisabled(UUID playerId) {
+        return loreAdapter != null && loreAdapter.isDisabled(playerId);
+    }
+
     private void loadDefinitions(List<ItemDefinitionProvider> providers) {
         Objects.requireNonNull(providers, "providers");
         for (ItemDefinitionProvider provider : providers) {

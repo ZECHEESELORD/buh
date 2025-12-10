@@ -9,11 +9,14 @@ import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import com.comphenix.protocol.wrappers.Pair;
 import org.bukkit.entity.Player;
+import java.util.UUID;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.api.menu.impl.MenuInventoryHolder;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -25,6 +28,7 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     private final ItemLoreRenderer renderer;
     private final Logger logger;
     private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
+    private final Set<UUID> disabledViewers = ConcurrentHashMap.newKeySet();
 
     private ProtocolLoreAdapter(Plugin plugin, ItemLoreRenderer renderer) {
         // TODO: re-enable ENTITY_EQUIPMENT once ProtocolLib handles 1.21.10 equipment packets without client decode errors.
@@ -47,6 +51,9 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     @Override
     public void onPacketSending(PacketEvent event) {
         Player viewer = event.getPlayer();
+        if (viewer != null && isDisabled(viewer.getUniqueId())) {
+            return;
+        }
         boolean isMenu = MenuInventoryHolder.isMenu(viewer.getOpenInventory().getTopInventory());
         int topSize = viewer.getOpenInventory().getTopInventory() == null ? 0 : viewer.getOpenInventory().getTopInventory().getSize();
         PacketContainer packet = event.getPacket();
@@ -89,6 +96,34 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
 
     public void unregister() {
         ProtocolLibrary.getProtocolManager().removePacketListener(this);
+    }
+
+    public void disable(UUID playerId) {
+        if (playerId != null) {
+            disabledViewers.add(playerId);
+        }
+    }
+
+    public void enable(UUID playerId) {
+        if (playerId != null) {
+            disabledViewers.remove(playerId);
+        }
+    }
+
+    public boolean toggle(UUID playerId) {
+        if (playerId == null) {
+            return false;
+        }
+        if (disabledViewers.contains(playerId)) {
+            disabledViewers.remove(playerId);
+            return true;
+        }
+        disabledViewers.add(playerId);
+        return false;
+    }
+
+    public boolean isDisabled(UUID playerId) {
+        return playerId != null && disabledViewers.contains(playerId);
     }
 
     private void logEquipment(Player viewer, Integer entityId, List<Pair<EnumWrappers.ItemSlot, ItemStack>> entries) {
