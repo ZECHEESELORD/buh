@@ -227,6 +227,10 @@ final class PerkMenuView {
 
         lore.forEach(builder::lore);
 
+        if (locked || canUpgrade) {
+            builder.requireConfirmation("&cConfirm perk purchase; click again.");
+        }
+
         return builder.build();
     }
 
