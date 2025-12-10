@@ -286,6 +286,7 @@ public final class ItemEngine {
 
     private void registerDefaultEnchants() {
         register("fulcrum:sharpness", "Sharpness", "Increases melee damage.", 7, StatIds.ATTACK_DAMAGE, 0.05, sharpnessCurve(), true, java.util.Set.of("fulcrum:smite", "fulcrum:bane_of_arthropods"));
+        register("fulcrum:critical_strike", "Critical Strike", "Occasionally doubles damage when swinging swords or axes.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:smite", "Smite", "More damage to undead foes only.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:bane_of_arthropods"), StatCondition.whenTag("target:undead"));
         register("fulcrum:bane_of_arthropods", "Bane of Arthropods", "More damage to spiders and arthropods only.", 5, StatIds.ATTACK_DAMAGE, 0.05, EnchantDefinition.LevelCurve.linear(), true, java.util.Set.of("fulcrum:sharpness", "fulcrum:smite"), StatCondition.whenTag("target:arthropod"));
 
@@ -327,6 +328,7 @@ public final class ItemEngine {
         register("fulcrum:curse_of_binding", "Curse of Binding", "Cannot remove once equipped.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:curse_of_vanishing", "Curse of Vanishing", "Item disappears on death.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:efficiency", "Efficiency", "Faster mining speed.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:dune_speed", "Dune Speed", "Sprinting on sand, gravel, or concrete powder feels lighter with each level.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of("fulcrum:soul_speed"));
         register("fulcrum:density", "Density", "Smash deals more damage per fallen block.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of(
             "fulcrum:sharpness",
             "fulcrum:smite",

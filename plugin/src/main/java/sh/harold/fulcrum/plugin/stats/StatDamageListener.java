@@ -32,6 +32,7 @@ import sh.harold.fulcrum.stats.core.StatSourceId;
 import sh.harold.fulcrum.stats.service.EntityKey;
 import sh.harold.fulcrum.stats.service.StatService;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
+import java.util.concurrent.ThreadLocalRandom;
 
 import java.util.Collection;
 import java.util.EnumSet;
@@ -97,6 +98,9 @@ public final class StatDamageListener implements Listener {
                 }
             }
         }
+        CriticalStrikeResult criticalStrike = rollCriticalStrike(event, attacker, baseDamage);
+        baseDamage = criticalStrike.damage();
+        critical = critical || criticalStrike.triggered();
 
         double armor = defenderContainer.getStat(StatIds.ARMOR, defenseContext);
         if (maceSmash.active() && maceSmash.breachLevel() > 0) {
@@ -373,6 +377,34 @@ public final class StatDamageListener implements Listener {
         return enchantment == null ? 0 : item.getEnchantmentLevel(enchantment);
     }
 
+    private CriticalStrikeResult rollCriticalStrike(EntityDamageEvent event, LivingEntity attacker, double baseDamage) {
+        if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        if (byEntity.getDamager() instanceof Projectile) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        if (attacker == null || attacker.getEquipment() == null) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        ItemStack weapon = attacker.getEquipment().getItem(EquipmentSlot.HAND);
+        if (weapon == null || weapon.getType().isAir()) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        Material type = weapon.getType();
+        boolean isWeapon = type.name().endsWith("_SWORD") || type.name().endsWith("_AXE");
+        if (!isWeapon) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        int level = enchantLevel(weapon, "critical_strike");
+        if (level <= 0) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
+        double chance = Math.max(0.0, 0.05 * level);
+        boolean triggered = ThreadLocalRandom.current().nextDouble() < chance;
+        return new CriticalStrikeResult(triggered, triggered ? baseDamage * 2.0 : baseDamage);
+    }
+
     private boolean isArthropod(LivingEntity entity) {
         return ARTHROPODS.contains(entity.getType());
     }
@@ -484,6 +516,9 @@ public final class StatDamageListener implements Listener {
         org.bukkit.entity.EntityType.PHANTOM,
         org.bukkit.entity.EntityType.ZOGLIN
     );
+
+    private record CriticalStrikeResult(boolean triggered, double damage) {
+    }
 
     private record MaceSmash(boolean active, double bonusDamage, double fallDistance, int breachLevel, int windBurstLevel) {
         static MaceSmash inactive() {

@@ -26,7 +26,9 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -39,6 +41,7 @@ final class ActionCosmeticListener implements Listener {
     private static final String CRAWL_ACTION_KEY = "crawl";
     private static final String RIDE_ACTION_KEY = "ride";
     private static final double RIDE_DISMOUNT_HEALTH_THRESHOLD = 2.0D;
+    private static final double RIDE_SEAT_OFFSET = 1.0D;
 
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
@@ -48,6 +51,7 @@ final class ActionCosmeticListener implements Listener {
     private final Map<UUID, ArmorStand> seats = new HashMap<>();
     private final Map<UUID, Long> crouchTaps = new HashMap<>();
     private final Map<UUID, Long> rideGrace = new HashMap<>();
+    private final Map<UUID, RideSeat> rideSeats = new HashMap<>();
 
     ActionCosmeticListener(UnlockableService unlockableService, CosmeticRegistry cosmeticRegistry, JavaPlugin plugin, Logger logger, CrawlManager crawlManager) {
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
@@ -103,6 +107,7 @@ final class ActionCosmeticListener implements Listener {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             checkCollision(mover);
             mover.getPassengers().forEach(this::checkCollisionDeep);
+            syncRideSeatOffsets(mover);
         });
     }
 
@@ -120,6 +125,10 @@ final class ActionCosmeticListener implements Listener {
         if (seat != null && event.getVehicle().getUniqueId().equals(seat.getUniqueId())) {
             removeSeat(player.getUniqueId());
         }
+        RideSeat rideSeat = rideSeats.get(player.getUniqueId());
+        if (rideSeat != null && event.getVehicle().getUniqueId().equals(rideSeat.seat().getUniqueId())) {
+            removeRideSeat(player.getUniqueId());
+        }
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -130,29 +139,38 @@ final class ActionCosmeticListener implements Listener {
         Long graceUntil = rideGrace.get(player.getUniqueId());
         if (graceUntil != null && System.currentTimeMillis() < graceUntil) {
             event.setCancelled(true);
+            return;
+        }
+        RideSeat rideSeat = rideSeats.get(player.getUniqueId());
+        if (rideSeat != null && rideSeat.seat().getUniqueId().equals(event.getDismounted().getUniqueId())) {
+            removeRideSeat(player.getUniqueId());
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         removeSeat(event.getPlayer().getUniqueId());
+        removeRideSeat(event.getPlayer().getUniqueId());
         crawlManager.stop(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onKick(PlayerKickEvent event) {
         removeSeat(event.getPlayer().getUniqueId());
+        removeRideSeat(event.getPlayer().getUniqueId());
         crawlManager.stop(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDeath(PlayerDeathEvent event) {
         removeSeat(event.getEntity().getUniqueId());
+        removeRideSeat(event.getEntity().getUniqueId());
         crawlManager.stop(event.getEntity());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent event) {
+        removeRideSeat(event.getPlayer().getUniqueId());
         crawlManager.stop(event.getPlayer());
     }
 
@@ -199,6 +217,8 @@ final class ActionCosmeticListener implements Listener {
         seats.clear();
         crouchTaps.clear();
         rideGrace.clear();
+        rideSeats.values().forEach(rideSeat -> rideSeat.seat().remove());
+        rideSeats.clear();
         crawlManager.stopAll();
     }
 
@@ -290,11 +310,22 @@ final class ActionCosmeticListener implements Listener {
         if (containsPlayer(top, player.getUniqueId())) {
             return;
         }
-        boolean mounted = top.addPassenger(player);
-        if (mounted) {
-            event.setCancelled(true);
-            rideGrace.put(player.getUniqueId(), System.currentTimeMillis() + 500L);
+        removeRideSeat(player.getUniqueId());
+        ArmorStand rideSeat = spawnRideSeat(top.getLocation());
+        boolean seatMounted = top.addPassenger(rideSeat);
+        if (!seatMounted) {
+            rideSeat.remove();
+            return;
         }
+        rideSeat.teleportAsync(offsetRideSeatLocation(top));
+        boolean riderMounted = rideSeat.addPassenger(player);
+        if (!riderMounted) {
+            rideSeat.remove();
+            return;
+        }
+        rideSeats.put(player.getUniqueId(), new RideSeat(rideSeat, top.getUniqueId()));
+        event.setCancelled(true);
+        rideGrace.put(player.getUniqueId(), System.currentTimeMillis() + 500L);
     }
 
     private Entity topPassenger(Entity entity) {
@@ -357,6 +388,7 @@ final class ActionCosmeticListener implements Listener {
             player.sendMessage("§eYou bonked into a wall and fell off.");
             Location safe = player.getLocation().add(player.getLocation().getDirection().multiply(-0.5));
             player.teleportAsync(safe);
+            removeRideSeat(player.getUniqueId());
         } catch (Throwable throwable) {
             logger.fine(() -> "Failed to knock player off stack for " + player.getUniqueId() + ": " + throwable.getMessage());
         }
@@ -388,5 +420,55 @@ final class ActionCosmeticListener implements Listener {
             return 0.5;
         }
         return 1.0;
+    }
+
+    private ArmorStand spawnRideSeat(Location location) {
+        return location.getWorld().spawn(location, ArmorStand.class, armorStand -> {
+            armorStand.setInvisible(true);
+            armorStand.setMarker(true);
+            armorStand.setGravity(false);
+            armorStand.setInvulnerable(true);
+            armorStand.setSilent(true);
+            armorStand.setCollidable(false);
+            armorStand.setPersistent(false);
+            armorStand.setRemoveWhenFarAway(true);
+        });
+    }
+
+    private Location offsetRideSeatLocation(Entity carrier) {
+        return carrier.getLocation().add(0, RIDE_SEAT_OFFSET, 0);
+    }
+
+    private void removeRideSeat(UUID riderId) {
+        RideSeat rideSeat = rideSeats.remove(riderId);
+        if (rideSeat == null) {
+            return;
+        }
+        ArmorStand seat = rideSeat.seat();
+        if (!seat.isDead()) {
+            seat.remove();
+        }
+    }
+
+    private void syncRideSeatOffsets(Entity entity) {
+        if (entity instanceof Player carrier) {
+            List<UUID> stale = new ArrayList<>();
+            rideSeats.forEach((riderId, rideSeat) -> {
+                if (!rideSeat.carrierId().equals(carrier.getUniqueId())) {
+                    return;
+                }
+                ArmorStand seat = rideSeat.seat();
+                if (seat.isDead() || seat.getPassengers().isEmpty()) {
+                    stale.add(riderId);
+                    return;
+                }
+                seat.teleportAsync(offsetRideSeatLocation(carrier));
+            });
+            stale.forEach(this::removeRideSeat);
+        }
+        entity.getPassengers().forEach(this::syncRideSeatOffsets);
+    }
+
+    private record RideSeat(ArmorStand seat, UUID carrierId) {
     }
 }
