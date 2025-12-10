@@ -169,11 +169,7 @@ final class ActionCosmeticListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onJump(PlayerJumpEvent event) {
-        if (!crawlManager.isCrawling(event.getPlayer().getUniqueId())) {
-            return;
-        }
-        event.setCancelled(true);
-        crawlManager.hopIfCrawling(event.getPlayer());
+        // Allow natural jumping while crawling; no more custom hop/velocity tweaks.
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
