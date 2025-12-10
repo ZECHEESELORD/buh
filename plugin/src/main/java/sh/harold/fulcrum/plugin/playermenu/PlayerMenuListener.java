@@ -18,9 +18,12 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.block.Block;
 import sh.harold.fulcrum.plugin.staff.StaffCreativeService;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import static sh.harold.fulcrum.plugin.osu.VerificationConstants.REGISTRATION_TAG;
@@ -129,14 +132,55 @@ final class PlayerMenuListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        PlayerInventory inventory = player.getInventory();
-        int topSize = event.getView().getTopInventory().getSize();
-        boolean touchesMenuSlot = event.getRawSlots().stream()
-            .filter(slot -> slot >= topSize)
-            .map(slot -> slot - topSize)
-            .anyMatch(slot -> slot >= 0 && slot < inventory.getSize() && menuService.isMenuItem(inventory.getItem(slot)));
-        if (touchesMenuSlot || menuService.isMenuItem(event.getCursor())) {
+        if (menuService.isMenuItem(event.getCursor())) {
             event.setCancelled(true);
+            return;
+        }
+
+        PlayerInventory inventory = player.getInventory();
+        int menuSlot = findMenuSlot(inventory);
+        if (menuSlot < 0) {
+            return;
+        }
+
+        InventoryView view = event.getView();
+        Map<Integer, ItemStack> allowedPlacements = new HashMap<>();
+        boolean touchesMenuSlot = false;
+        int placedAmount = 0;
+
+        for (Map.Entry<Integer, ItemStack> entry : event.getNewItems().entrySet()) {
+            int rawSlot = entry.getKey();
+            Integer playerSlot = mapToPlayerSlot(rawSlot, view);
+            if (playerSlot != null && playerSlot == menuSlot) {
+                touchesMenuSlot = true;
+                continue;
+            }
+            allowedPlacements.put(rawSlot, entry.getValue());
+        }
+
+        if (!touchesMenuSlot) {
+            return;
+        }
+
+        event.setCancelled(true);
+        for (Map.Entry<Integer, ItemStack> entry : allowedPlacements.entrySet()) {
+            int rawSlot = entry.getKey();
+            ItemStack newStack = entry.getValue();
+            ItemStack existing = view.getItem(rawSlot);
+            int existingAmount = existing == null ? 0 : existing.getAmount();
+            int delta = Math.max(0, newStack.getAmount() - existingAmount);
+            placedAmount += delta;
+            view.setItem(rawSlot, newStack);
+        }
+
+        ItemStack cursor = event.getCursor();
+        if (cursor != null && !cursor.getType().isAir()) {
+            int remaining = Math.max(0, cursor.getAmount() - placedAmount);
+            ItemStack updatedCursor = remaining <= 0 ? null : cursor.clone();
+            if (updatedCursor != null) {
+                updatedCursor.setAmount(remaining);
+            }
+            view.setCursor(updatedCursor);
         }
     }
 
@@ -166,5 +210,35 @@ final class PlayerMenuListener implements Listener {
 
     private boolean isRegistrationLocked(Player player) {
         return player.getScoreboardTags().contains(REGISTRATION_TAG);
+    }
+
+    private int findMenuSlot(PlayerInventory inventory) {
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            if (menuService.isMenuItem(inventory.getItem(slot))) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    private Integer mapToPlayerSlot(int rawSlot, InventoryView view) {
+        int topSize = view.getTopInventory().getSize();
+        if (rawSlot < topSize) {
+            return null;
+        }
+        if (!(view.getBottomInventory() instanceof PlayerInventory bottom)) {
+            return null;
+        }
+        int bottomIndex = rawSlot - topSize;
+        if (bottomIndex < 0 || bottomIndex >= bottom.getSize()) {
+            return null;
+        }
+        if (bottomIndex >= 27 && bottomIndex <= 35) {
+            return bottomIndex - 27; // hotbar 0-8
+        }
+        if (bottomIndex <= 26) {
+            return bottomIndex + 9; // main inventory 9-35
+        }
+        return null;
     }
 }
