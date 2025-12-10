@@ -218,6 +218,10 @@ final class CosmeticMenuView {
         }
         lore.forEach(builder::lore);
 
+        if (!unlocked) {
+            builder.requireConfirmation("&cConfirm cosmetic purchase; spend &3" + cost + " &cshards.");
+        }
+
         return builder.build();
     }
 
