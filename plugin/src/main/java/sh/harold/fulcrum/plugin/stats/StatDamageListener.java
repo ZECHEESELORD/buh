@@ -23,6 +23,8 @@ import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.entity.AbstractArrow;
+import org.bukkit.entity.Trident;
+import org.bukkit.entity.WaterMob;
 import sh.harold.fulcrum.stats.core.ConditionContext;
 import sh.harold.fulcrum.stats.core.ModifierOp;
 import sh.harold.fulcrum.stats.core.StatContainer;
@@ -92,10 +94,14 @@ public final class StatDamageListener implements Listener {
             } else {
                 double attackDamage = attackerContainer.getStat(StatIds.ATTACK_DAMAGE, attackContext);
                 if (arrow != null) {
-                    double drawForce = drawForce(arrow);
-                    double rangedBase = scaleForBowDraw(attackDamage, drawForce);
-                    baseDamage = applyArrowCritical(arrow, rangedBase);
-                    critical = critical || arrow.isCritical();
+                    if (arrow instanceof Trident trident) {
+                        baseDamage = computeTridentDamage(trident, defender, attackDamage, event.getDamage());
+                    } else {
+                        double drawForce = drawForce(arrow);
+                        double rangedBase = scaleForBowDraw(attackDamage, drawForce);
+                        baseDamage = applyArrowCritical(arrow, rangedBase);
+                        critical = critical || arrow.isCritical();
+                    }
                 } else {
                     double nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
                     double enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
@@ -532,6 +538,33 @@ public final class StatDamageListener implements Listener {
         return baseDamage + bonus;
     }
 
+    private double computeTridentDamage(Trident trident, LivingEntity defender, double attackDamage, double fallbackDamage) {
+        double scaledBase = attackDamage > 0.0
+            ? attackDamage * TRIDENT_THROWN_SCALE
+            : Math.max(0.0, fallbackDamage);
+        double impalingBonus = impalingBonus(trident, defender);
+        return Math.max(0.0, scaledBase + impalingBonus);
+    }
+
+    private double impalingBonus(Trident trident, LivingEntity defender) {
+        if (trident == null || defender == null || !isImpalingTarget(defender)) {
+            return 0.0;
+        }
+        ItemStack stack = trident.getItemStack();
+        int impalingLevel = enchantLevel(stack, "impaling");
+        if (impalingLevel <= 0) {
+            return 0.0;
+        }
+        return impalingLevel * IMPALING_PER_LEVEL;
+    }
+
+    private boolean isImpalingTarget(LivingEntity entity) {
+        if (entity == null) {
+            return false;
+        }
+        return entity instanceof WaterMob;
+    }
+
     private boolean isEnchantSource(StatSourceId sourceId) {
         return sourceId != null && sourceId.value().contains(":enchant:");
     }
@@ -539,6 +572,11 @@ public final class StatDamageListener implements Listener {
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
+
+    private static final double TRIDENT_MELEE_BASE_DAMAGE = 9.0;
+    private static final double TRIDENT_THROWN_BASE_DAMAGE = 8.0;
+    private static final double TRIDENT_THROWN_SCALE = TRIDENT_THROWN_BASE_DAMAGE / TRIDENT_MELEE_BASE_DAMAGE;
+    private static final double IMPALING_PER_LEVEL = 2.5;
 
     private static final EnumSet<org.bukkit.entity.EntityType> ARTHROPODS = EnumSet.of(
         org.bukkit.entity.EntityType.SPIDER,
