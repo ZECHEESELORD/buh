@@ -10,15 +10,18 @@ import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.plugin.economy.EconomyService;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,6 +42,7 @@ final class CosmeticPriceDropRefund {
     private final Logger logger;
     private final AtomicInteger refundedPlayers = new AtomicInteger();
     private final AtomicLong refundedShards = new AtomicLong();
+    private final Set<UUID> pending = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     CosmeticPriceDropRefund(DataApi dataApi, EconomyService economyService, UnlockableRegistry registry, JavaPlugin plugin, Logger logger) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -48,23 +52,13 @@ final class CosmeticPriceDropRefund {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
-    CompletionStage<Void> run() { //TODO: REMOVE after price-drop refunds finish.
-        logger.info("[refund:cosmetics] Starting cosmetic price-drop refund sweep...");
-        return players.all()
-            .thenCompose(documents -> {
-                List<CompletableFuture<Void>> refunds = documents.stream()
-                    .map(this::refundPlayer)
-                    .map(CompletionStage::toCompletableFuture)
-                    .toList();
-                return CompletableFuture.allOf(refunds.toArray(CompletableFuture[]::new));
-            })
-            .whenComplete((ignored, throwable) -> {
-                if (throwable != null) {
-                    logger.log(Level.SEVERE, "[refund:cosmetics] Refund sweep failed", throwable);
-                    return;
-                }
-                logger.info(() -> "[refund:cosmetics] Refunded " + refundedShards.get() + " shards to " + refundedPlayers.get() + " players.");
-            });
+    CompletionStage<Void> refundIfNeeded(UUID playerId) { //TODO: REMOVE after price-drop refunds finish.
+        if (!pending.add(playerId)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return players.load(playerId.toString())
+            .thenCompose(this::refundPlayer)
+            .whenComplete((ignored, throwable) -> pending.remove(playerId));
     }
 
     private CompletionStage<Void> refundPlayer(Document document) {
