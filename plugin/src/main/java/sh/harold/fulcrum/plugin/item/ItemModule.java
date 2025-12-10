@@ -17,6 +17,7 @@ import sh.harold.fulcrum.plugin.item.registry.ItemDefinitionProvider;
 import sh.harold.fulcrum.plugin.item.registry.SampleItemProvider;
 import sh.harold.fulcrum.plugin.item.command.ItemBrowserCommand;
 import sh.harold.fulcrum.plugin.item.command.DetailedItemInfoCommand;
+import sh.harold.fulcrum.plugin.item.command.ToggleItemPacketViewCommand;
 import sh.harold.fulcrum.plugin.item.menu.ItemBrowserService;
 import sh.harold.fulcrum.plugin.stats.StatsModule;
 
@@ -93,5 +94,7 @@ public final class ItemModule implements FulcrumModule {
         registrar.register(itemBrowserCommand.build(), "item", java.util.List.of());
         DetailedItemInfoCommand detailedItemInfoCommand = new DetailedItemInfoCommand(plugin, engine);
         registrar.register(detailedItemInfoCommand.build(), "viewdetailediteminfo", java.util.List.of());
+        ToggleItemPacketViewCommand toggleItemPacketViewCommand = new ToggleItemPacketViewCommand(plugin, engine);
+        registrar.register(toggleItemPacketViewCommand.build(), "toggleitempacketview", java.util.List.of());
     }
 }
