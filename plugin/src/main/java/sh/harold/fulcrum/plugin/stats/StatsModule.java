@@ -35,6 +35,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
     private DamageMarkerRenderer damageMarkerRenderer;
     private StatEntityListener statEntityListener;
     private StatDamageListener statDamageListener;
+    private MovementSpeedListener movementSpeedListener;
 
     public StatsModule(JavaPlugin plugin, PlayerDataModule playerDataModule) {
         this.plugin = plugin;
@@ -127,8 +128,10 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         statEntityListener = new StatEntityListener(statService);
         statDamageListener = new StatDamageListener(plugin, statService, mappingConfig, damageMarkerRenderer);
+        movementSpeedListener = new MovementSpeedListener(plugin, statService);
         pluginManager.registerEvents(statEntityListener, plugin);
         pluginManager.registerEvents(statDamageListener, plugin);
+        pluginManager.registerEvents(movementSpeedListener, plugin);
     }
 
     private void unregisterListeners() {
@@ -139,6 +142,10 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         if (statDamageListener != null) {
             HandlerList.unregisterAll(statDamageListener);
             statDamageListener = null;
+        }
+        if (movementSpeedListener != null) {
+            HandlerList.unregisterAll(movementSpeedListener);
+            movementSpeedListener = null;
         }
     }
 
