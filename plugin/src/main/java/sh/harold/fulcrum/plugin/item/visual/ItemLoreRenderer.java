@@ -87,11 +87,10 @@ public final class ItemLoreRenderer {
         boolean showCustomInline = playerSettingsService != null
             && playerSettingsService.cachedCustomItemNames(viewer.getUniqueId())
             && customName != null;
-        Component displayName = noItalics(showCustomInline
-            ? defaultDisplayName.append(Component.text(" (", NamedTextColor.DARK_GRAY))
-                .append(Component.text(customName, NamedTextColor.DARK_GRAY))
-                .append(Component.text(")", NamedTextColor.DARK_GRAY))
-            : defaultDisplayName);
+        Component customDisplayName = showCustomInline
+            ? rarityColorize(Component.text(customName), visual)
+            : defaultDisplayName;
+        Component displayName = noItalics(customDisplayName);
         meta.displayName(displayName);
         ensureGlint(meta, instance);
 

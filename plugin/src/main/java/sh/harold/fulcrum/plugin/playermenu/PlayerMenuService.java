@@ -553,11 +553,11 @@ public final class PlayerMenuService {
                     .build();
 
                 MenuButton customItemNamesToggle = MenuButton.builder(Material.NAME_TAG)
-                    .name(customItemNamesEnabled ? "&aCustom Names: Suffix Title" : "&cCustom Names: Hidden")
+                    .name(customItemNamesEnabled ? "&aCustom Names: Override Title" : "&cCustom Names: Hidden")
                     .secondary("Items")
                     .description(customItemNamesEnabled
-                        ? "Show anvil names inline as a gray suffix on item titles."
-                        : "Hide anvil names from titles; they stay in the tag line.")
+                        ? "Replace item titles with anvil names tinted by rarity."
+                        : "Use default titles; anvil names stay in the tag line.")
                     .slot(13)
                     .cooldown(SETTINGS_COOLDOWN)
                     .sound(Sound.UI_BUTTON_CLICK)
@@ -669,8 +669,8 @@ public final class PlayerMenuService {
         settingsService.setCustomItemNamesEnabled(playerId, enable)
             .thenRun(() -> plugin.getServer().getScheduler().runTask(plugin, () -> {
                 player.sendMessage(enable
-                    ? "§aItem titles now show custom names as gray suffixes."
-                    : "§eItem titles will hide custom names; check tags for renames.");
+                    ? "§aItem titles now use custom names tinted by rarity."
+                    : "§eItem titles show defaults; check tags for renames.");
                 openSettings(player);
             }))
             .exceptionally(throwable -> {
