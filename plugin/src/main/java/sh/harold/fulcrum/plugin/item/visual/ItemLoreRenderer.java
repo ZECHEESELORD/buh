@@ -78,6 +78,9 @@ public final class ItemLoreRenderer {
         }
 
         CustomItem definition = instance.definition();
+        if (definition.id().startsWith("vanilla:") && clone.getMaxStackSize() > 1) {
+            return clone;
+        }
         VisualComponent visual = definition.component(ComponentType.VISUAL, VisualComponent.class).orElse(null);
         Component baseName = visual != null && visual.hasDisplayName()
             ? visual.displayName()
@@ -670,6 +673,10 @@ public final class ItemLoreRenderer {
         if (definition.perLevelStats().containsKey(sh.harold.fulcrum.stats.core.StatIds.ARMOR)) {
             percent = definition.levelCurve().value(definition.perLevelStats().get(sh.harold.fulcrum.stats.core.StatIds.ARMOR), level);
             return "Increases defense by " + STAT_FORMAT.format(percent) + ".";
+        }
+        String plainDescription = plain(definition.description());
+        if (!plainDescription.isBlank()) {
+            return plainDescription;
         }
         return "Enhances this item.";
     }
