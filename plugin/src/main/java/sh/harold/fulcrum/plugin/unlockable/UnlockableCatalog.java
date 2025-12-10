@@ -53,7 +53,7 @@ public final class UnlockableCatalog {
             POCKET_CRAFTER,
             UnlockableType.PERK,
             "Pocket Crafter",
-            "Summon a crafting grid without hunting for a table.",
+            "Summon a crafting grid anywhere with /craft; no table required.",
             List.of(new UnlockableTier(
                 1,
                 "Pocket Crafter",
