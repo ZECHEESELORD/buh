@@ -102,7 +102,7 @@ public final class UnlockableCatalog {
                 1,
                 "Sit",
                 "Unlocks the sit emote.",
-                500L,
+                81L,
                 Map.of()
             )),
             Material.OAK_STAIRS,
@@ -120,7 +120,7 @@ public final class UnlockableCatalog {
                 1,
                 "Crawl",
                 "Unlocks the crawl emote.",
-                750L,
+                288L,
                 Map.of()
             )),
             Material.TURTLE_HELMET,
@@ -138,7 +138,7 @@ public final class UnlockableCatalog {
                 1,
                 "Ride",
                 "Unlocks stacking piggyback rides.",
-                1350L,
+                900L,
                 Map.of()
             )),
             Material.SADDLE,
