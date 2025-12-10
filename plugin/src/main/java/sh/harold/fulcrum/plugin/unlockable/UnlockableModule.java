@@ -21,7 +21,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.logging.Level;
 
 public final class UnlockableModule implements FulcrumModule {
 
@@ -34,6 +33,7 @@ public final class UnlockableModule implements FulcrumModule {
     private CooldownRegistry cooldownRegistry;
     private ActionCosmeticListener actionCosmeticListener;
     private CrawlManager crawlManager;
+    private CosmeticPriceDropRefund cosmeticPriceDropRefund;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -73,12 +73,8 @@ public final class UnlockableModule implements FulcrumModule {
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         economyModule.economyService().ifPresent(economyService -> {
             //TODO: REMOVE after cosmetic price-drop refunds finish.
-            new CosmeticPriceDropRefund(dataApi, economyService, registry, plugin, plugin.getLogger())
-                .run()
-                .exceptionally(throwable -> {
-                    plugin.getLogger().log(Level.SEVERE, "[refund:cosmetics] Startup refund sweep failed", throwable);
-                    return null;
-                });
+            cosmeticPriceDropRefund = new CosmeticPriceDropRefund(dataApi, economyService, registry, plugin, plugin.getLogger());
+            pluginManager.registerEvents(new CosmeticPriceDropRefundListener(cosmeticPriceDropRefund), plugin);
         });
         return CompletableFuture.completedFuture(null);
     }
