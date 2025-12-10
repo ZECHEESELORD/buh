@@ -179,11 +179,17 @@ public final class ItemResolver {
             tagged = itemPdc.writeStats(tagged, stats);
         }
         DurabilityData durabilityData = itemPdc.readDurability(tagged).orElse(null);
+        DurabilityData inferredDurability = computeDurability(definition, tagged);
         if (durabilityData == null) {
-            durabilityData = computeDurability(definition, tagged);
+            durabilityData = inferredDurability;
             if (durabilityData != null) {
                 tagged = itemPdc.writeDurability(tagged, durabilityData);
             }
+        } else if (inferredDurability != null && inferredDurability.current() > durabilityData.current()) {
+            int updatedMax = Math.max(durabilityData.max(), inferredDurability.max());
+            int repairedCurrent = Math.min(inferredDurability.current(), updatedMax);
+            durabilityData = new DurabilityData(repairedCurrent, updatedMax);
+            tagged = itemPdc.writeDurability(tagged, durabilityData);
         }
         EnchantMerge merge = mergeEnchants(tagged);
         Map<String, Integer> enchants = merge.enchants();
