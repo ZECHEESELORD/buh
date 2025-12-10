@@ -50,6 +50,7 @@ public final class VanillaStatResolver {
 
         registerTrident();
         registerMace();
+        registerBow();
 
         registerArmor(Material.LEATHER_HELMET, 1.0, 0.0);
         registerArmor(Material.LEATHER_CHESTPLATE, 3.0, 0.0);
@@ -127,6 +128,11 @@ public final class VanillaStatResolver {
 
     private void registerMace() {
         registerIfPresent("MACE", 6.0, 0.6, 0.0);
+    }
+
+    private void registerBow() {
+        register(Material.BOW, 2.0, 0.0, 0.0);
+        register(Material.CROSSBOW, 6.0, 0.0, 0.0);
     }
 
     private void registerArmor(Material material, double armor, double critDamage) {
