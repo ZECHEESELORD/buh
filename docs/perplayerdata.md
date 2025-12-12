@@ -90,60 +90,24 @@ PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet)
 
 I would pick option two for cleanliness once you are comfortable, and option one as the quick and dirty version while you experiment.
 
-5. Above head name tags (optional and trickier)
+5. Above head name tags:
 
-Tab list will already feel good, but if you also want the alias above players’ heads, you need to override the name tag.
+The client treats the player name tag as part of the player identity; it is derived from the GameProfile name and is not something you can safely replace per viewer without expensive destroy and respawn tricks.
 
-You have two main patterns.
+What we do instead:
 
-A. Entity metadata approach
+Hide the vanilla player name tag per viewer:
 
-For each viewer, intercept:
+Send a viewer only scoreboard team update with NameTagVisibility set to NEVER; add the target player's entry name to that team.
 
-PacketType.Play.Server.ENTITY_METADATA in another PacketEvents listener
+Spawn a viewer only label entity:
 
-In onPacketSending:
+Spawn a packet only MARKER entity; set CustomName and CustomNameVisible to show the alias.
 
-Resolve entityId to a Player instance using your own map of entity id to player, updated on:
+Attach the label to the target using passengers:
 
-PacketType.Play.Server.NAMED_ENTITY_SPAWN
+Send SET_PASSENGERS for the target entity id and include the marker entity id in the passenger list; this yields stable motion without teleport spam.
 
-player join or quit
+Keep the passenger list merged:
 
-When you know the target is a player:
-
-Look at the watcher entries inside the metadata packet:
-
-Use packet.getWatchableCollectionModifier().read(0) which gives metadata items
-
-Inject or replace the CustomName metadata for that player:
-
-Use a WrappedDataWatcher.WrappedDataWatcherObject for the correct index
-
-Set value to a WrappedChatComponent built from your alias component
-
-Also ensure CustomNameVisible is set to true
-
-This yields a custom name tag separate from the actual username. It does not affect tab list and can be per viewer because you only send modified metadata to the one viewer.
-
-Drawback: this behaves like a custom mob name; styling may differ slightly from vanilla player name tags, but it is robust and per viewer.
-
-B. Scoreboard team spoofing (only if you really want it)
-
-If you want something closer to vanilla player tags:
-
-Send virtual scoreboard team packets only to the viewer:
-
-Use PacketType.Play.Server.SCOREBOARD_TEAM
-
-Create a team per target player for that viewer, with:
-
-Team name equal to some internal identifier like alias_<uuid>
-
-Name tag visibility set to ALWAYS
-
-Prefix or suffix carrying part of the alias
-
-Since scoreboard teams only add prefix and suffix to the real name, you cannot neatly replace the entire name without other hacks. For a pure alias this is less ideal; it shines for rank tags.
-
-My strong suggestion here: use entity metadata for pure alias name above head, and scoreboard teams only if you later need rank brackets as well.
+SET_PASSENGERS replaces the whole list; if the server later sends a new passenger list for that vehicle, rewrite it per viewer to append the label passenger again.
