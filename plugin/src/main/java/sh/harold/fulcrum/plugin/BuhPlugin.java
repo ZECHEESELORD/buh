@@ -1,5 +1,7 @@
 package sh.harold.fulcrum.plugin;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
 import org.bukkit.plugin.java.JavaPlugin;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
@@ -93,12 +95,19 @@ public final class BuhPlugin extends JavaPlugin {
 
     @Override
     public void onLoad() {
+        PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this));
+        PacketEvents.getAPI()
+            .getSettings()
+            .reEncodeByDefault(true)
+            .checkForUpdates(false);
+        PacketEvents.getAPI().load();
         ensureDataFolder();
         createModules();
     }
 
     @Override
     public void onEnable() {
+        PacketEvents.getAPI().init();
         ensureDataFolder();
         if (moduleLoader == null) {
             createModules();
@@ -115,6 +124,7 @@ public final class BuhPlugin extends JavaPlugin {
         if (moduleLoader != null) {
             await(moduleLoader.disableAll(), "disable modules");
         }
+        PacketEvents.getAPI().terminate();
     }
 
     public DataApi dataApi() {

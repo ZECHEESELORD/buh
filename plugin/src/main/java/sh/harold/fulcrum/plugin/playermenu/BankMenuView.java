@@ -1,8 +1,8 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolManager;
-import com.comphenix.protocol.events.PacketContainer;
+import com.github.retrooper.packetevents.PacketEvents;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -51,7 +51,6 @@ final class BankMenuView {
     private final MenuService menuService;
     private final DocumentCollection players;
     private final LedgerRepository ledger;
-    private final ProtocolManager protocolManager;
     private final Logger logger;
     private final Map<UUID, BankSession> sessions = new ConcurrentHashMap<>();
 
@@ -60,14 +59,12 @@ final class BankMenuView {
         MenuService menuService,
         DocumentCollection players,
         LedgerRepository ledger,
-        ProtocolManager protocolManager,
         Logger logger
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.menuService = Objects.requireNonNull(menuService, "menuService");
         this.players = Objects.requireNonNull(players, "players");
         this.ledger = ledger;
-        this.protocolManager = protocolManager;
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -373,18 +370,16 @@ final class BankMenuView {
     }
 
     private boolean maskSlot(Player player, int slot, ItemStack item) {
-        if (protocolManager == null) {
+        if (player == null || !player.isOnline()) {
             return false;
         }
         try {
             int rawSlot = player.getOpenInventory().convertSlot(slot);
             boolean sent = false;
+            var peItem = SpigotConversionUtil.fromBukkitItemStack(item);
             for (int windowId : currentWindowIds(player)) {
-                var packet = protocolManager.createPacket(PacketType.Play.Server.SET_SLOT);
-                packet.getIntegers().write(0, windowId);
-                packet.getIntegers().write(1, rawSlot);
-                packet.getItemModifier().write(0, item);
-                protocolManager.sendServerPacket(player, packet);
+                var packet = new WrapperPlayServerSetSlot(windowId, 0, rawSlot, peItem);
+                PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
                 sent = true;
             }
             return sent;

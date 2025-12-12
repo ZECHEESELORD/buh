@@ -1,17 +1,15 @@
 package sh.harold.fulcrum.plugin.playerdata;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.ProtocolManager;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.comphenix.protocol.wrappers.PlayerInfoData;
-import com.comphenix.protocol.wrappers.WrappedChatComponent;
-import com.comphenix.protocol.wrappers.WrappedDataValue;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListenerAbstract;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -55,16 +53,11 @@ public final class UsernameDisplayService implements Listener {
     private final TabNameDecorator tabNameDecorator;
     private final NametagDecorator nametagDecorator;
     private final ChatNameDecorator chatNameDecorator;
-    private final ProtocolManager protocolManager;
-    private final PacketType playerInfoPacketType;
     private final GsonComponentSerializer gson = GsonComponentSerializer.gson();
-    private final WrappedDataWatcher.Serializer nameSerializer;
-    private final WrappedDataWatcher.Serializer booleanSerializer;
     private final Map<Integer, UUID> entityToPlayer = new ConcurrentHashMap<>();
     private final Map<UUID, String> vanillaNames = new ConcurrentHashMap<>();
     private final Map<UUID, Long> recentHealthRefresh = new ConcurrentHashMap<>();
     private final boolean debug = false;
-    private boolean loggedMissingProtocolLib;
 
     public UsernameDisplayService(Plugin plugin, DataApi dataApi, PlayerSettingsService settingsService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -75,20 +68,10 @@ public final class UsernameDisplayService implements Listener {
         this.tabNameDecorator = new TabNameDecorator(settingsService);
         this.nametagDecorator = new NametagDecorator(settingsService);
         this.chatNameDecorator = new ChatNameDecorator(settingsService);
-        this.protocolManager = plugin.getServer().getPluginManager().isPluginEnabled("ProtocolLib")
-            ? ProtocolLibrary.getProtocolManager()
-            : null;
-        this.playerInfoPacketType = resolvePlayerInfoUpdate();
-        this.nameSerializer = WrappedDataWatcher.Registry.getChatComponentSerializer(true);
-        this.booleanSerializer = WrappedDataWatcher.Registry.get(Boolean.class);
 
         plugin.getServer().getOnlinePlayers().forEach(this::track);
 
-        if (protocolManager != null) {
-            registerPacketAdapters();
-        } else {
-            logger.warning("ProtocolLib not detected; username masking will only apply in chat and viewer-aware messages. Tab and nametags will stay vanilla.");
-        }
+        registerPacketAdapters();
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -140,13 +123,6 @@ public final class UsernameDisplayService implements Listener {
         if (viewer == null) {
             return;
         }
-        if (protocolManager == null) {
-            if (!loggedMissingProtocolLib) {
-                loggedMissingProtocolLib = true;
-                logger.warning("ProtocolLib missing; username view changes will not affect tab or nametags.");
-            }
-            return;
-        }
         UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             fallbackResendTab(viewer);
@@ -155,36 +131,36 @@ public final class UsernameDisplayService implements Listener {
     }
 
     private void registerPacketAdapters() {
-        protocolManager.addPacketListener(new PlayerInfoPacketAdapter(plugin));
-        protocolManager.addPacketListener(new EntityMetadataPacketAdapter(plugin));
-        if (PacketType.Play.Server.ENTITY_DESTROY.isSupported()) {
-            protocolManager.addPacketListener(new EntityDestroyAdapter(plugin));
-        }
-    }
-
-    private PlayerInfoData buildInfoData(Player target, Component display) {
-        return PlayerInfoDataCloner.buildFromPlayer(target, display, gson, logger);
+        PacketEvents.getAPI().getEventManager().registerListener(new PlayerInfoPacketListener());
+        PacketEvents.getAPI().getEventManager().registerListener(new EntityMetadataPacketListener());
+        PacketEvents.getAPI().getEventManager().registerListener(new EntityDestroyPacketListener());
     }
 
     private void sendNametagUpdate(Player viewer, UsernameView preference) {
-        if (protocolManager == null) {
+        if (viewer == null || !viewer.isOnline()) {
             return;
         }
+        boolean clearNames = false;
         if (preference == UsernameView.MINECRAFT) {
             boolean anyDecorations = plugin.getServer().getOnlinePlayers().stream()
                 .anyMatch(player -> nametagDecorator.hasNametagDecorations(player.getUniqueId()));
-            if (!anyDecorations) {
-                return;
-            }
+            clearNames = !anyDecorations;
         }
         for (Player target : plugin.getServer().getOnlinePlayers()) {
-            UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, target.getUniqueId(), target.getName());
-            Component decorated = nametagDecorator.decorateForNametag(target.getUniqueId(), baseName.component());
-            PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.ENTITY_METADATA);
-            packet.getIntegers().writeSafely(0, target.getEntityId());
-            applyNametag(packet, decorated);
             try {
-                protocolManager.sendServerPacket(viewer, packet);
+                List<EntityData<?>> values = clearNames
+                    ? List.of(
+                        new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.empty()),
+                        new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, false)
+                    )
+                    : nametagData(
+                        nametagDecorator.decorateForNametag(
+                            target.getUniqueId(),
+                            baseNameResolver.resolve(preference, target.getUniqueId(), target.getName()).component()
+                        )
+                    );
+                var packet = new WrapperPlayServerEntityMetadata(target.getEntityId(), values);
+                PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
             } catch (RuntimeException runtimeException) {
                 logger.log(Level.WARNING, "Failed to send nametag update for " + target.getUniqueId(), runtimeException);
             }
@@ -223,18 +199,6 @@ public final class UsernameDisplayService implements Listener {
         plugin.getServer().getScheduler().runTask(plugin, () -> plugin.getServer().getOnlinePlayers().forEach(this::refreshView));
     }
 
-    private PacketType resolvePlayerInfoUpdate() {
-        try {
-            var field = PacketType.Play.Server.class.getField("PLAYER_INFO_UPDATE");
-            Object value = field.get(null);
-            if (value instanceof PacketType type) {
-                return type;
-            }
-        } catch (ReflectiveOperationException ignored) {
-        }
-        return PacketType.Play.Server.PLAYER_INFO;
-    }
-
     private void debug(Supplier<String> message) {
         if (!debug) {
             return;
@@ -246,75 +210,113 @@ public final class UsernameDisplayService implements Listener {
         }
     }
 
-    private final class PlayerInfoPacketAdapter extends PacketAdapter {
-        PlayerInfoPacketAdapter(Plugin ownerPlugin) {
-            super(ownerPlugin, ListenerPriority.HIGHEST, PacketType.Play.Server.PLAYER_INFO, playerInfoPacketType);
+    private final class PlayerInfoPacketListener extends PacketListenerAbstract {
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            Object handle = event.getPlayer();
+            if (!(handle instanceof Player viewer)) {
+                return;
+            }
+
+            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
+            if (event.getPacketType() == PacketType.Play.Server.PLAYER_INFO_UPDATE) {
+                handleInfoUpdate(event, viewer, preference);
+            } else if (event.getPacketType() == PacketType.Play.Server.PLAYER_INFO) {
+                handleLegacyInfo(event, viewer, preference);
+            }
         }
 
-        @Override
-        public void onPacketSending(PacketEvent event) {
-            Player viewer = event.getPlayer();
-            if (viewer == null) {
+        private void handleInfoUpdate(PacketSendEvent event, Player viewer, UsernameView preference) {
+            WrapperPlayServerPlayerInfoUpdate packet = new WrapperPlayServerPlayerInfoUpdate(event);
+            List<WrapperPlayServerPlayerInfoUpdate.PlayerInfo> entries = packet.getEntries();
+            if (entries == null || entries.isEmpty()) {
                 return;
             }
-            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-            var dataLists = event.getPacket().getPlayerInfoDataLists();
-            if (dataLists.size() == 0) {
-                return;
-            }
-            List<PlayerInfoData> originals = dataLists.readSafely(0);
-            if (originals == null || originals.isEmpty()) {
-                return;
-            }
-            List<PlayerInfoData> updated = new ArrayList<>(originals.size());
+
             boolean mutated = false;
-            for (PlayerInfoData data : originals) {
+            for (WrapperPlayServerPlayerInfoUpdate.PlayerInfo data : entries) {
                 if (data == null) {
-                    updated.add(null);
                     continue;
                 }
-                UUID targetId = resolveTargetId(data);
+                UUID targetId = data.getProfileId();
+                if (targetId == null && data.getGameProfile() != null) {
+                    targetId = data.getGameProfile().getUUID();
+                }
                 Player target = targetId == null ? null : plugin.getServer().getPlayer(targetId);
                 String vanillaName = resolveVanillaName(data, targetId, target);
 
                 if (preference == UsernameView.MINECRAFT && !tabNameDecorator.hasTabDecorations(targetId, target)) {
-                    updated.add(data);
                     continue;
                 }
 
                 UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, vanillaName);
                 if (preference == UsernameView.MINECRAFT
-                    && baseName.value().equals(vanillaName)
+                    && Objects.equals(baseName.value(), vanillaName)
                     && !tabNameDecorator.hasTabDecorations(targetId, target)) {
-                    updated.add(data);
                     continue;
                 }
 
                 Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component());
-                PlayerInfoData replacement = cloneWithDisplayName(data, decorated);
-                updated.add(replacement);
-                mutated = mutated || replacement != data;
+                data.setDisplayName(decorated);
+                mutated = true;
             }
+
             if (mutated) {
-                dataLists.writeSafely(0, updated);
-                debug(() -> "Rewrote player info for viewer " + viewer.getUniqueId() + " (" + updated.size() + " entries)");
+                packet.setEntries(entries);
+                debug(() -> "Rewrote player info for viewer " + viewer.getUniqueId() + " (" + entries.size() + " entries)");
             }
         }
 
-        private UUID resolveTargetId(PlayerInfoData data) {
-            UUID targetId = data.getProfileId();
-            if (targetId == null && data.getProfile() != null) {
-                targetId = data.getProfile().getUUID();
+        private void handleLegacyInfo(PacketSendEvent event, Player viewer, UsernameView preference) {
+            WrapperPlayServerPlayerInfo packet = new WrapperPlayServerPlayerInfo(event);
+            List<WrapperPlayServerPlayerInfo.PlayerData> entries = packet.getPlayerDataList();
+            if (entries == null || entries.isEmpty()) {
+                return;
             }
-            return targetId;
+
+            boolean mutated = false;
+            for (WrapperPlayServerPlayerInfo.PlayerData data : entries) {
+                if (data == null || data.getUserProfile() == null) {
+                    continue;
+                }
+                UUID targetId = data.getUserProfile().getUUID();
+                Player target = targetId == null ? null : plugin.getServer().getPlayer(targetId);
+                String vanillaName = target != null ? target.getName() : data.getUserProfile().getName();
+
+                if (preference == UsernameView.MINECRAFT && !tabNameDecorator.hasTabDecorations(targetId, target)) {
+                    continue;
+                }
+
+                UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, vanillaName);
+                if (preference == UsernameView.MINECRAFT
+                    && Objects.equals(baseName.value(), vanillaName)
+                    && !tabNameDecorator.hasTabDecorations(targetId, target)) {
+                    continue;
+                }
+
+                Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component());
+                data.setDisplayName(decorated);
+                mutated = true;
+            }
+
+            if (mutated) {
+                packet.setPlayerDataList(entries);
+                debug(() -> "Rewrote legacy player info for viewer " + viewer.getUniqueId() + " (" + entries.size() + " entries)");
+            }
         }
 
-        private String resolveVanillaName(PlayerInfoData data, UUID targetId, Player target) {
+        private String resolveVanillaName(
+            WrapperPlayServerPlayerInfoUpdate.PlayerInfo data,
+            UUID targetId,
+            Player target
+        ) {
             if (target != null) {
                 return target.getName();
             }
-            if (data.getProfile() != null && data.getProfile().getName() != null && !data.getProfile().getName().isBlank()) {
-                return data.getProfile().getName();
+            if (data.getGameProfile() != null
+                && data.getGameProfile().getName() != null
+                && !data.getGameProfile().getName().isBlank()) {
+                return data.getGameProfile().getName();
             }
             if (targetId != null) {
                 String cached = vanillaNames.get(targetId);
@@ -324,93 +326,96 @@ public final class UsernameDisplayService implements Listener {
             }
             return null;
         }
-
-        private PlayerInfoData cloneWithDisplayName(PlayerInfoData source, Component display) {
-            return PlayerInfoDataCloner.cloneWithDisplayName(source, display, gson, logger);
-        }
     }
 
-    private final class EntityMetadataPacketAdapter extends PacketAdapter {
-        EntityMetadataPacketAdapter(Plugin ownerPlugin) {
-            super(ownerPlugin, ListenerPriority.NORMAL, PacketType.Play.Server.ENTITY_METADATA);
-        }
-
+    private final class EntityMetadataPacketListener extends PacketListenerAbstract {
         @Override
-        public void onPacketSending(PacketEvent event) {
-            Player viewer = event.getPlayer();
-            if (viewer == null) {
+        public void onPacketSend(PacketSendEvent event) {
+            if (event.getPacketType() != PacketType.Play.Server.ENTITY_METADATA) {
                 return;
             }
-            PacketContainer packet = event.getPacket();
-            Integer entityId = packet.getIntegers().readSafely(0);
-            Entity entity = packet.getEntityModifier(viewer.getWorld()).readSafely(0);
-            Player targetPlayer = entity instanceof Player player ? player : null;
-            UUID targetId = targetPlayer != null ? targetPlayer.getUniqueId() : entityToPlayer.get(entityId);
-            if (targetPlayer != null && entityId != null) {
-                entityToPlayer.put(entityId, targetPlayer.getUniqueId());
+            Object handle = event.getPlayer();
+            if (!(handle instanceof Player viewer)) {
+                return;
             }
+
+            WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(event);
+            int entityId = packet.getEntityId();
+
+            Player targetPlayer = null;
+            UUID targetId = entityToPlayer.get(entityId);
+            for (Player candidate : plugin.getServer().getOnlinePlayers()) {
+                if (candidate.getEntityId() == entityId) {
+                    targetPlayer = candidate;
+                    targetId = candidate.getUniqueId();
+                    entityToPlayer.put(entityId, targetId);
+                    break;
+                }
+            }
+
             if (targetId == null) {
                 return;
             }
+
             UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
             if (preference == UsernameView.MINECRAFT && !nametagDecorator.hasNametagDecorations(targetId)) {
                 return;
             }
+
             String vanillaName = targetPlayer != null ? targetPlayer.getName() : vanillaNames.get(targetId);
             UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, vanillaName);
             Component decorated = nametagDecorator.decorateForNametag(targetId, baseName.component());
-            applyNametag(packet, decorated);
+
+            List<EntityData<?>> values = applyNametag(packet.getEntityMetadata(), decorated);
+            packet.setEntityMetadata(values);
         }
     }
 
-    private final class EntityDestroyAdapter extends PacketAdapter {
-        EntityDestroyAdapter(Plugin ownerPlugin) {
-            super(ownerPlugin, ListenerPriority.MONITOR, PacketType.Play.Server.ENTITY_DESTROY);
-        }
-
+    private final class EntityDestroyPacketListener extends PacketListenerAbstract {
         @Override
-        public void onPacketSending(PacketEvent event) {
-            PacketContainer packet = event.getPacket();
-            List<Integer> ids = packet.getIntLists().size() > 0 ? packet.getIntLists().readSafely(0) : List.of();
-            if (ids.isEmpty() && packet.getIntegerArrays().size() > 0) {
-                int[] array = packet.getIntegerArrays().readSafely(0);
-                ids = array == null ? List.of() : Arrays.stream(array).boxed().toList();
+        public void onPacketSend(PacketSendEvent event) {
+            if (event.getPacketType() != PacketType.Play.Server.DESTROY_ENTITIES) {
+                return;
             }
-            if (!ids.isEmpty()) {
-                ids.forEach(entityToPlayer::remove);
+            WrapperPlayServerDestroyEntities packet = new WrapperPlayServerDestroyEntities(event);
+            int[] ids = packet.getEntityIds();
+            if (ids == null || ids.length == 0) {
+                return;
+            }
+            for (int id : ids) {
+                entityToPlayer.remove(id);
             }
         }
     }
 
-    private void applyNametag(PacketContainer packet, Component nameComponent) {
-        var dataValues = packet.getDataValueCollectionModifier();
-        List<WrappedDataValue> values = dataValues.size() == 0 ? null : dataValues.readSafely(0);
-        values = values == null ? new ArrayList<>() : new ArrayList<>(values);
+    private List<EntityData<?>> nametagData(Component nameComponent) {
+        return applyNametag(List.of(), nameComponent);
+    }
+
+    private List<EntityData<?>> applyNametag(List<EntityData<?>> values, Component nameComponent) {
+        List<EntityData<?>> updated = values == null ? new ArrayList<>() : new ArrayList<>(values);
         boolean updatedName = false;
         boolean updatedVisibility = false;
 
-        WrappedChatComponent serialized = WrappedChatComponent.fromJson(gson.serialize(nameComponent));
-        Optional<?> namePayload = Optional.ofNullable(serialized.getHandle());
-
-        for (int i = 0; i < values.size(); i++) {
-            WrappedDataValue value = values.get(i);
-            if (value.getIndex() == CUSTOM_NAME_INDEX) {
-                values.set(i, new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, namePayload));
+        for (int i = 0; i < updated.size(); i++) {
+            EntityData<?> value = updated.get(i);
+            int index = value.getIndex();
+            if (index == CUSTOM_NAME_INDEX) {
+                updated.set(i, new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(nameComponent)));
                 updatedName = true;
-            } else if (value.getIndex() == CUSTOM_NAME_VISIBILITY_INDEX) {
-                values.set(i, new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, true));
+            } else if (index == CUSTOM_NAME_VISIBILITY_INDEX) {
+                updated.set(i, new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, true));
                 updatedVisibility = true;
             }
         }
 
         if (!updatedName) {
-            values.add(new WrappedDataValue(CUSTOM_NAME_INDEX, nameSerializer, namePayload));
+            updated.add(new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(nameComponent)));
         }
         if (!updatedVisibility) {
-            values.add(new WrappedDataValue(CUSTOM_NAME_VISIBILITY_INDEX, booleanSerializer, true));
+            updated.add(new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, true));
         }
 
-        dataValues.writeSafely(0, values);
-        debug(() -> "Applied nametag for entity " + packet.getIntegers().readSafely(0));
+        return updated;
     }
 }

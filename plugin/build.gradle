@@ -7,9 +7,8 @@ dependencies {
     implementation project(":common")
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("net.luckperms:api:5.4")
-    compileOnly("net.dmulloy2:ProtocolLib:5.4.0")
+    implementation("com.github.retrooper:packetevents-spigot:2.11.0")
     testCompileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    testCompileOnly("net.dmulloy2:ProtocolLib:5.4.0")
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.26.3")
@@ -17,7 +16,6 @@ dependencies {
     testImplementation("org.mockito:mockito-junit-jupiter:5.13.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    testRuntimeOnly("net.dmulloy2:ProtocolLib:5.4.0")
     testRuntimeOnly("com.mojang:authlib:1.5.25")
 }
 

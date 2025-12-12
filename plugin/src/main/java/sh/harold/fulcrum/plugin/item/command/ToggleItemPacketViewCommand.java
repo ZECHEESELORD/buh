@@ -39,7 +39,7 @@ public final class ToggleItemPacketViewCommand {
             return Command.SINGLE_SUCCESS;
         }
         if (!itemEngine.hasPacketLoreAdapter()) {
-            sender.sendMessage(Component.text("Packet lore rendering is not active; ProtocolLib might be missing.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Packet lore rendering is not active; PacketEvents may not be initialized.", NamedTextColor.RED));
             return Command.SINGLE_SUCCESS;
         }
         itemEngine.togglePacketLore(player.getUniqueId());
