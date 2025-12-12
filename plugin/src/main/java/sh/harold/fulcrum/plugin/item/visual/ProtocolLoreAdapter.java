@@ -3,8 +3,10 @@ package sh.harold.fulcrum.plugin.item.visual;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.player.Equipment;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 import org.bukkit.entity.Player;
@@ -62,6 +64,31 @@ public final class ProtocolLoreAdapter extends PacketListenerAbstract {
         }
 
         if (event.getPacketType() != PacketType.Play.Server.WINDOW_ITEMS) {
+            if (event.getPacketType() == PacketType.Play.Server.ENTITY_EQUIPMENT) {
+                WrapperPlayServerEntityEquipment packet = new WrapperPlayServerEntityEquipment(event);
+                List<Equipment> equipmentList = packet.getEquipment();
+                if (equipmentList == null || equipmentList.isEmpty()) {
+                    return;
+                }
+                List<Equipment> renderedList = new ArrayList<>(equipmentList.size());
+                boolean mutated = false;
+                for (Equipment equipment : equipmentList) {
+                    if (equipment == null || equipment.getItem() == null) {
+                        renderedList.add(equipment);
+                        continue;
+                    }
+                    var rendered = render(equipment.getItem(), viewer);
+                    if (!rendered.equals(equipment.getItem())) {
+                        mutated = true;
+                        renderedList.add(new Equipment(equipment.getSlot(), rendered));
+                    } else {
+                        renderedList.add(equipment);
+                    }
+                }
+                if (mutated) {
+                    packet.setEquipment(renderedList);
+                }
+            }
             return;
         }
 
