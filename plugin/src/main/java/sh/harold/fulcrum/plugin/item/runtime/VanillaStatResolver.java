@@ -1,6 +1,10 @@
 package sh.harold.fulcrum.plugin.item.runtime;
 
+import com.google.common.collect.Multimap;
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.inventory.EquipmentSlot;
 import sh.harold.fulcrum.stats.core.StatId;
 import sh.harold.fulcrum.stats.core.StatIds;
 
@@ -11,6 +15,8 @@ import java.util.Map;
 public final class VanillaStatResolver {
 
     private final Map<Material, Map<StatId, Double>> table = new EnumMap<>(Material.class);
+    private static final double BASE_ATTACK_DAMAGE = 1.0;
+    private static final double BASE_ATTACK_SPEED = 4.0;
 
     public VanillaStatResolver() {
         registerSword(Material.WOODEN_SWORD, 4.0);
@@ -94,8 +100,14 @@ public final class VanillaStatResolver {
     }
 
     public Map<StatId, Double> statsFor(Material material) {
+        if (material == null) {
+            return Map.of();
+        }
         Map<StatId, Double> stats = table.get(material);
-        return stats == null ? Map.of() : stats;
+        if (stats != null) {
+            return stats;
+        }
+        return inferFromDefaultAttributes(material);
     }
 
     private void registerSword(Material material, double damage) {
@@ -189,5 +201,39 @@ public final class VanillaStatResolver {
 
     private void registerHoeIfPresent(String materialName, double damage, double speed) {
         registerToolIfPresent(materialName, damage, speed);
+    }
+
+    private Map<StatId, Double> inferFromDefaultAttributes(Material material) {
+        if (!material.isItem()) {
+            return Map.of();
+        }
+        Multimap<Attribute, AttributeModifier> modifiers = material.getDefaultAttributeModifiers(EquipmentSlot.HAND);
+        if (modifiers == null || modifiers.isEmpty()) {
+            return Map.of();
+        }
+        double attackDamage = totalAttribute(modifiers, Attribute.ATTACK_DAMAGE, BASE_ATTACK_DAMAGE);
+        double attackSpeed = totalAttribute(modifiers, Attribute.ATTACK_SPEED, BASE_ATTACK_SPEED);
+        if (attackDamage == BASE_ATTACK_DAMAGE && attackSpeed == BASE_ATTACK_SPEED) {
+            return Map.of();
+        }
+        Map<StatId, Double> inferred = new HashMap<>();
+        if (attackDamage != BASE_ATTACK_DAMAGE) {
+            inferred.put(StatIds.ATTACK_DAMAGE, attackDamage);
+        }
+        if (attackSpeed != BASE_ATTACK_SPEED) {
+            inferred.put(StatIds.ATTACK_SPEED, attackSpeed);
+        }
+        return Map.copyOf(inferred);
+    }
+
+    private double totalAttribute(Multimap<Attribute, AttributeModifier> modifiers, Attribute attribute, double base) {
+        if (modifiers == null || attribute == null) {
+            return base;
+        }
+        double modifierSum = modifiers.get(attribute).stream()
+            .filter(modifier -> modifier.getOperation() == AttributeModifier.Operation.ADD_NUMBER)
+            .mapToDouble(AttributeModifier::getAmount)
+            .sum();
+        return base + modifierSum;
     }
 }
