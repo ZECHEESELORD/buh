@@ -57,6 +57,9 @@ public enum ItemCategory {
             if (name.endsWith("_LEGGINGS")) return LEGGINGS;
             if (name.endsWith("_BOOTS")) return BOOTS;
         }
+        if (name.equals("SPEAR") || name.endsWith("_SPEAR")) {
+            return TRIDENT;
+        }
         return switch (material) {
             case NETHERITE_SWORD, DIAMOND_SWORD, GOLDEN_SWORD, IRON_SWORD, STONE_SWORD, WOODEN_SWORD -> SWORD;
             case NETHERITE_AXE, DIAMOND_AXE, GOLDEN_AXE, IRON_AXE, STONE_AXE, WOODEN_AXE -> AXE;

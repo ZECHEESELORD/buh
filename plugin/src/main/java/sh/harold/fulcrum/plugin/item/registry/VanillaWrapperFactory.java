@@ -31,9 +31,9 @@ public final class VanillaWrapperFactory {
     private ItemRarity rarityFor(Material material) {
         return switch (material) {
             case NETHERITE_SWORD, NETHERITE_AXE, NETHERITE_HELMET, NETHERITE_CHESTPLATE, NETHERITE_LEGGINGS,
-                 NETHERITE_BOOTS, NETHERITE_HOE, NETHERITE_PICKAXE, NETHERITE_SHOVEL -> ItemRarity.RARE;
+                 NETHERITE_BOOTS, NETHERITE_HOE, NETHERITE_PICKAXE, NETHERITE_SHOVEL, NETHERITE_SPEAR -> ItemRarity.RARE;
             case DIAMOND_SWORD, DIAMOND_AXE, DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS,
-                 DIAMOND_BOOTS, DIAMOND_HOE, DIAMOND_PICKAXE, DIAMOND_SHOVEL -> ItemRarity.UNCOMMON;
+                 DIAMOND_BOOTS, DIAMOND_HOE, DIAMOND_PICKAXE, DIAMOND_SHOVEL, DIAMOND_SPEAR -> ItemRarity.UNCOMMON;
             case TRIDENT, MACE -> ItemRarity.RARE;
             default -> ItemRarity.COMMON;
         };

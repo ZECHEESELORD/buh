@@ -31,7 +31,7 @@ public final class ProtocolLoreAdapter extends PacketAdapter {
     private final Set<UUID> disabledViewers = ConcurrentHashMap.newKeySet();
 
     private ProtocolLoreAdapter(Plugin plugin, ItemLoreRenderer renderer) {
-        // TODO: re-enable ENTITY_EQUIPMENT once ProtocolLib handles 1.21.10 equipment packets without client decode errors.
+        // TODO: re-enable ENTITY_EQUIPMENT once ProtocolLib handles 1.21.11 equipment packets without client decode errors.
         super(plugin, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS);
         this.renderer = renderer;
         this.logger = plugin.getLogger();
