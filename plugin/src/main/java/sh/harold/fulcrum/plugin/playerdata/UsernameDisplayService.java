@@ -285,7 +285,7 @@ public final class UsernameDisplayService implements Listener {
             var spawn = new WrapperPlayServerSpawnEntity(
                 carrierEntityId,
                 Optional.of(carrierId),
-                EntityTypes.MARKER,
+                EntityTypes.INTERACTION,
                 targetPosition,
                 0.0F,
                 0.0F,
