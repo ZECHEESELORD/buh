@@ -55,10 +55,16 @@ public final class AnvilListener implements Listener {
         int linearRepairs = readLinearRepairCount(inventory.getFirstItem());
         int uiCost = computeRepairCost(linearRepairs);
         inventory.setRepairCost(uiCost);
-        ItemStack working = vanillaResult.clone();
-        ItemResolver.EnchantMerge merge = resolver.mergeEnchants(working);
         boolean hasRightItem = inventory.getSecondItem() != null && !inventory.getSecondItem().getType().isAir();
-        if (merge.removedIncompatibles() && hasRightItem) {
+        ItemStack working = vanillaResult.clone();
+        ItemResolver.AnvilEnchantMerge anvilMerge = resolver.applyAnvilEnchantMerge(
+            working,
+            inventory.getFirstItem(),
+            inventory.getSecondItem()
+        );
+        working = anvilMerge.stack();
+        resolver.mergeEnchants(working);
+        if (anvilMerge.incompatibleMerge() && hasRightItem) {
             resultConsumer.accept(null);
             return;
         }
