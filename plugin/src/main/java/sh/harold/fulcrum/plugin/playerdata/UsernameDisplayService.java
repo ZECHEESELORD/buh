@@ -5,15 +5,22 @@ import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRelativeMove;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRelativeMoveAndRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnPlayer;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTeams;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -26,15 +33,16 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.common.data.DataApi;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -43,7 +51,9 @@ public final class UsernameDisplayService implements Listener {
 
     private static final int CUSTOM_NAME_INDEX = 2;
     private static final int CUSTOM_NAME_VISIBILITY_INDEX = 3;
+    private static final int NO_GRAVITY_INDEX = 5;
     private static final long HEALTH_REFRESH_INTERVAL_MILLIS = 500L;
+    private static final double CARRIER_Y_OFFSET = 2.25D;
 
     private final Plugin plugin;
     private final Logger logger;
@@ -53,10 +63,10 @@ public final class UsernameDisplayService implements Listener {
     private final TabNameDecorator tabNameDecorator;
     private final NametagDecorator nametagDecorator;
     private final ChatNameDecorator chatNameDecorator;
-    private final GsonComponentSerializer gson = GsonComponentSerializer.gson();
-    private final Map<Integer, UUID> entityToPlayer = new ConcurrentHashMap<>();
     private final Map<UUID, String> vanillaNames = new ConcurrentHashMap<>();
     private final Map<UUID, Long> recentHealthRefresh = new ConcurrentHashMap<>();
+    private final AtomicInteger nextCarrierEntityId = new AtomicInteger(Integer.MAX_VALUE);
+    private final Map<UUID, ViewerNametagState> viewerNametagStates = new ConcurrentHashMap<>();
     private final boolean debug = false;
 
     public UsernameDisplayService(Plugin plugin, DataApi dataApi, PlayerSettingsService settingsService) {
@@ -91,8 +101,8 @@ public final class UsernameDisplayService implements Listener {
         settingsService.evictCachedSettings(playerId);
         linkedAccountService.evict(playerId);
         vanillaNames.remove(playerId);
-        entityToPlayer.entrySet().removeIf(entry -> entry.getValue().equals(playerId));
         recentHealthRefresh.remove(playerId);
+        viewerNametagStates.remove(playerId);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -109,7 +119,6 @@ public final class UsernameDisplayService implements Listener {
         Objects.requireNonNull(player, "player");
         UUID playerId = player.getUniqueId();
         vanillaNames.put(playerId, player.getName());
-        entityToPlayer.put(player.getEntityId(), playerId);
         linkedAccountService.refresh(playerId);
     }
 
@@ -126,45 +135,16 @@ public final class UsernameDisplayService implements Listener {
         UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             sendTabUpdate(viewer, preference);
-            sendNametagUpdate(viewer, preference);
+            refreshNametagView(viewer, preference);
         });
     }
 
     private void registerPacketAdapters() {
         PacketEvents.getAPI().getEventManager().registerListener(new PlayerInfoPacketListener());
-        PacketEvents.getAPI().getEventManager().registerListener(new EntityMetadataPacketListener());
-        PacketEvents.getAPI().getEventManager().registerListener(new EntityDestroyPacketListener());
-    }
-
-    private void sendNametagUpdate(Player viewer, UsernameView preference) {
-        if (viewer == null || !viewer.isOnline()) {
-            return;
-        }
-        boolean clearNames = false;
-        if (preference == UsernameView.MINECRAFT) {
-            boolean anyDecorations = plugin.getServer().getOnlinePlayers().stream()
-                .anyMatch(player -> nametagDecorator.hasNametagDecorations(player.getUniqueId()));
-            clearNames = !anyDecorations;
-        }
-        for (Player target : plugin.getServer().getOnlinePlayers()) {
-            try {
-                List<EntityData<?>> values = clearNames
-                    ? List.of(
-                        new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.empty()),
-                        new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, false)
-                    )
-                    : nametagData(
-                        nametagDecorator.decorateForNametag(
-                            target.getUniqueId(),
-                            baseNameResolver.resolve(preference, target.getUniqueId(), target.getName()).component()
-                        )
-                    );
-                var packet = new WrapperPlayServerEntityMetadata(target.getEntityId(), values);
-                PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
-            } catch (RuntimeException runtimeException) {
-                logger.log(Level.WARNING, "Failed to send nametag update for " + target.getUniqueId(), runtimeException);
-            }
-        }
+        PacketEvents.getAPI().getEventManager().registerListener(new TeamsPacketListener());
+        PacketEvents.getAPI().getEventManager().registerListener(new SpawnPlayerPacketListener());
+        PacketEvents.getAPI().getEventManager().registerListener(new DestroyEntitiesPacketListener());
+        PacketEvents.getAPI().getEventManager().registerListener(new MovementPacketListener());
     }
 
     private void sendTabUpdate(Player viewer, UsernameView preference) {
@@ -191,19 +171,177 @@ public final class UsernameDisplayService implements Listener {
         PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
     }
 
-    private void fallbackResendTab(Player viewer) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            for (Player target : plugin.getServer().getOnlinePlayers()) {
-                if (target.equals(viewer)) {
-                    continue;
-                }
-                boolean initiallyVisible = viewer.canSee(target);
-                viewer.hidePlayer(plugin, target);
-                if (initiallyVisible) {
-                    viewer.showPlayer(plugin, target);
-                }
+    private void refreshNametagView(Player viewer, UsernameView preference) {
+        if (viewer == null || !viewer.isOnline()) {
+            return;
+        }
+
+        ViewerNametagState state = viewerNametagStates.computeIfAbsent(viewer.getUniqueId(), ViewerNametagState::new);
+        for (Map.Entry<Integer, TrackedPlayer> entry : state.trackedPlayers.entrySet()) {
+            int targetEntityId = entry.getKey();
+            TrackedPlayer tracked = entry.getValue();
+            if (tracked == null) {
+                continue;
             }
-        });
+            applyViewerNametag(viewer, state, targetEntityId, tracked, preference);
+        }
+    }
+
+    private void applyViewerNametag(
+        Player viewer,
+        ViewerNametagState state,
+        int targetEntityId,
+        TrackedPlayer tracked,
+        UsernameView preference
+    ) {
+        UUID viewerId = viewer.getUniqueId();
+        UUID targetId = tracked.playerId();
+
+        if (targetId == null || targetId.equals(viewerId)) {
+            destroyCarrier(viewer, state, targetEntityId);
+            return;
+        }
+
+        String vanillaName = tracked.vanillaName();
+        if (vanillaName == null || vanillaName.isBlank()) {
+            vanillaName = vanillaNames.get(targetId);
+        }
+        if (vanillaName == null || vanillaName.isBlank()) {
+            destroyCarrier(viewer, state, targetEntityId);
+            return;
+        }
+
+        boolean hasDecorations = nametagDecorator.hasNametagDecorations(targetId);
+        UsernameView resolvedView = preference == null ? UsernameView.MINECRAFT : preference;
+        UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(resolvedView, targetId, vanillaName);
+        boolean aliasDiffers = !Objects.equals(baseName.value(), vanillaName);
+
+        boolean shouldOverride = resolvedView == UsernameView.MINECRAFT
+            ? hasDecorations
+            : hasDecorations || aliasDiffers;
+
+        if (!shouldOverride) {
+            destroyCarrier(viewer, state, targetEntityId);
+            return;
+        }
+
+        Vector3d position = tracked.position();
+        if (position == null) {
+            return;
+        }
+
+        Component decorated = nametagDecorator.decorateForNametag(targetId, baseName.component());
+        ensureCarrier(viewer, state, targetEntityId, vanillaName, position, decorated);
+    }
+
+    private void ensureCarrier(
+        Player viewer,
+        ViewerNametagState state,
+        int targetEntityId,
+        String targetEntryName,
+        Vector3d targetPosition,
+        Component displayName
+    ) {
+        CarrierEntity existing = state.carriers.get(targetEntityId);
+        if (existing == null) {
+            ensureHiddenNametag(viewer, state, targetEntryName);
+            int carrierEntityId = nextCarrierEntityId.getAndDecrement();
+            UUID carrierId = UUID.randomUUID();
+            Vector3d position = targetPosition.add(0.0D, CARRIER_Y_OFFSET, 0.0D);
+            var spawn = new WrapperPlayServerSpawnEntity(
+                carrierEntityId,
+                Optional.of(carrierId),
+                EntityTypes.INTERACTION,
+                position,
+                0.0F,
+                0.0F,
+                0.0F,
+                0,
+                Optional.empty()
+            );
+            PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, spawn);
+            sendCarrierMetadata(viewer, carrierEntityId, displayName);
+            state.carriers.put(targetEntityId, new CarrierEntity(carrierEntityId, targetEntryName, displayName));
+            return;
+        }
+
+        if (!Objects.equals(existing.lastDisplayName(), displayName)) {
+            sendCarrierMetadata(viewer, existing.entityId(), displayName);
+            state.carriers.put(targetEntityId, new CarrierEntity(existing.entityId(), existing.targetEntryName(), displayName));
+        }
+    }
+
+    private void destroyCarrier(Player viewer, ViewerNametagState state, int targetEntityId) {
+        CarrierEntity carrier = state.carriers.remove(targetEntityId);
+        if (carrier == null) {
+            return;
+        }
+        releaseHiddenNametag(viewer, state, carrier.targetEntryName());
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, new WrapperPlayServerDestroyEntities(carrier.entityId()));
+    }
+
+    private void sendCarrierMetadata(Player viewer, int carrierEntityId, Component displayName) {
+        List<EntityData<?>> metadata = List.of(
+            new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(displayName)),
+            new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, true),
+            new EntityData<>(NO_GRAVITY_INDEX, EntityDataTypes.BOOLEAN, true)
+        );
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, new WrapperPlayServerEntityMetadata(carrierEntityId, metadata));
+    }
+
+    private void ensureHiddenNametag(Player viewer, ViewerNametagState state, String entryName) {
+        if (entryName == null || entryName.isBlank()) {
+            return;
+        }
+        if (!state.hiddenEntries.add(entryName)) {
+            return;
+        }
+        ensureHideTeam(viewer, state);
+        var packet = new WrapperPlayServerTeams(
+            state.hideTeamName,
+            WrapperPlayServerTeams.TeamMode.ADD_ENTITIES,
+            Optional.empty(),
+            List.of(entryName)
+        );
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
+    }
+
+    private void releaseHiddenNametag(Player viewer, ViewerNametagState state, String entryName) {
+        if (entryName == null || entryName.isBlank()) {
+            return;
+        }
+        if (!state.hiddenEntries.remove(entryName)) {
+            return;
+        }
+        var packet = new WrapperPlayServerTeams(
+            state.hideTeamName,
+            WrapperPlayServerTeams.TeamMode.REMOVE_ENTITIES,
+            Optional.empty(),
+            List.of(entryName)
+        );
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
+    }
+
+    private void ensureHideTeam(Player viewer, ViewerNametagState state) {
+        if (!state.hideTeamCreated.compareAndSet(false, true)) {
+            return;
+        }
+        var info = new WrapperPlayServerTeams.ScoreBoardTeamInfo(
+            Component.empty(),
+            Component.empty(),
+            Component.empty(),
+            WrapperPlayServerTeams.NameTagVisibility.NEVER,
+            WrapperPlayServerTeams.CollisionRule.ALWAYS,
+            NamedTextColor.WHITE,
+            WrapperPlayServerTeams.OptionData.NONE
+        );
+        var packet = new WrapperPlayServerTeams(
+            state.hideTeamName,
+            WrapperPlayServerTeams.TeamMode.CREATE,
+            info,
+            List.of()
+        );
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
     }
 
     private void refreshHealthIfPeaceful(Entity entity) {
@@ -360,10 +498,29 @@ public final class UsernameDisplayService implements Listener {
         }
     }
 
-    private final class EntityMetadataPacketListener extends PacketListenerAbstract {
+    private static final class ViewerNametagState {
+        private final String hideTeamName;
+        private final AtomicBoolean hideTeamCreated = new AtomicBoolean();
+        private final Map<Integer, TrackedPlayer> trackedPlayers = new ConcurrentHashMap<>();
+        private final Map<Integer, CarrierEntity> carriers = new ConcurrentHashMap<>();
+        private final Set<String> hiddenEntries = ConcurrentHashMap.newKeySet();
+
+        private ViewerNametagState(UUID viewerId) {
+            String compact = viewerId == null ? "" : viewerId.toString().replace("-", "");
+            this.hideTeamName = "flc_ud_" + (compact.length() >= 8 ? compact.substring(0, 8) : Integer.toHexString(Objects.hashCode(viewerId)));
+        }
+    }
+
+    private record TrackedPlayer(UUID playerId, String vanillaName, Vector3d position) {
+    }
+
+    private record CarrierEntity(int entityId, String targetEntryName, Component lastDisplayName) {
+    }
+
+    private final class TeamsPacketListener extends PacketListenerAbstract {
         @Override
         public void onPacketSend(PacketSendEvent event) {
-            if (event.getPacketType() != PacketType.Play.Server.ENTITY_METADATA) {
+            if (event.getPacketType() != PacketType.Play.Server.TEAMS) {
                 return;
             }
             Object handle = event.getPlayer();
@@ -371,83 +528,192 @@ public final class UsernameDisplayService implements Listener {
                 return;
             }
 
-            WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(event);
-            int entityId = packet.getEntityId();
-
-            Player targetPlayer = null;
-            UUID targetId = entityToPlayer.get(entityId);
-            for (Player candidate : plugin.getServer().getOnlinePlayers()) {
-                if (candidate.getEntityId() == entityId) {
-                    targetPlayer = candidate;
-                    targetId = candidate.getUniqueId();
-                    entityToPlayer.put(entityId, targetId);
-                    break;
-                }
-            }
-
-            if (targetId == null) {
+            ViewerNametagState state = viewerNametagStates.get(viewer.getUniqueId());
+            if (state == null || state.hiddenEntries.isEmpty()) {
                 return;
             }
 
-            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-            if (preference == UsernameView.MINECRAFT && !nametagDecorator.hasNametagDecorations(targetId)) {
+            WrapperPlayServerTeams packet = new WrapperPlayServerTeams(event);
+            String teamName = packet.getTeamName();
+            if (teamName == null || teamName.equals(state.hideTeamName)) {
                 return;
             }
 
-            String vanillaName = targetPlayer != null ? targetPlayer.getName() : vanillaNames.get(targetId);
-            UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, vanillaName);
-            Component decorated = nametagDecorator.decorateForNametag(targetId, baseName.component());
+            Set<String> hidden = state.hiddenEntries;
+            var players = packet.getPlayers();
+            if (players == null || players.isEmpty()) {
+                return;
+            }
 
-            List<EntityData<?>> values = applyNametag(packet.getEntityMetadata(), decorated);
-            packet.setEntityMetadata(values);
+            List<String> filtered = players.stream()
+                .filter(entryName -> !hidden.contains(entryName))
+                .toList();
+            if (filtered.size() == players.size()) {
+                return;
+            }
+            packet.setPlayers(filtered);
         }
     }
 
-    private final class EntityDestroyPacketListener extends PacketListenerAbstract {
+    private final class SpawnPlayerPacketListener extends PacketListenerAbstract {
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            if (event.getPacketType() != PacketType.Play.Server.SPAWN_PLAYER) {
+                return;
+            }
+            Object handle = event.getPlayer();
+            if (!(handle instanceof Player viewer)) {
+                return;
+            }
+
+            WrapperPlayServerSpawnPlayer packet = new WrapperPlayServerSpawnPlayer(event);
+            int entityId = packet.getEntityId();
+            UUID targetId = packet.getUUID();
+            Vector3d position = packet.getPosition();
+            String vanillaName = targetId == null ? null : vanillaNames.get(targetId);
+
+            ViewerNametagState state = viewerNametagStates.computeIfAbsent(viewer.getUniqueId(), ViewerNametagState::new);
+            TrackedPlayer tracked = new TrackedPlayer(targetId, vanillaName, position);
+            state.trackedPlayers.put(entityId, tracked);
+
+            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
+            applyViewerNametag(viewer, state, entityId, tracked, preference);
+        }
+    }
+
+    private final class DestroyEntitiesPacketListener extends PacketListenerAbstract {
         @Override
         public void onPacketSend(PacketSendEvent event) {
             if (event.getPacketType() != PacketType.Play.Server.DESTROY_ENTITIES) {
                 return;
             }
+            Object handle = event.getPlayer();
+            if (!(handle instanceof Player viewer)) {
+                return;
+            }
+
+            ViewerNametagState state = viewerNametagStates.get(viewer.getUniqueId());
+            if (state == null) {
+                return;
+            }
+
             WrapperPlayServerDestroyEntities packet = new WrapperPlayServerDestroyEntities(event);
             int[] ids = packet.getEntityIds();
             if (ids == null || ids.length == 0) {
                 return;
             }
-            for (int id : ids) {
-                entityToPlayer.remove(id);
+
+            for (int entityId : ids) {
+                state.trackedPlayers.remove(entityId);
+                destroyCarrier(viewer, state, entityId);
             }
         }
     }
 
-    private List<EntityData<?>> nametagData(Component nameComponent) {
-        return applyNametag(List.of(), nameComponent);
-    }
+    private final class MovementPacketListener extends PacketListenerAbstract {
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            var packetType = event.getPacketType();
+            if (packetType != PacketType.Play.Server.ENTITY_RELATIVE_MOVE
+                && packetType != PacketType.Play.Server.ENTITY_RELATIVE_MOVE_AND_ROTATION
+                && packetType != PacketType.Play.Server.ENTITY_TELEPORT) {
+                return;
+            }
 
-    private List<EntityData<?>> applyNametag(List<EntityData<?>> values, Component nameComponent) {
-        List<EntityData<?>> updated = values == null ? new ArrayList<>() : new ArrayList<>(values);
-        boolean updatedName = false;
-        boolean updatedVisibility = false;
+            Object handle = event.getPlayer();
+            if (!(handle instanceof Player viewer)) {
+                return;
+            }
 
-        for (int i = 0; i < updated.size(); i++) {
-            EntityData<?> value = updated.get(i);
-            int index = value.getIndex();
-            if (index == CUSTOM_NAME_INDEX) {
-                updated.set(i, new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(nameComponent)));
-                updatedName = true;
-            } else if (index == CUSTOM_NAME_VISIBILITY_INDEX) {
-                updated.set(i, new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, true));
-                updatedVisibility = true;
+            ViewerNametagState state = viewerNametagStates.get(viewer.getUniqueId());
+            if (state == null || state.trackedPlayers.isEmpty()) {
+                return;
+            }
+
+            if (packetType == PacketType.Play.Server.ENTITY_RELATIVE_MOVE) {
+                handleRelativeMove(event, viewer, state);
+            } else if (packetType == PacketType.Play.Server.ENTITY_RELATIVE_MOVE_AND_ROTATION) {
+                handleRelativeMoveAndRotation(event, viewer, state);
+            } else if (packetType == PacketType.Play.Server.ENTITY_TELEPORT) {
+                handleTeleport(event, viewer, state);
             }
         }
 
-        if (!updatedName) {
-            updated.add(new EntityData<>(CUSTOM_NAME_INDEX, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(nameComponent)));
-        }
-        if (!updatedVisibility) {
-            updated.add(new EntityData<>(CUSTOM_NAME_VISIBILITY_INDEX, EntityDataTypes.BOOLEAN, true));
+        private void handleRelativeMove(PacketSendEvent event, Player viewer, ViewerNametagState state) {
+            WrapperPlayServerEntityRelativeMove packet = new WrapperPlayServerEntityRelativeMove(event);
+            int entityId = packet.getEntityId();
+            TrackedPlayer tracked = state.trackedPlayers.get(entityId);
+            if (tracked != null && tracked.position() != null) {
+                Vector3d updated = tracked.position().add(packet.getDeltaX(), packet.getDeltaY(), packet.getDeltaZ());
+                state.trackedPlayers.put(entityId, new TrackedPlayer(tracked.playerId(), tracked.vanillaName(), updated));
+            }
+
+            CarrierEntity carrier = state.carriers.get(entityId);
+            if (carrier == null) {
+                return;
+            }
+            PacketEvents.getAPI().getPlayerManager().sendPacket(
+                viewer,
+                new WrapperPlayServerEntityRelativeMove(
+                    carrier.entityId(),
+                    packet.getDeltaX(),
+                    packet.getDeltaY(),
+                    packet.getDeltaZ(),
+                    packet.isOnGround()
+                )
+            );
         }
 
-        return updated;
+        private void handleRelativeMoveAndRotation(PacketSendEvent event, Player viewer, ViewerNametagState state) {
+            WrapperPlayServerEntityRelativeMoveAndRotation packet = new WrapperPlayServerEntityRelativeMoveAndRotation(event);
+            int entityId = packet.getEntityId();
+            TrackedPlayer tracked = state.trackedPlayers.get(entityId);
+            if (tracked != null && tracked.position() != null) {
+                Vector3d updated = tracked.position().add(packet.getDeltaX(), packet.getDeltaY(), packet.getDeltaZ());
+                state.trackedPlayers.put(entityId, new TrackedPlayer(tracked.playerId(), tracked.vanillaName(), updated));
+            }
+
+            CarrierEntity carrier = state.carriers.get(entityId);
+            if (carrier == null) {
+                return;
+            }
+            PacketEvents.getAPI().getPlayerManager().sendPacket(
+                viewer,
+                new WrapperPlayServerEntityRelativeMoveAndRotation(
+                    carrier.entityId(),
+                    packet.getDeltaX(),
+                    packet.getDeltaY(),
+                    packet.getDeltaZ(),
+                    packet.getYaw(),
+                    packet.getPitch(),
+                    packet.isOnGround()
+                )
+            );
+        }
+
+        private void handleTeleport(PacketSendEvent event, Player viewer, ViewerNametagState state) {
+            WrapperPlayServerEntityTeleport packet = new WrapperPlayServerEntityTeleport(event);
+            int entityId = packet.getEntityId();
+            Vector3d position = packet.getPosition();
+            TrackedPlayer tracked = state.trackedPlayers.get(entityId);
+            if (tracked != null) {
+                state.trackedPlayers.put(entityId, new TrackedPlayer(tracked.playerId(), tracked.vanillaName(), position));
+            }
+
+            CarrierEntity carrier = state.carriers.get(entityId);
+            if (carrier == null || position == null) {
+                return;
+            }
+            PacketEvents.getAPI().getPlayerManager().sendPacket(
+                viewer,
+                new WrapperPlayServerEntityTeleport(
+                    carrier.entityId(),
+                    position.add(0.0D, CARRIER_Y_OFFSET, 0.0D),
+                    packet.getYaw(),
+                    packet.getPitch(),
+                    packet.isOnGround()
+                )
+            );
+        }
     }
 }
