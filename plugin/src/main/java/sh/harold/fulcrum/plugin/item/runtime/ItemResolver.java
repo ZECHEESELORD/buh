@@ -454,6 +454,156 @@ public final class ItemResolver {
     public record EnchantMerge(Map<String, Integer> enchants, boolean removedIncompatibles) {
     }
 
+    public record AnvilEnchantMerge(ItemStack stack, boolean incompatibleMerge) {
+    }
+
+    public AnvilEnchantMerge applyAnvilEnchantMerge(ItemStack result, ItemStack left, ItemStack right) {
+        if (result == null) {
+            return new AnvilEnchantMerge(null, false);
+        }
+        Map<String, Integer> leftEnchants = collectEnchantsForMerge(left);
+        boolean rightContributes = right != null
+            && right.getType() != Material.AIR
+            && (right.getItemMeta() instanceof EnchantmentStorageMeta
+            || (left != null && left.getType() == right.getType()));
+        Map<String, Integer> rightEnchants = rightContributes ? collectEnchantsForMerge(right) : Map.of();
+        rightEnchants = filterApplicableRightEnchants(rightEnchants, leftEnchants, result);
+        boolean incompatibleMerge = isIncompatibleMerge(leftEnchants, rightEnchants);
+        Map<String, Integer> merged = mergeLevelsWithVanillaCaps(leftEnchants, rightEnchants);
+        if (!incompatibleMerge) {
+            merged = enforceIncompatibilities(merged);
+        }
+        ItemStack updated;
+        if (merged.isEmpty()) {
+            updated = itemPdc.clearEnchants(result);
+        } else {
+            updated = itemPdc.writeEnchants(result, merged);
+        }
+        return new AnvilEnchantMerge(updated, incompatibleMerge);
+    }
+
+    private Map<String, Integer> filterApplicableRightEnchants(Map<String, Integer> rightEnchants, Map<String, Integer> leftEnchants, ItemStack result) {
+        if (rightEnchants == null || rightEnchants.isEmpty()) {
+            return Map.of();
+        }
+        if (result != null && result.getItemMeta() instanceof EnchantmentStorageMeta) {
+            return rightEnchants;
+        }
+        Map<String, Integer> filtered = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : rightEnchants.entrySet()) {
+            String id = entry.getKey();
+            int level = entry.getValue();
+            if (id == null || level <= 0) {
+                continue;
+            }
+            if (leftEnchants != null && leftEnchants.containsKey(id)) {
+                filtered.put(id, level);
+                continue;
+            }
+            Enchantment vanilla = ENCHANTS_BY_ID.get(id);
+            if (vanilla == null || vanilla.canEnchantItem(result)) {
+                filtered.put(id, level);
+            }
+        }
+        return Map.copyOf(filtered);
+    }
+
+    private Map<String, Integer> collectEnchantsForMerge(ItemStack stack) {
+        if (stack == null || stack.getType() == Material.AIR) {
+            return Map.of();
+        }
+        Map<String, Integer> enchants = new HashMap<>(itemPdc.readEnchants(stack).orElse(Map.of()));
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return Map.copyOf(enchants);
+        }
+        if (!meta.getEnchants().isEmpty()) {
+            for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                String customId = ENCHANT_IDS.get(entry.getKey());
+                if (customId == null) {
+                    continue;
+                }
+                enchants.merge(customId, entry.getValue(), Math::max);
+            }
+        }
+        if (meta instanceof EnchantmentStorageMeta storage && !storage.getStoredEnchants().isEmpty()) {
+            for (Map.Entry<Enchantment, Integer> entry : storage.getStoredEnchants().entrySet()) {
+                String customId = ENCHANT_IDS.get(entry.getKey());
+                if (customId == null) {
+                    continue;
+                }
+                enchants.merge(customId, entry.getValue(), Math::max);
+            }
+        }
+        return Map.copyOf(enchants);
+    }
+
+    private boolean isIncompatibleMerge(Map<String, Integer> leftEnchants, Map<String, Integer> rightEnchants) {
+        if (leftEnchants == null || rightEnchants == null || leftEnchants.isEmpty() || rightEnchants.isEmpty()) {
+            return false;
+        }
+        for (String rightId : rightEnchants.keySet()) {
+            if (leftEnchants.containsKey(rightId)) {
+                continue; // overwrite is fine
+            }
+            var rightDefinition = enchantRegistry.get(rightId).orElse(null);
+            for (String leftId : leftEnchants.keySet()) {
+                if (leftId.equals(rightId)) {
+                    continue;
+                }
+                var leftDefinition = enchantRegistry.get(leftId).orElse(null);
+                boolean rightBlocksLeft = rightDefinition != null && rightDefinition.incompatibleWith().contains(leftId);
+                boolean leftBlocksRight = leftDefinition != null && leftDefinition.incompatibleWith().contains(rightId);
+                if (rightBlocksLeft || leftBlocksRight) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private int vanillaCap(String id) {
+        if (id == null) {
+            return Integer.MAX_VALUE;
+        }
+        Enchantment vanilla = ENCHANTS_BY_ID.get(id);
+        if (vanilla != null) {
+            return Math.max(1, vanilla.getMaxLevel());
+        }
+        var definition = enchantRegistry.get(id).orElse(null);
+        return definition == null ? Integer.MAX_VALUE : Math.max(1, definition.maxLevel());
+    }
+
+    private Map<String, Integer> mergeLevelsWithVanillaCaps(Map<String, Integer> leftEnchants, Map<String, Integer> rightEnchants) {
+        Map<String, Integer> merged = new HashMap<>(leftEnchants == null ? Map.of() : leftEnchants);
+        if (rightEnchants == null || rightEnchants.isEmpty()) {
+            return Map.copyOf(merged);
+        }
+        for (Map.Entry<String, Integer> entry : rightEnchants.entrySet()) {
+            String id = entry.getKey();
+            int rightLevel = Math.max(0, entry.getValue());
+            if (rightLevel == 0) {
+                continue;
+            }
+            int leftLevel = Math.max(0, merged.getOrDefault(id, 0));
+            int cap = vanillaCap(id);
+            int resultLevel;
+            if (leftLevel == 0) {
+                resultLevel = rightLevel;
+            } else if (leftLevel == rightLevel) {
+                if (leftLevel <= cap) {
+                    resultLevel = Math.min(leftLevel + 1, cap);
+                } else {
+                    resultLevel = leftLevel;
+                }
+            } else {
+                resultLevel = Math.max(leftLevel, rightLevel);
+            }
+            merged.put(id, resultLevel);
+        }
+        return Map.copyOf(merged);
+    }
+
     private ItemStack storeTrim(ItemStack stack) {
         if (stack == null) {
             return null;
