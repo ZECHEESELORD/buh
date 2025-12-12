@@ -125,7 +125,7 @@ public final class UsernameDisplayService implements Listener {
         }
         UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            fallbackResendTab(viewer);
+            sendTabUpdate(viewer, preference);
             sendNametagUpdate(viewer, preference);
         });
     }
@@ -165,6 +165,30 @@ public final class UsernameDisplayService implements Listener {
                 logger.log(Level.WARNING, "Failed to send nametag update for " + target.getUniqueId(), runtimeException);
             }
         }
+    }
+
+    private void sendTabUpdate(Player viewer, UsernameView preference) {
+        if (viewer == null || !viewer.isOnline()) {
+            return;
+        }
+        List<WrapperPlayServerPlayerInfoUpdate.PlayerInfo> entries = plugin.getServer().getOnlinePlayers().stream()
+            .filter(target -> target.equals(viewer) || viewer.canSee(target))
+            .map(target -> {
+                UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, target.getUniqueId(), target.getName());
+                Component decorated = tabNameDecorator.decorateForTab(target.getUniqueId(), target, baseName.component());
+                WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(target.getUniqueId());
+                info.setDisplayName(decorated);
+                return info;
+            })
+            .toList();
+        if (entries.isEmpty()) {
+            return;
+        }
+        var packet = new WrapperPlayServerPlayerInfoUpdate(
+            EnumSet.of(WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME),
+            entries
+        );
+        PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
     }
 
     private void fallbackResendTab(Player viewer) {
@@ -262,6 +286,14 @@ public final class UsernameDisplayService implements Listener {
             }
 
             if (mutated) {
+                EnumSet<WrapperPlayServerPlayerInfoUpdate.Action> actions = packet.getActions();
+                if (actions == null || !actions.contains(WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME)) {
+                    EnumSet<WrapperPlayServerPlayerInfoUpdate.Action> updatedActions = (actions == null || actions.isEmpty())
+                        ? EnumSet.of(WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME)
+                        : EnumSet.copyOf(actions);
+                    updatedActions.add(WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME);
+                    packet.setActions(updatedActions);
+                }
                 packet.setEntries(entries);
                 debug(() -> "Rewrote player info for viewer " + viewer.getUniqueId() + " (" + entries.size() + " entries)");
             }
