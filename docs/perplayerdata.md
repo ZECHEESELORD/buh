@@ -1,4 +1,4 @@
-Override onPacketSending(PacketEvent event):
+Override onPacketSend(PacketSendEvent event):
 
 Get the viewer:
 
@@ -12,33 +12,33 @@ From here on, you rewrite the packet.
 
 3. Rewriting the tab list entries
 
-Modern ProtocolLib exposes player info entries through:
+PacketEvents exposes player info entries through:
 
-PacketContainer packet = event.getPacket()
+WrapperPlayServerPlayerInfoUpdate packet = new WrapperPlayServerPlayerInfoUpdate(event)
 
-EnumSet<EnumWrappers.PlayerInfoAction> actions = packet.getPlayerInfoActions().read(0)
+EnumSet<WrapperPlayServerPlayerInfoUpdate.Action> actions = packet.getActions()
 
 Only proceed if actions contains any of:
 
-EnumWrappers.PlayerInfoAction.ADD_PLAYER
+WrapperPlayServerPlayerInfoUpdate.Action.ADD_PLAYER
 
-EnumWrappers.PlayerInfoAction.UPDATE_DISPLAY_NAME
+WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME
 
 Then:
 
 Read the current entries:
 
-List<PlayerInfoData> dataList = packet.getPlayerInfoDataLists().read(0)
+List<WrapperPlayServerPlayerInfoUpdate.PlayerInfo> dataList = packet.getEntries()
 
-You must not mutate PlayerInfoData in place; construct new ones.
+You may mutate PlayerInfo entries in place.
 
-For each PlayerInfoData data:
+For each PlayerInfo data:
 
 Extract the target profile:
 
-WrappedGameProfile profile = data.getProfile()
+UserProfile profile = data.getGameProfile()
 
-UUID targetId = profile.getUUID()
+UUID targetId = data.getProfileId()
 
 Resolve alias:
 
@@ -56,29 +56,13 @@ Component aliasComponent = Component.text(alias)
 
 Optionally add formatting; do not include the Minecraft name anywhere if you want a pure alias
 
-Convert to a ProtocolLib chat component:
+Set the PacketEvents display name:
 
-String json = GsonComponentSerializer.gson().serialize(aliasComponent)
+data.setDisplayName(aliasComponent)
 
-WrappedChatComponent wrapped = WrappedChatComponent.fromJson(json)
+Then write the list back:
 
-Create a new PlayerInfoData instance with the same non name fields:
-
-Latency from data.getLatency()
-
-Game mode from data.getGameMode()
-
-Listed flag from data.isListed()
-
-Profile from data.getProfile()
-
-Profile key data from data.getProfileKeyData()
-
-and inject your wrapped as the display name.
-
-Build a new List<PlayerInfoData> with these replacements, then:
-
-packet.getPlayerInfoDataLists().write(0, modifiedList)
+packet.setEntries(dataList)
 
 Result: every time a player appears or their display name is refreshed in the tab list, your viewer sees osu or Discord usernames instead of Minecraft names.
 
@@ -96,21 +80,13 @@ Call viewer.hidePlayer(plugin, target)
 
 Then call viewer.showPlayer(plugin, target)
 
-Paper will resend PLAYER_INFO for that viewer, which your ProtocolLib listener will rewrite.
+Paper will resend PLAYER_INFO for that viewer, which your PacketEvents listener will rewrite.
 
-Manually send a synthetic PLAYER_INFO packet only to that viewer:
+Manually send a synthetic PLAYER_INFO_UPDATE packet only to that viewer:
 
-Use ProtocolManager.createPacket(PacketType.Play.Server.PLAYER_INFO)
+Build a `WrapperPlayServerPlayerInfoUpdate` with action `UPDATE_DISPLAY_NAME`, then send it with:
 
-Populate:
-
-actions set containing EnumWrappers.PlayerInfoAction.UPDATE_DISPLAY_NAME
-
-playerInfoDataLists with entries for all online players, each already rewritten with your alias logic
-
-Send it:
-
-protocolManager.sendServerPacket(viewer, packet)
+PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet)
 
 I would pick option two for cleanliness once you are comfortable, and option one as the quick and dirty version while you experiment.
 
@@ -124,7 +100,7 @@ A. Entity metadata approach
 
 For each viewer, intercept:
 
-PacketType.Play.Server.ENTITY_METADATA in another PacketAdapter
+PacketType.Play.Server.ENTITY_METADATA in another PacketEvents listener
 
 In onPacketSending:
 

@@ -1,12 +1,12 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.ProtocolManager;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.events.ListenerPriority;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListenerAbstract;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -112,7 +112,6 @@ public final class PlayerMenuService {
     private final CosmeticMenuView cosmeticMenuView;
     private final NamespacedKey markerKey;
     private final NamespacedKey displayMaterialKey;
-    private final ProtocolManager protocolManager;
     private final BankMenuView bankMenuView;
     private final StatBreakdownView statBreakdownView;
 
@@ -149,15 +148,11 @@ public final class PlayerMenuService {
         this.statSourceContextRegistry = Objects.requireNonNull(contextRegistry, "contextRegistry");
         this.markerKey = new NamespacedKey(plugin, "player_menu");
         this.displayMaterialKey = new NamespacedKey(plugin, "player_menu_display");
-        this.protocolManager = plugin.getServer().getPluginManager().isPluginEnabled("ProtocolLib")
-            ? ProtocolLibrary.getProtocolManager()
-            : null;
         this.bankMenuView = new BankMenuView(
             plugin,
             menuService,
             players,
             ledger,
-            protocolManager,
             logger
         );
         this.perkMenuView = new PerkMenuView(
@@ -1041,29 +1036,12 @@ public final class PlayerMenuService {
     }
 
     private void spoofMenuItemAppearance(Player player, int slot, Material displayMaterial) {
-        if (protocolManager == null) {
+        if (player == null || !player.isOnline()) {
             return;
         }
-
         ItemStack visual = buildDisplayItem(displayMaterial);
-        PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.SET_SLOT);
-
-        var integers = packet.getIntegers();
-        if (integers.size() > 0) {
-            integers.writeSafely(0, 0);
-        }
-        if (integers.size() > 1) {
-            integers.writeSafely(1, 0);
-        }
-        if (integers.size() > 2) {
-            integers.writeSafely(2, slot);
-        } else {
-            packet.getShorts().writeSafely(0, (short) slot);
-        }
-
-        packet.getItemModifier().writeSafely(0, visual);
-
-        protocolManager.sendServerPacket(player, packet);
+        var packet = new WrapperPlayServerSetSlot(0, 0, slot, SpigotConversionUtil.fromBukkitItemStack(visual));
+        PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
     }
 
     private void stashDisplaced(Player player, ItemStack displaced) {
@@ -1172,46 +1150,41 @@ public final class PlayerMenuService {
     }
 
     private void registerSpoofingAdapter() {
-        if (protocolManager == null) {
-            return;
-        }
-
-        protocolManager.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.SET_SLOT, PacketType.Play.Server.WINDOW_ITEMS) {
+        PacketEvents.getAPI().getEventManager().registerListener(new PacketListenerAbstract() {
             @Override
-            public void onPacketSending(PacketEvent event) {
-                Player target = event.getPlayer();
-                if (target == null) {
+            public void onPacketSend(PacketSendEvent event) {
+                Object handle = event.getPlayer();
+                if (!(handle instanceof Player target)) {
                     return;
                 }
 
-                PacketContainer packet = event.getPacket();
-
-                if (packet.getType() == PacketType.Play.Server.SET_SLOT) {
-                    ItemStack stack = packet.getItemModifier().readSafely(0);
+                if (event.getPacketType() == PacketType.Play.Server.SET_SLOT) {
+                    var packet = new WrapperPlayServerSetSlot(event);
+                    ItemStack stack = SpigotConversionUtil.toBukkitItemStack(packet.getItem());
                     if (isMenuItem(stack)) {
                         Material displayMaterial = displayMaterialFrom(stack);
-                        packet.getItemModifier().writeSafely(0, buildDisplayItem(displayMaterial));
+                        packet.setItem(SpigotConversionUtil.fromBukkitItemStack(buildDisplayItem(displayMaterial)));
                     }
                     return;
                 }
 
-                var itemLists = packet.getItemListModifier();
-                if (itemLists.size() == 0) {
+                if (event.getPacketType() != PacketType.Play.Server.WINDOW_ITEMS) {
                     return;
                 }
 
-                List<ItemStack> items = new ArrayList<>(itemLists.readSafely(0));
+                var packet = new WrapperPlayServerWindowItems(event);
+                List<com.github.retrooper.packetevents.protocol.item.ItemStack> items = new ArrayList<>(packet.getItems());
                 boolean mutated = false;
                 for (int i = 0; i < items.size(); i++) {
-                    ItemStack stack = items.get(i);
+                    ItemStack stack = SpigotConversionUtil.toBukkitItemStack(items.get(i));
                     if (isMenuItem(stack)) {
-                        items.set(i, buildDisplayItem(displayMaterialFrom(stack)));
+                        items.set(i, SpigotConversionUtil.fromBukkitItemStack(buildDisplayItem(displayMaterialFrom(stack))));
                         mutated = true;
                     }
                 }
 
                 if (mutated) {
-                    itemLists.writeSafely(0, items);
+                    packet.setItems(items);
                 }
             }
         });

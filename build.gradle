@@ -56,6 +56,14 @@ subprojects {
             name = "papermc-repo"
             url = "https://repo.papermc.io/repository/maven-public/"
         }
+        maven {
+            name = "retrooper-repo"
+            url = "https://repo.retrooper.com/repository/maven-releases/"
+        }
+        maven {
+            name = "codemc-repo"
+            url = "https://repo.codemc.io/repository/maven-public/"
+        }
     }
 
     def targetJavaVersion = 21

@@ -253,7 +253,7 @@ This makes lore per‑player, dynamic, and always up‑to‑date without ItemMet
 
 ## 6. Visual Engine (Packet Interceptor)
 
-The visual engine is implemented via ProtocolLib (preferred here) and never mutates the actual inventory items on the server.
+The visual engine is implemented via PacketEvents (shaded) and never mutates the actual inventory items on the server.
 
 ### 6.1 Intercepted Packets
 
@@ -438,7 +438,7 @@ Recommended implementation order:
    - Wire up `loreLayout` on `CustomItem` and verify server‑side rendering logic.
 
 6. **Packet Visual Engine**
-   - Implement ProtocolLib/PacketEvents adapter.  
+   - Implement PacketEvents adapter.  
    - Intercept `WindowItems`/`SetSlot`, wrap stacks in `ItemInstance`, and inject rendered lore into cloned items.  
    - Add simple caching if needed.
 
