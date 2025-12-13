@@ -32,6 +32,8 @@ public final class MySqlDocumentStore implements DocumentStore {
     };
     private static final String TABLE = "documents";
     private static final long SLOW_OP_THRESHOLD_MS = 250;
+    private static final int MAX_LOCK_RETRIES = 3;
+    private static final long LOCK_RETRY_BASE_DELAY_MS = 10;
 
     private final HikariDataSource dataSource;
     private final Executor executor;
@@ -120,29 +122,49 @@ public final class MySqlDocumentStore implements DocumentStore {
         Objects.requireNonNull(mutator, "mutator");
         return CompletableFuture.supplyAsync(() -> {
             long startedAt = System.nanoTime();
-            try (Connection connection = dataSource.getConnection()) {
-                boolean previousAutoCommit = connection.getAutoCommit();
-                connection.setAutoCommit(false);
-                try {
-                    Map<String, Object> current = readForUpdate(connection, key);
-                    Map<String, Object> working = MapPath.deepCopy(current);
-                    Map<String, Object> mutated = mutator.apply(working);
-                    if (mutated == null) {
-                        throw new IllegalStateException("Mutator returned null for " + key);
+            try {
+                for (int attempt = 0; attempt <= MAX_LOCK_RETRIES; attempt++) {
+                    try (Connection connection = dataSource.getConnection()) {
+                        boolean previousAutoCommit = connection.getAutoCommit();
+                        connection.setAutoCommit(false);
+                        try {
+                            if (attempt > 0) {
+                                lockOrCreateRow(connection, key);
+                            }
+                            Map<String, Object> current = readForUpdate(connection, key);
+                            Map<String, Object> working = MapPath.deepCopy(current);
+                            Map<String, Object> mutated = mutator.apply(working);
+                            if (mutated == null) {
+                                throw new IllegalStateException("Mutator returned null for " + key);
+                            }
+                            Map<String, Object> normalized = MapPath.deepCopy(mutated);
+                            writeInternal(connection, key, normalized);
+                            connection.commit();
+                            return new DocumentSnapshot(key, normalized, true);
+                        } catch (Exception exception) {
+                            try {
+                                connection.rollback();
+                            } catch (SQLException rollbackException) {
+                                exception.addSuppressed(rollbackException);
+                            }
+                            if (exception instanceof SQLException sqlException && attempt < MAX_LOCK_RETRIES && isRetryableLockFailure(sqlException)) {
+                                delayRetry(attempt);
+                                continue;
+                            }
+                            throw exception;
+                        } finally {
+                            connection.setAutoCommit(previousAutoCommit);
+                        }
+                    } catch (SQLException exception) {
+                        if (attempt < MAX_LOCK_RETRIES && isRetryableLockFailure(exception)) {
+                            delayRetry(attempt);
+                            continue;
+                        }
+                        logger.log(Level.WARNING, "[data] update failed for " + key.collection() + "/" + key.id(), exception);
+                        throw new IllegalStateException("Failed to update document " + key, exception);
                     }
-                    Map<String, Object> normalized = MapPath.deepCopy(mutated);
-                    writeInternal(connection, key, normalized);
-                    connection.commit();
-                    return new DocumentSnapshot(key, normalized, true);
-                } catch (Exception exception) {
-                    connection.rollback();
-                    throw exception;
-                } finally {
-                    connection.setAutoCommit(previousAutoCommit);
                 }
-            } catch (SQLException exception) {
-                logger.log(Level.WARNING, "[data] update failed for " + key.collection() + "/" + key.id(), exception);
-                throw new IllegalStateException("Failed to update document " + key, exception);
+                throw new IllegalStateException("Failed to update document " + key + " after retries");
             } finally {
                 logIfSlow("update", key, startedAt);
             }
@@ -269,6 +291,48 @@ public final class MySqlDocumentStore implements DocumentStore {
                 String json = rs.getString(1);
                 return parse(json);
             }
+        }
+    }
+
+    private void lockOrCreateRow(Connection connection, DocumentKey key) throws SQLException {
+        String sql = "INSERT INTO " + TABLE + " (collection, id, data) VALUES (?, ?, JSON_OBJECT()) "
+            + "ON DUPLICATE KEY UPDATE data = data";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, key.collection());
+            statement.setString(2, key.id());
+            statement.executeUpdate();
+        }
+    }
+
+    private boolean isRetryableLockFailure(SQLException exception) {
+        if (exception == null) {
+            return false;
+        }
+        int errorCode = exception.getErrorCode();
+        if (errorCode == 1213 || errorCode == 1205) {
+            return true;
+        }
+        String state = exception.getSQLState();
+        if ("40001".equals(state)) {
+            return true;
+        }
+        SQLException next = exception.getNextException();
+        if (next != null && next != exception) {
+            return isRetryableLockFailure(next);
+        }
+        Throwable cause = exception.getCause();
+        if (cause instanceof SQLException sqlCause && cause != exception) {
+            return isRetryableLockFailure(sqlCause);
+        }
+        return false;
+    }
+
+    private void delayRetry(int attempt) {
+        long delayMillis = LOCK_RETRY_BASE_DELAY_MS * (1L << attempt);
+        try {
+            Thread.sleep(delayMillis);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
         }
     }
 

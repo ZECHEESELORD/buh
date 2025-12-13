@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -17,37 +18,57 @@ public final class MessageService {
     private final Plugin plugin;
     private final java.util.function.Supplier<FormattedUsernameService> usernameServiceSupplier;
     private final Supplier<UsernameDisplayService> usernameDisplayServiceSupplier;
+    private final ChatCosmeticPrefixService cosmeticPrefixService;
 
     public MessageService(
         Plugin plugin,
         java.util.function.Supplier<FormattedUsernameService> usernameServiceSupplier,
-        Supplier<UsernameDisplayService> usernameDisplayServiceSupplier
+        Supplier<UsernameDisplayService> usernameDisplayServiceSupplier,
+        ChatCosmeticPrefixService cosmeticPrefixService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.usernameServiceSupplier = Objects.requireNonNull(usernameServiceSupplier, "usernameServiceSupplier");
         this.usernameDisplayServiceSupplier = usernameDisplayServiceSupplier == null ? () -> null : usernameDisplayServiceSupplier;
+        this.cosmeticPrefixService = Objects.requireNonNull(cosmeticPrefixService, "cosmeticPrefixService");
     }
 
     public void sendMessage(Player sender, Player target, String content) {
         FormattedUsernameService usernameService = usernameServiceSupplier.get();
         CompletionStage<FormattedUsernameService.FormattedUsername> senderNameStage = usernameService.username(sender);
         CompletionStage<FormattedUsernameService.FormattedUsername> targetNameStage = usernameService.username(target);
+        CompletableFuture<Component> senderCosmeticStage = cosmeticPrefixService.prefix(sender.getUniqueId());
+        CompletableFuture<Component> targetCosmeticStage = cosmeticPrefixService.prefix(target.getUniqueId());
 
-        CompletableFuture.allOf(senderNameStage.toCompletableFuture(), targetNameStage.toCompletableFuture())
+        CompletableFuture.allOf(
+            senderNameStage.toCompletableFuture(),
+            targetNameStage.toCompletableFuture(),
+            senderCosmeticStage,
+            targetCosmeticStage
+        )
             .whenComplete((ignored, throwable) -> {
                 FormattedUsernameService.FormattedUsername senderName = defaultName(sender);
                 FormattedUsernameService.FormattedUsername targetName = defaultName(target);
+                Component senderCosmetic = Component.empty();
+                Component targetCosmetic = Component.empty();
                 if (throwable == null) {
                     try {
                         senderName = senderNameStage.toCompletableFuture().join();
                         targetName = targetNameStage.toCompletableFuture().join();
+                        senderCosmetic = senderCosmeticStage.join();
+                        targetCosmetic = targetCosmeticStage.join();
                     } catch (RuntimeException runtimeException) {
                         plugin.getLogger().severe("Failed to fetch formatted usernames: " + runtimeException.getMessage());
                     }
                 } else {
                     plugin.getLogger().severe("Failed to fetch formatted usernames: " + throwable.getMessage());
                 }
-                dispatchMessages(sender, target, senderName, targetName, content);
+                dispatchMessages(
+                    sender,
+                    target,
+                    withCosmeticPrefix(senderName, senderCosmetic),
+                    withCosmeticPrefix(targetName, targetCosmetic),
+                    content
+                );
             });
     }
 
@@ -71,6 +92,14 @@ public final class MessageService {
 
     private FormattedUsernameService.FormattedUsername defaultName(Player player) {
         return new FormattedUsernameService.FormattedUsername(Component.empty(), Component.text(player.getName(), NamedTextColor.WHITE));
+    }
+
+    private FormattedUsernameService.FormattedUsername withCosmeticPrefix(FormattedUsernameService.FormattedUsername formatted, Component cosmeticPrefix) {
+        if (formatted == null) {
+            return null;
+        }
+        Component combined = ChatCosmeticPrefixService.combinePrefixes(cosmeticPrefix, formatted.prefix());
+        return new FormattedUsernameService.FormattedUsername(combined, formatted.name());
     }
 
     private UsernameDisplayService usernameDisplayService() {

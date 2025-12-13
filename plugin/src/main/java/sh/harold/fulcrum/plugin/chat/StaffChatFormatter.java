@@ -8,6 +8,7 @@ import net.kyori.adventure.audience.Audience;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 
 import java.util.Objects;
 import java.util.logging.Level;
@@ -22,18 +23,27 @@ public final class StaffChatFormatter {
     private final Plugin plugin;
     private final ChatFormatService formatService;
     private final boolean useLuckPerms;
+    private final ChatCosmeticPrefixService cosmeticPrefixService;
     private final UsernameDisplayService usernameDisplayService;
 
-    public StaffChatFormatter(Plugin plugin, ChatFormatService formatService, UsernameDisplayService usernameDisplayService) {
+    public StaffChatFormatter(
+        Plugin plugin,
+        ChatFormatService formatService,
+        ChatCosmeticPrefixService cosmeticPrefixService,
+        UsernameDisplayService usernameDisplayService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.formatService = formatService;
         this.useLuckPerms = formatService != null;
+        this.cosmeticPrefixService = Objects.requireNonNull(cosmeticPrefixService, "cosmeticPrefixService");
         this.usernameDisplayService = usernameDisplayService;
     }
 
     public Component format(Player sender, Component message, Audience viewer) {
-        ChatFormatService.Format format = resolveFormat(sender);
-        return STAFF_PREFIX.append(render(format, message, sender, viewer));
+        ChatFormatService.Format baseFormat = resolveFormat(sender);
+        Component cosmeticPrefix = resolveCosmeticPrefix(sender.getUniqueId());
+        ChatFormatService.Format combined = combinePrefix(baseFormat, cosmeticPrefix);
+        return STAFF_PREFIX.append(render(combined, message, sender, viewer));
     }
 
     private ChatFormatService.Format resolveFormat(Player sender) {
@@ -41,6 +51,9 @@ public final class StaffChatFormatter {
             return fallbackFormat(sender);
         }
         try {
+            if (plugin.getServer().isPrimaryThread()) {
+                return formatService.format(sender).getNow(fallbackFormat(sender));
+            }
             return formatService.format(sender).join();
         } catch (RuntimeException runtimeException) {
             plugin.getLogger().log(Level.SEVERE, "Failed to format chat message", runtimeException);
@@ -54,6 +67,23 @@ public final class StaffChatFormatter {
             Component.text(player.getName(), NamedTextColor.WHITE),
             NamedTextColor.WHITE
         );
+    }
+
+    private Component resolveCosmeticPrefix(java.util.UUID playerId) {
+        try {
+            if (plugin.getServer().isPrimaryThread()) {
+                return cosmeticPrefixService.prefix(playerId).getNow(Component.empty());
+            }
+            return cosmeticPrefixService.prefix(playerId).join();
+        } catch (RuntimeException runtimeException) {
+            plugin.getLogger().log(Level.WARNING, "Failed to resolve chat cosmetic prefix for " + playerId, runtimeException);
+            return Component.empty();
+        }
+    }
+
+    private ChatFormatService.Format combinePrefix(ChatFormatService.Format format, Component cosmeticPrefix) {
+        Component combined = ChatCosmeticPrefixService.combinePrefixes(cosmeticPrefix, format.prefix());
+        return new ChatFormatService.Format(combined, format.name(), format.chatColor());
     }
 
     private Component render(ChatFormatService.Format format, Component message, Player sender, Audience viewer) {
