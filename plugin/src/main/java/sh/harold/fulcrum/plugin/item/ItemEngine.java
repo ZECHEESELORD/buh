@@ -230,6 +230,7 @@ public final class ItemEngine {
         pluginManager.registerEvents(durabilityService, plugin);
         pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.visual.CursorRenderListener(plugin, loreRenderer), plugin);
         pluginManager.registerEvents(new AnvilListener(plugin, resolver), plugin);
+        pluginManager.registerEvents(new sh.harold.fulcrum.plugin.item.listener.GrindstoneListener(itemPdc), plugin);
         pluginManager.registerEvents(new NullItemPlacementListener(itemPdc), plugin);
         armorTrimRecipeBlocker.register();
     }
