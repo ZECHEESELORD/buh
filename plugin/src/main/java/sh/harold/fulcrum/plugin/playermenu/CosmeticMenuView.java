@@ -1,6 +1,8 @@
 package sh.harold.fulcrum.plugin.playermenu;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -10,12 +12,18 @@ import sh.harold.fulcrum.api.menu.component.MenuButton;
 import sh.harold.fulcrum.plugin.unlockable.Cosmetic;
 import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
 import sh.harold.fulcrum.plugin.unlockable.CosmeticSection;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
+import sh.harold.fulcrum.plugin.unlockable.ChatPrefixCosmetic;
+import sh.harold.fulcrum.plugin.unlockable.OsuRankChatPrefixCosmetic;
 import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockable;
 import sh.harold.fulcrum.plugin.unlockable.PlayerUnlockableState;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableId;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableDefinition;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableTier;
+import sh.harold.fulcrum.plugin.permissions.LuckPermsTextFormat;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryEntry;
+import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +43,7 @@ final class CosmeticMenuView {
     private final MenuService menuService;
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
+    private final PlayerDirectoryService playerDirectoryService;
     private final Logger logger;
     private final Consumer<Player> menuItemRefresher;
     private Consumer<Player> hubBackAction = player -> {
@@ -45,12 +54,14 @@ final class CosmeticMenuView {
         MenuService menuService,
         UnlockableService unlockableService,
         CosmeticRegistry cosmeticRegistry,
+        PlayerDirectoryService playerDirectoryService,
         Consumer<Player> menuItemRefresher
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.menuService = Objects.requireNonNull(menuService, "menuService");
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.cosmeticRegistry = Objects.requireNonNull(cosmeticRegistry, "cosmeticRegistry");
+        this.playerDirectoryService = Objects.requireNonNull(playerDirectoryService, "playerDirectoryService");
         this.logger = plugin.getLogger();
         this.menuItemRefresher = menuItemRefresher != null ? menuItemRefresher : player -> {
         };
@@ -129,17 +140,23 @@ final class CosmeticMenuView {
 
     private void openSection(Player player, CosmeticSection section) {
         UUID playerId = player.getUniqueId();
-        unlockableService.loadState(playerId).whenComplete((state, throwable) -> {
+        java.util.concurrent.CompletableFuture<PlayerUnlockableState> stateFuture = unlockableService.loadState(playerId)
+            .toCompletableFuture();
+        java.util.concurrent.CompletableFuture<PlayerDirectoryEntry> directoryFuture = section == CosmeticSection.CHAT_PREFIX
+            ? playerDirectoryService.loadEntry(playerId).exceptionally(ignored -> null).toCompletableFuture()
+            : java.util.concurrent.CompletableFuture.completedFuture(null);
+
+        stateFuture.thenCombine(directoryFuture, ResolvedState::new).whenComplete((resolved, throwable) -> {
             if (throwable != null) {
                 logger.log(Level.SEVERE, "Failed to open cosmetics for " + playerId, throwable);
                 player.sendMessage("§cCould not load your cosmetics right now.");
                 return;
             }
-            renderSection(player, section, state);
+            renderSection(player, section, resolved.state(), resolved.directoryEntry());
         });
     }
 
-    private void renderSection(Player player, CosmeticSection section, PlayerUnlockableState state) {
+    private void renderSection(Player player, CosmeticSection section, PlayerUnlockableState state, PlayerDirectoryEntry directoryEntry) {
         List<Cosmetic> cosmetics = cosmeticRegistry.cosmetics(section);
         boolean hasEquipped = !state.equippedCosmetics(section).isEmpty();
 
@@ -170,7 +187,7 @@ final class CosmeticMenuView {
             .addButton(MenuButton.createPositionedClose(SECTION_ROWS))
             .addButton(back)
             .addButton(clear)
-            .addItems(cosmetics, cosmetic -> buildCosmeticButton(cosmetic, state))
+            .addItems(cosmetics, cosmetic -> buildCosmeticButton(player, cosmetic, state, directoryEntry))
             .emptyMessage(Component.text("No cosmetics available for this section yet."))
             .buildAsync(player)
             .exceptionally(openError -> {
@@ -180,7 +197,7 @@ final class CosmeticMenuView {
             });
     }
 
-    private MenuButton buildCosmeticButton(Cosmetic cosmetic, PlayerUnlockableState state) {
+    private MenuButton buildCosmeticButton(Player viewer, Cosmetic cosmetic, PlayerUnlockableState state, PlayerDirectoryEntry directoryEntry) {
         UnlockableDefinition definition = cosmetic.definition();
         PlayerUnlockable unlockable = state.unlockable(definition.id())
             .orElse(new PlayerUnlockable(definition, 0, false));
@@ -197,11 +214,11 @@ final class CosmeticMenuView {
             .secondary(sectionSecondary(cosmetic.section()))
             .description(definition.description())
             .sound(Sound.UI_BUTTON_CLICK)
-            .onClick(viewer -> {
+            .onClick(clicker -> {
                 if (unlockable.unlocked()) {
-                    handleCosmeticToggle(viewer, cosmetic, equipped);
+                    handleCosmeticToggle(clicker, cosmetic, equipped);
                 } else {
-                    handleUnlock(viewer, cosmetic);
+                    handleUnlock(clicker, cosmetic);
                 }
             });
 
@@ -218,12 +235,62 @@ final class CosmeticMenuView {
         }
         lore.forEach(builder::lore);
 
+        if (cosmetic.section() == CosmeticSection.CHAT_PREFIX) {
+            addChatPrefixPreview(builder, viewer, cosmetic, directoryEntry);
+        }
+
         if (!unlocked) {
             builder.requireConfirmation("&cConfirm cosmetic purchase; spend &3" + cost + " &cshards.");
         }
 
         return builder.build();
     }
+
+    private void addChatPrefixPreview(MenuButton.Builder builder, Player viewer, Cosmetic cosmetic, PlayerDirectoryEntry directoryEntry) {
+        if (builder == null || viewer == null || cosmetic == null) {
+            return;
+        }
+        Component cosmeticPrefix = previewPrefix(cosmetic, directoryEntry);
+        if (cosmeticPrefix.equals(Component.empty()) && cosmetic instanceof OsuRankChatPrefixCosmetic) {
+            builder.lore("&f");
+            builder.lore("&7Preview:");
+            builder.lore(Component.text("Link your osu! account to show a rank badge.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+            return;
+        }
+        Component preview = previewLine(viewer.getName(), cosmeticPrefix);
+        if (preview.equals(Component.empty())) {
+            return;
+        }
+        builder.lore("&f");
+        builder.lore("&7Preview:");
+        builder.lore(preview);
+    }
+
+    private Component previewPrefix(Cosmetic cosmetic, PlayerDirectoryEntry directoryEntry) {
+        if (cosmetic instanceof ChatPrefixCosmetic chatPrefixCosmetic) {
+            return LuckPermsTextFormat.deserializePrefix(chatPrefixCosmetic.prefix())
+                .decoration(TextDecoration.ITALIC, false);
+        }
+        if (cosmetic instanceof OsuRankChatPrefixCosmetic) {
+            Integer rank = directoryEntry == null ? null : directoryEntry.osuRank();
+            return ChatCosmeticPrefixService.renderOsuRankBadge(rank).decoration(TextDecoration.ITALIC, false);
+        }
+        return Component.empty();
+    }
+
+    private Component previewLine(String username, Component cosmeticPrefix) {
+        Component name = Component.text(username == null ? "Username" : username, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false);
+        Component luckPermsPlaceholder = Component.text("[prefix]", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false);
+        Component prefixPart = cosmeticPrefix == null ? Component.empty() : cosmeticPrefix;
+        var builder = Component.text();
+        if (!prefixPart.equals(Component.empty())) {
+            builder.append(prefixPart).append(Component.space());
+        }
+        builder.append(luckPermsPlaceholder).append(Component.space()).append(name);
+        return builder.build().decoration(TextDecoration.ITALIC, false);
+    }
+
+    private record ResolvedState(PlayerUnlockableState state, PlayerDirectoryEntry directoryEntry) {}
 
     private void handleCosmeticToggle(Player player, Cosmetic cosmetic, boolean equipped) {
         UUID playerId = player.getUniqueId();

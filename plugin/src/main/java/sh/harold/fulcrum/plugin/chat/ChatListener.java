@@ -16,6 +16,7 @@ import sh.harold.fulcrum.plugin.message.MessageService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryEntry;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 
 import java.util.Objects;
 import java.util.logging.Level;
@@ -25,6 +26,7 @@ final class ChatListener implements Listener {
     private final Plugin plugin;
     private final ChatFormatService formatService;
     private final boolean useLuckPerms;
+    private final ChatCosmeticPrefixService cosmeticPrefixService;
     private final ChatChannelService channelService;
     private final MessageService messageService;
     private final StaffChatFormatter staffChatFormatter;
@@ -34,6 +36,7 @@ final class ChatListener implements Listener {
     ChatListener(
         Plugin plugin,
         ChatFormatService formatService,
+        ChatCosmeticPrefixService cosmeticPrefixService,
         ChatChannelService channelService,
         MessageService messageService,
         StaffChatFormatter staffChatFormatter,
@@ -45,6 +48,7 @@ final class ChatListener implements Listener {
         this.messageService = messageService;
         this.formatService = formatService;
         this.useLuckPerms = formatService != null;
+        this.cosmeticPrefixService = Objects.requireNonNull(cosmeticPrefixService, "cosmeticPrefixService");
         this.staffChatFormatter = Objects.requireNonNull(staffChatFormatter, "staffChatFormatter");
         this.usernameDisplayService = usernameDisplayService;
         this.playerDirectoryService = Objects.requireNonNull(playerDirectoryService, "playerDirectoryService");
@@ -62,13 +66,15 @@ final class ChatListener implements Listener {
             return;
         }
         Component tooltip = resolveTooltip(event.getPlayer());
+        Component cosmeticPrefix = resolveCosmeticPrefix(event.getPlayer().getUniqueId());
         if (!useLuckPerms) {
             ChatFormatService.Format fallback = new ChatFormatService.Format(
                 Component.empty(),
                 Component.text(event.getPlayer().getName(), NamedTextColor.WHITE),
                 NamedTextColor.WHITE
             );
-            event.renderer((source, sourceDisplayName, message, viewer) -> render(fallback, message, source, viewer, tooltip));
+            ChatFormatService.Format captured = combinePrefix(fallback, cosmeticPrefix);
+            event.renderer((source, sourceDisplayName, message, viewer) -> render(captured, message, source, viewer, tooltip));
             return;
         }
         ChatFormatService.Format format;
@@ -82,7 +88,7 @@ final class ChatListener implements Listener {
                 NamedTextColor.WHITE
             );
         }
-        ChatFormatService.Format captured = format;
+        ChatFormatService.Format captured = combinePrefix(format, cosmeticPrefix);
         event.renderer((source, sourceDisplayName, message, viewer) -> render(captured, message, source, viewer, tooltip));
     }
 
@@ -138,6 +144,23 @@ final class ChatListener implements Listener {
         return nameComponent
             .append(Component.text(": ", NamedTextColor.GRAY))
             .append(coloredMessage);
+    }
+
+    private Component resolveCosmeticPrefix(java.util.UUID playerId) {
+        try {
+            if (plugin.getServer().isPrimaryThread()) {
+                return cosmeticPrefixService.prefix(playerId).getNow(Component.empty());
+            }
+            return cosmeticPrefixService.prefix(playerId).join();
+        } catch (RuntimeException runtimeException) {
+            plugin.getLogger().log(Level.WARNING, "Failed to resolve chat cosmetic prefix for " + playerId, runtimeException);
+            return Component.empty();
+        }
+    }
+
+    private ChatFormatService.Format combinePrefix(ChatFormatService.Format format, Component cosmeticPrefix) {
+        Component combined = ChatCosmeticPrefixService.combinePrefixes(cosmeticPrefix, format.prefix());
+        return new ChatFormatService.Format(combined, format.name(), format.chatColor());
     }
 
     private Component resolveTooltip(org.bukkit.entity.Player source) {

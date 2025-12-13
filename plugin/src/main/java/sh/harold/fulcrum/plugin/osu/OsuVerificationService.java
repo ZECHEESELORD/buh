@@ -36,6 +36,7 @@ import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -48,9 +49,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static sh.harold.fulcrum.plugin.osu.VerificationConstants.REGISTRATION_TAG;
+import static sh.harold.fulcrum.plugin.osu.VerificationConstants.BYPASS_REGISTRATION_PERMISSION;
 
 final class OsuVerificationService implements Listener, AutoCloseable {
     private static final Set<String> ALLOWED_COMMANDS = Set.of("linkosuaccount", "linkdiscordaccount", "skiposu", "menu", "settings", "help");
+    private final Set<String> bypassRegistrationUsernames = ConcurrentHashMap.newKeySet();
     private final JavaPlugin plugin;
     private final Logger logger;
     private final DocumentCollection players;
@@ -111,6 +114,11 @@ final class OsuVerificationService implements Listener, AutoCloseable {
             return;
         }
         UUID playerId = event.getUniqueId();
+        if (isRegistrationBypassed(event.getName())) {
+            preloginChecks.put(playerId, CompletableFuture.completedFuture(true));
+            quarantined.remove(playerId);
+            return;
+        }
         long startedAt = System.nanoTime();
         logger.info(() -> "[login:data] prelogin link check load for " + playerId);
         CompletableFuture<Boolean> check = players.load(playerId.toString())
@@ -140,6 +148,13 @@ final class OsuVerificationService implements Listener, AutoCloseable {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
+        if (isRegistrationBypassed(player.getName())) {
+            quarantined.remove(playerId);
+            preloginChecks.put(playerId, CompletableFuture.completedFuture(true));
+            player.removeScoreboardTag(REGISTRATION_TAG);
+            hideQuarantinedFrom(player);
+            return;
+        }
         if (!needsQuarantine(playerId)) {
             hideQuarantinedFrom(player);
             return;
@@ -166,9 +181,12 @@ final class OsuVerificationService implements Listener, AutoCloseable {
         if (!isQuarantined(event.getPlayer())) {
             return;
         }
-        String command = event.getMessage().toLowerCase();
+        String command = event.getMessage();
         String root = command.startsWith("/") ? command.substring(1) : command;
-        String rootCommand = root.split("\\s+")[0];
+        String rootCommand = root.split("\\s+")[0].toLowerCase(Locale.ROOT);
+        if (rootCommand.equals("bypassregistration") && event.getPlayer().hasPermission(BYPASS_REGISTRATION_PERMISSION)) {
+            return;
+        }
         if (ALLOWED_COMMANDS.contains(rootCommand)) {
             event.setCancelled(true);
             if (rootCommand.equals("menu") || rootCommand.equals("settings")) {
@@ -327,11 +345,63 @@ final class OsuVerificationService implements Listener, AutoCloseable {
     }
 
     private boolean isQuarantined(Player player) {
+        if (isRegistrationBypassed(player.getName())) {
+            return false;
+        }
         return quarantined.contains(player.getUniqueId());
     }
 
     private boolean isQuarantined(UUID playerId) {
         return quarantined.contains(playerId);
+    }
+
+    RegistrationBypassUpdate addRegistrationBypassUsernames(Set<String> usernames) {
+        Objects.requireNonNull(usernames, "usernames");
+        int added = 0;
+        for (String username : usernames) {
+            String normalized = normalizeUsername(username);
+            if (normalized.isBlank()) {
+                continue;
+            }
+            if (bypassRegistrationUsernames.add(normalized)) {
+                added++;
+            }
+        }
+
+        int released = 0;
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            if (!isRegistrationBypassed(player.getName())) {
+                continue;
+            }
+            UUID playerId = player.getUniqueId();
+            preloginChecks.put(playerId, CompletableFuture.completedFuture(true));
+            player.removeScoreboardTag(REGISTRATION_TAG);
+            if (quarantined.contains(playerId)) {
+                released++;
+                releasePlayer(playerId, false);
+            } else {
+                quarantined.remove(playerId);
+            }
+        }
+        return new RegistrationBypassUpdate(added, bypassRegistrationUsernames.size(), released);
+    }
+
+    private boolean isRegistrationBypassed(String username) {
+        String normalized = normalizeUsername(username);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return bypassRegistrationUsernames.contains(normalized);
+    }
+
+    private String normalizeUsername(String username) {
+        if (username == null) {
+            return "";
+        }
+        return username.strip().toLowerCase(Locale.ROOT);
+    }
+
+    record RegistrationBypassUpdate(int addedUsernames, int totalUsernames, int releasedPlayers) {
     }
 
     private void quarantine(Player player) {
