@@ -257,6 +257,28 @@ public final class UsernameDisplayService implements Listener {
         ensureCarrier(viewer, state, targetEntityId, vanillaName, position, decorated);
     }
 
+    private void scheduleSpawnNametagApply(UUID viewerId, int targetEntityId) {
+        if (viewerId == null) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Player viewer = plugin.getServer().getPlayer(viewerId);
+            if (viewer == null || !viewer.isOnline()) {
+                return;
+            }
+            ViewerNametagState state = viewerNametagStates.get(viewerId);
+            if (state == null) {
+                return;
+            }
+            TrackedPlayer tracked = state.trackedPlayers.get(targetEntityId);
+            if (tracked == null) {
+                return;
+            }
+            UsernameView preference = settingsService.cachedUsernameView(viewerId);
+            applyViewerNametag(viewer, state, targetEntityId, tracked, preference);
+        });
+    }
+
     private Vector3d resolveCurrentPosition(UUID targetId, Vector3d fallback) {
         if (targetId == null) {
             return fallback;
@@ -716,21 +738,15 @@ public final class UsernameDisplayService implements Listener {
 
             String vanillaName = null;
             if (targetId != null) {
-                Player target = plugin.getServer().getPlayer(targetId);
-                if (target != null) {
-                    vanillaName = target.getName();
-                }
-            }
-            if (vanillaName == null || vanillaName.isBlank()) {
-                vanillaName = targetId == null ? null : vanillaNames.get(targetId);
+                vanillaName = vanillaNames.get(targetId);
             }
 
-            ViewerNametagState state = viewerNametagStates.computeIfAbsent(viewer.getUniqueId(), ViewerNametagState::new);
+            UUID viewerId = viewer.getUniqueId();
+            ViewerNametagState state = viewerNametagStates.computeIfAbsent(viewerId, ViewerNametagState::new);
             TrackedPlayer tracked = new TrackedPlayer(targetId, vanillaName, position);
             state.trackedPlayers.put(entityId, tracked);
 
-            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
-            applyViewerNametag(viewer, state, entityId, tracked, preference);
+            scheduleSpawnNametagApply(viewerId, entityId);
         }
     }
 
