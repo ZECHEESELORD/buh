@@ -10,7 +10,12 @@ import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,15 +34,20 @@ public final class OsuLinkService {
         DISCORD
     }
 
+    private static final String OSU_LAST_REFRESH_PATH = "linking.osu.lastRefresh";
+    private static final Duration OSU_PROFILE_REFRESH_TTL = Duration.ofHours(1);
+
     private final JavaPlugin plugin;
     private final DocumentCollection players;
     private final LinkAccountConfig config;
     private final OsuOAuthClient osuClient;
+    private final OsuPublicApiClient osuPublicApiClient;
     private final DiscordOAuthClient discordClient;
     private final Consumer<UUID> linkCompleteCallback;
     private final Logger logger;
     private final Map<String, Object> accountLocks = new ConcurrentHashMap<>();
     private final Map<String, PendingLink> pendingLinks = new ConcurrentHashMap<>();
+    private final Map<UUID, CompletableFuture<Void>> osuRefreshTasks = new ConcurrentHashMap<>();
 
     public OsuLinkService(JavaPlugin plugin, DocumentCollection players, LinkAccountConfig config, Consumer<UUID> linkCompleteCallback) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -51,6 +61,7 @@ public final class OsuLinkService {
             throw new IllegalStateException("discord OAuth client id/secret must be configured.");
         }
         this.osuClient = new OsuOAuthClient(config, config.osu());
+        this.osuPublicApiClient = new OsuPublicApiClient(config.osu());
         this.discordClient = new DiscordOAuthClient(config, config.discord());
         this.logger = plugin.getLogger();
     }
@@ -77,6 +88,107 @@ public final class OsuLinkService {
 
     public boolean hasDiscordLink(UUID playerId) {
         return hasLink(playerId, Provider.DISCORD);
+    }
+
+    public CompletionStage<Void> refreshOsuProfile(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return osuRefreshTasks.computeIfAbsent(playerId, id -> refreshOsuProfileInternal(id)
+            .toCompletableFuture()
+            .whenComplete((ignored, throwable) -> osuRefreshTasks.remove(id)));
+    }
+
+    private CompletionStage<Void> refreshOsuProfileInternal(UUID playerId) {
+        return players.load(playerId.toString())
+            .thenCompose(document -> refreshOsuProfile(playerId, document))
+            .exceptionally(throwable -> {
+                logger.log(Level.FINE, "Failed to refresh osu profile for " + playerId, throwable);
+                return null;
+            });
+    }
+
+    private CompletionStage<Void> refreshOsuProfile(UUID playerId, Document document) {
+        if (document == null || !document.exists()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        Long osuUserId = readLong(document, "linking.osu.userId")
+            .or(() -> readLong(document, "osu.userId"))
+            .orElse(null);
+        String osuUsername = document.get("linking.osu.username", String.class)
+            .filter(value -> !value.isBlank())
+            .orElseGet(() -> document.get("osu.username", String.class)
+                .filter(value -> !value.isBlank())
+                .orElse(null));
+        if ((osuUserId == null || osuUserId <= 0) && (osuUsername == null || osuUsername.isBlank())) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        if (!isOsuRefreshDue(document)) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> stamp = document.set(OSU_LAST_REFRESH_PATH, Instant.now().toString()).toCompletableFuture();
+        CompletionStage<OsuPublicApiClient.OsuUserProfile> profileStage = osuUserId != null && osuUserId > 0
+            ? osuPublicApiClient.fetchUserById(osuUserId)
+            : osuPublicApiClient.fetchUserByUsername(osuUsername);
+        return stamp.thenCombine(profileStage.toCompletableFuture(), (ignored, profile) -> profile)
+            .thenCompose(profile -> applyOsuProfileUpdate(playerId, document, profile))
+            .exceptionally(throwable -> {
+                logger.log(Level.FINE, "Failed to refresh osu profile for " + playerId, throwable);
+                return null;
+            });
+    }
+
+    private boolean isOsuRefreshDue(Document document) {
+        Instant lastRefresh = parseInstant(document.get(OSU_LAST_REFRESH_PATH, String.class).orElse(null));
+        if (lastRefresh == null) {
+            return true;
+        }
+        return lastRefresh.plus(OSU_PROFILE_REFRESH_TTL).isBefore(Instant.now());
+    }
+
+    private CompletionStage<Void> applyOsuProfileUpdate(UUID playerId, Document document, OsuPublicApiClient.OsuUserProfile profile) {
+        if (profile == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (profile.userId() <= 0) {
+            logger.fine(() -> "osu profile refresh returned invalid user id for " + playerId);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        Map<String, Object> setValues = new HashMap<>();
+        List<String> removePaths = new ArrayList<>();
+
+        if (profile.username() != null && !profile.username().isBlank()) {
+            setValues.put("linking.osu.username", profile.username().trim());
+        }
+        setValues.put("linking.osu.userId", profile.userId());
+
+        if (profile.countryCode() != null && !profile.countryCode().isBlank()) {
+            setValues.put("linking.osu.country", profile.countryCode().trim());
+        } else {
+            removePaths.add("linking.osu.country");
+        }
+
+        Integer rank = profile.globalRank();
+        if (rank != null && rank > 0) {
+            setValues.put("linking.osu.rank", rank);
+        } else {
+            removePaths.add("linking.osu.rank");
+        }
+
+        return document.patch(setValues, removePaths);
+    }
+
+    private static Instant parseInstant(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(raw);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private String createLink(Provider provider, UUID playerId, String username) {

@@ -37,6 +37,7 @@ public final class UnlockableCatalog {
     public static final UnlockableId MENU_SKIN_PEONY = UnlockableId.of("menu-skin-peony");
     public static final UnlockableId MENU_SKIN_TORCHFLOWER = UnlockableId.of("menu-skin-torchflower");
     public static final UnlockableId MENU_SKIN_PINK_PETALS = UnlockableId.of("menu-skin-pink-petals");
+    public static final UnlockableId CHAT_PREFIX_OSU_RANK = UnlockableId.of("chat-prefix-osu-rank");
 
     private UnlockableCatalog() {
     }
@@ -92,6 +93,24 @@ public final class UnlockableCatalog {
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_PEONY, "Peony Menu Skin", "Fluffy peony blooms around the slot.", Material.PEONY);
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_TORCHFLOWER, "Torchflower Menu Skin", "Warm torchflower glow on your menu.", Material.TORCHFLOWER);
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_PINK_PETALS, "Pink Petals Menu Skin", "Scatter petals over the true menu item.", Material.PINK_PETALS);
+
+        UnlockableDefinition osuRankBadge = new UnlockableDefinition(
+            CHAT_PREFIX_OSU_RANK,
+            UnlockableType.COSMETIC,
+            "osu! Rank Badge",
+            "Show your osu! global rank in chat. A small bracketed flex; tidy, tasteful, and slightly smug.",
+            List.of(new UnlockableTier(
+                1,
+                "osu! Rank Badge",
+                "Unlock the rank badge for chat.",
+                25L,
+                Map.of()
+            )),
+            Material.NAME_TAG,
+            false
+        );
+        registry.register(osuRankBadge);
+        cosmeticRegistry.register(new OsuRankChatPrefixCosmetic(osuRankBadge));
 
         UnlockableDefinition sit = new UnlockableDefinition(
             SIT_ACTION,

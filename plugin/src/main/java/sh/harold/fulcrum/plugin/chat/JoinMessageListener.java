@@ -11,6 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
 import sh.harold.fulcrum.plugin.permissions.LuckPermsTextFormat;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +25,7 @@ import java.util.logging.Level;
 public record JoinMessageListener(
     JavaPlugin plugin,
     Supplier<FormattedUsernameService> usernameServiceSupplier,
+    ChatCosmeticPrefixService cosmeticPrefixService,
     UsernameDisplayService usernameDisplayService
 ) implements Listener {
 
@@ -32,6 +34,7 @@ public record JoinMessageListener(
     public JoinMessageListener {
         Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(usernameServiceSupplier, "usernameServiceSupplier");
+        Objects.requireNonNull(cosmeticPrefixService, "cosmeticPrefixService");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -42,8 +45,9 @@ public record JoinMessageListener(
         }
         SESSION_STARTS.put(event.getPlayer().getUniqueId(), Instant.now());
         FormattedUsernameService.FormattedUsername username = resolveUsername(event.getPlayer());
+        Component cosmeticPrefix = resolveCosmeticPrefix(event.getPlayer().getUniqueId());
         event.joinMessage(null);
-        plugin.getServer().getScheduler().runTask(plugin, () -> sendJoinMessage(event.getPlayer(), username));
+        plugin.getServer().getScheduler().runTask(plugin, () -> sendJoinMessage(event.getPlayer(), username, cosmeticPrefix));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -55,8 +59,9 @@ public record JoinMessageListener(
         }
         Duration sessionDuration = sessionDuration(leaving.getUniqueId());
         FormattedUsernameService.FormattedUsername username = resolveUsername(leaving);
+        Component cosmeticPrefix = resolveCosmeticPrefix(leaving.getUniqueId());
         event.quitMessage(null);
-        plugin.getServer().getScheduler().runTask(plugin, () -> sendQuitMessage(leaving, username, sessionDuration));
+        plugin.getServer().getScheduler().runTask(plugin, () -> sendQuitMessage(leaving, username, cosmeticPrefix, sessionDuration));
     }
 
     private FormattedUsernameService.FormattedUsername resolveUsername(Player player) {
@@ -82,7 +87,7 @@ public record JoinMessageListener(
         );
     }
 
-    private void sendJoinMessage(Player joining, FormattedUsernameService.FormattedUsername formatted) {
+    private void sendJoinMessage(Player joining, FormattedUsernameService.FormattedUsername formatted, Component cosmeticPrefix) {
         if (joining == null || !joining.isOnline()) {
             return;
         }
@@ -91,13 +96,13 @@ public record JoinMessageListener(
             if (!self && !viewer.canSee(joining)) {
                 continue;
             }
-            Component nameComponent = displayNameForViewer(viewer, joining, formatted);
+            Component nameComponent = displayNameForViewer(viewer, joining, formatted, cosmeticPrefix);
             Component joinMessage = nameComponent.append(Component.text(" joined the game!", NamedTextColor.GRAY));
             viewer.sendMessage(joinMessage);
         }
     }
 
-    private void sendQuitMessage(Player leaving, FormattedUsernameService.FormattedUsername formatted, Duration sessionDuration) {
+    private void sendQuitMessage(Player leaving, FormattedUsernameService.FormattedUsername formatted, Component cosmeticPrefix, Duration sessionDuration) {
         if (leaving == null) {
             return;
         }
@@ -109,7 +114,7 @@ public record JoinMessageListener(
             if (!viewer.canSee(leaving)) {
                 continue;
             }
-            Component nameComponent = displayNameForViewer(viewer, leaving, formatted);
+            Component nameComponent = displayNameForViewer(viewer, leaving, formatted, cosmeticPrefix);
             Component quitMessage = nameComponent
                 .append(Component.text(" left the game!", NamedTextColor.GRAY))
                 .append(sessionNote);
@@ -156,8 +161,8 @@ public record JoinMessageListener(
         return parts.getFirst() + ", " + parts.get(1) + ", and " + parts.getLast();
     }
 
-    private Component displayNameForViewer(Player viewer, Player joining, FormattedUsernameService.FormattedUsername formatted) {
-        Component prefix = formatted.prefix();
+    private Component displayNameForViewer(Player viewer, Player joining, FormattedUsernameService.FormattedUsername formatted, Component cosmeticPrefix) {
+        Component prefix = ChatCosmeticPrefixService.combinePrefixes(cosmeticPrefix, formatted.prefix());
         Component name = formatted.name();
         if (usernameDisplayService != null) {
             name = usernameDisplayService.displayComponent(
@@ -172,5 +177,14 @@ public record JoinMessageListener(
             return name;
         }
         return prefix.append(Component.space()).append(name);
+    }
+
+    private Component resolveCosmeticPrefix(UUID playerId) {
+        try {
+            return cosmeticPrefixService.prefix(playerId).getNow(Component.empty());
+        } catch (RuntimeException runtimeException) {
+            plugin.getLogger().log(Level.WARNING, "Failed to resolve chat cosmetic prefix for " + playerId, runtimeException);
+            return Component.empty();
+        }
     }
 }

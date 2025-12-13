@@ -22,6 +22,7 @@ import sh.harold.fulcrum.plugin.permissions.LuckPermsModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 
 import java.util.Objects;
 import java.util.Set;
@@ -36,15 +37,24 @@ public final class ChatModule implements FulcrumModule {
     private final ChatChannelService channelService;
     private final MessageService messageService;
     private final PlayerDataModule playerDataModule;
+    private final ChatCosmeticPrefixService cosmeticPrefixService;
     private StaffChatFormatter staffChatFormatter;
     private StaffChatBossBarService staffChatBossBarService;
 
-    public ChatModule(JavaPlugin plugin, LuckPermsModule luckPermsModule, ChatChannelService channelService, MessageService messageService, PlayerDataModule playerDataModule) {
+    public ChatModule(
+        JavaPlugin plugin,
+        LuckPermsModule luckPermsModule,
+        ChatChannelService channelService,
+        MessageService messageService,
+        PlayerDataModule playerDataModule,
+        ChatCosmeticPrefixService cosmeticPrefixService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.luckPermsModule = Objects.requireNonNull(luckPermsModule, "luckPermsModule");
         this.channelService = Objects.requireNonNull(channelService, "channelService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.playerDataModule = Objects.requireNonNull(playerDataModule, "playerDataModule");
+        this.cosmeticPrefixService = Objects.requireNonNull(cosmeticPrefixService, "cosmeticPrefixService");
     }
 
     @Override
@@ -66,13 +76,13 @@ public final class ChatModule implements FulcrumModule {
         UsernameDisplayService usernameDisplayService = playerDataModule.usernameDisplayService().orElse(null);
         PlayerDirectoryService playerDirectoryService = playerDataModule.playerDirectoryService()
             .orElseThrow(() -> new IllegalStateException("PlayerDirectoryService not available"));
-        staffChatFormatter = new StaffChatFormatter(plugin, chatFormatService, usernameDisplayService);
+        staffChatFormatter = new StaffChatFormatter(plugin, chatFormatService, cosmeticPrefixService, usernameDisplayService);
         staffChatBossBarService = new StaffChatBossBarService(plugin, channelService);
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         Supplier<FormattedUsernameService> usernameServiceSupplier = () -> luckPermsModule.formattedUsernameService().orElse(null);
-        pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier, usernameDisplayService), plugin);
-        pluginManager.registerEvents(new ChatListener(plugin, chatFormatService, channelService, messageService, staffChatFormatter, usernameDisplayService, playerDirectoryService), plugin);
+        pluginManager.registerEvents(new JoinMessageListener(plugin, usernameServiceSupplier, cosmeticPrefixService, usernameDisplayService), plugin);
+        pluginManager.registerEvents(new ChatListener(plugin, chatFormatService, cosmeticPrefixService, channelService, messageService, staffChatFormatter, usernameDisplayService, playerDirectoryService), plugin);
         pluginManager.registerEvents(staffChatBossBarService, plugin);
         channelService.addListener(staffChatBossBarService);
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);

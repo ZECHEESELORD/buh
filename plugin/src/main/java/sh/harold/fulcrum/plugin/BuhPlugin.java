@@ -40,6 +40,7 @@ import sh.harold.fulcrum.plugin.playermenu.PlayerMenuService;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableModule;
 import sh.harold.fulcrum.plugin.unlockable.UnlockableService;
 import sh.harold.fulcrum.plugin.unlockable.CosmeticRegistry;
+import sh.harold.fulcrum.plugin.unlockable.ChatCosmeticPrefixService;
 import sh.harold.fulcrum.plugin.version.PluginVersionService;
 import sh.harold.fulcrum.plugin.version.VersionService;
 import sh.harold.fulcrum.plugin.vote.FeatureVoteModule;
@@ -193,12 +194,19 @@ public final class BuhPlugin extends JavaPlugin {
         luckPermsModule = new LuckPermsModule(this);
         osuLinkModule = new OsuLinkModule(this, dataModule);
         chatChannelService = new ChatChannelService(this::staffService);
+        ChatCosmeticPrefixService chatCosmeticPrefixService = new ChatCosmeticPrefixService(
+            this::unlockableService,
+            this::cosmeticRegistry,
+            playerDataModule::playerDirectoryService,
+            getLogger()
+        );
         messageService = new MessageService(
             this,
             () -> formattedUsernameService().orElseGet(this::noopFormattedUsernameService),
-            () -> playerDataModule.usernameDisplayService().orElse(null)
+            () -> playerDataModule.usernameDisplayService().orElse(null),
+            chatCosmeticPrefixService
         );
-        chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService, playerDataModule);
+        chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService, playerDataModule, chatCosmeticPrefixService);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
