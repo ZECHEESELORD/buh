@@ -167,6 +167,7 @@ public final class PlayerMenuService {
             menuService,
             unlockableService,
             cosmeticRegistry,
+            playerDirectoryService,
             this::refreshMenuItem
         );
         this.statBreakdownView = new StatBreakdownView(
