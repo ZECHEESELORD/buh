@@ -47,6 +47,8 @@ public final class ItemResolver {
 
     private static final Map<Enchantment, String> ENCHANT_IDS = buildEnchantIds();
 
+    private static final Map<NamespacedKey, String> ENCHANT_IDS_BY_KEY = buildEnchantIdsByKey();
+
     private static final Map<String, Enchantment> ENCHANTS_BY_ID = invertEnchantIds();
 
     private static final Set<Enchantment> OVERRIDDEN_ENCHANTS = buildOverriddenEnchants();
@@ -112,6 +114,17 @@ public final class ItemResolver {
         Map<String, Enchantment> inverse = new HashMap<>();
         ENCHANT_IDS.forEach((enchant, id) -> inverse.put(id, enchant));
         return Map.copyOf(inverse);
+    }
+
+    private static Map<NamespacedKey, String> buildEnchantIdsByKey() {
+        Map<NamespacedKey, String> ids = new HashMap<>();
+        ENCHANT_IDS.forEach((enchant, id) -> {
+            if (enchant == null || enchant.getKey() == null || id == null) {
+                return;
+            }
+            ids.put(enchant.getKey(), id);
+        });
+        return Map.copyOf(ids);
     }
 
     private static Set<Enchantment> buildOverriddenEnchants() {
@@ -356,7 +369,7 @@ public final class ItemResolver {
             scrubLegacyLuck(meta);
             if (!meta.getEnchants().isEmpty()) {
                 for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                    String customId = ENCHANT_IDS.get(entry.getKey());
+                    String customId = resolveEnchantId(entry.getKey());
                     if (customId == null) {
                         continue;
                     }
@@ -368,7 +381,7 @@ public final class ItemResolver {
             }
             if (meta instanceof EnchantmentStorageMeta storage && !storage.getStoredEnchants().isEmpty()) {
                 for (Map.Entry<Enchantment, Integer> entry : storage.getStoredEnchants().entrySet()) {
-                    String customId = ENCHANT_IDS.get(entry.getKey());
+                    String customId = resolveEnchantId(entry.getKey());
                     if (customId == null) {
                         continue;
                     }
@@ -519,7 +532,7 @@ public final class ItemResolver {
         }
         if (!meta.getEnchants().isEmpty()) {
             for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                String customId = ENCHANT_IDS.get(entry.getKey());
+                String customId = resolveEnchantId(entry.getKey());
                 if (customId == null) {
                     continue;
                 }
@@ -528,7 +541,7 @@ public final class ItemResolver {
         }
         if (meta instanceof EnchantmentStorageMeta storage && !storage.getStoredEnchants().isEmpty()) {
             for (Map.Entry<Enchantment, Integer> entry : storage.getStoredEnchants().entrySet()) {
-                String customId = ENCHANT_IDS.get(entry.getKey());
+                String customId = resolveEnchantId(entry.getKey());
                 if (customId == null) {
                     continue;
                 }
@@ -536,6 +549,18 @@ public final class ItemResolver {
             }
         }
         return Map.copyOf(enchants);
+    }
+
+    private String resolveEnchantId(Enchantment enchantment) {
+        if (enchantment == null) {
+            return null;
+        }
+        String id = ENCHANT_IDS.get(enchantment);
+        if (id != null) {
+            return id;
+        }
+        NamespacedKey key = enchantment.getKey();
+        return key == null ? null : ENCHANT_IDS_BY_KEY.get(key);
     }
 
     private boolean isIncompatibleMerge(Map<String, Integer> leftEnchants, Map<String, Integer> rightEnchants) {
@@ -566,12 +591,15 @@ public final class ItemResolver {
         if (id == null) {
             return Integer.MAX_VALUE;
         }
+        var definition = enchantRegistry.get(id).orElse(null);
+        if (definition != null) {
+            return Math.max(1, definition.maxLevel());
+        }
         Enchantment vanilla = ENCHANTS_BY_ID.get(id);
         if (vanilla != null) {
             return Math.max(1, vanilla.getMaxLevel());
         }
-        var definition = enchantRegistry.get(id).orElse(null);
-        return definition == null ? Integer.MAX_VALUE : Math.max(1, definition.maxLevel());
+        return Integer.MAX_VALUE;
     }
 
     private Map<String, Integer> mergeLevelsWithVanillaCaps(Map<String, Integer> leftEnchants, Map<String, Integer> rightEnchants) {

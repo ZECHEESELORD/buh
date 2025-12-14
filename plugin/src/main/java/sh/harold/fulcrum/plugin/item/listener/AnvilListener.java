@@ -15,7 +15,6 @@ import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer;
 
 import java.util.Objects;
-import java.util.function.Consumer;
 
 public final class AnvilListener implements Listener {
 
@@ -32,7 +31,8 @@ public final class AnvilListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPrepare(PrepareAnvilEvent event) {
-        applyResult(event.getInventory(), event.getResult(), event::setResult);
+        ItemStack updated = computeResult(event.getInventory(), event.getResult());
+        event.setResult(updated);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -43,14 +43,15 @@ public final class AnvilListener implements Listener {
         if (event.getRawSlot() != 2) { // result slot
             return;
         }
-        applyResult(anvil, anvil.getResult(), updated -> anvil.setItem(2, updated));
+        ItemStack updated = computeResult(anvil, anvil.getResult());
+        event.setCurrentItem(updated);
+        anvil.setItem(2, updated);
     }
 
-    private void applyResult(AnvilInventory inventory, ItemStack vanillaResult, Consumer<ItemStack> resultConsumer) {
+    private ItemStack computeResult(AnvilInventory inventory, ItemStack vanillaResult) {
         if (vanillaResult == null || vanillaResult.getType().isAir()) {
-            resultConsumer.accept(null);
             inventory.setRepairCost(0);
-            return;
+            return null;
         }
         int linearRepairs = readLinearRepairCount(inventory.getFirstItem());
         int uiCost = computeRepairCost(linearRepairs);
@@ -63,15 +64,12 @@ public final class AnvilListener implements Listener {
             inventory.getSecondItem()
         );
         working = anvilMerge.stack();
-        resolver.mergeEnchants(working);
         if (anvilMerge.incompatibleMerge() && hasRightItem) {
-            resultConsumer.accept(null);
-            return;
+            return null;
         }
         ItemStack normalized = resolver.resolve(working).map(ItemInstance::stack).orElse(working.clone());
         normalized = setLinearRepairCost(normalized, linearRepairs + 1);
         normalized = ItemSanitizer.normalize(normalized);
-        resultConsumer.accept(normalized);
         plugin.getServer().getScheduler().runTask(plugin, () ->
             inventory.getViewers().forEach(viewer -> {
                 if (viewer instanceof org.bukkit.entity.Player player) {
@@ -79,6 +77,7 @@ public final class AnvilListener implements Listener {
                 }
             })
         );
+        return normalized;
     }
 
     private int readLinearRepairCount(ItemStack base) {
