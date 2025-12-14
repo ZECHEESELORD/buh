@@ -170,6 +170,18 @@ public final class ItemResolver {
         }
         ItemStack working = stack.clone();
         String id = readId(working);
+        String expectedVanillaId = "vanilla:" + working.getType().getKey().getKey();
+        boolean staleVanillaId = id != null
+            && id.startsWith("vanilla:")
+            && !id.equals(expectedVanillaId);
+        if (staleVanillaId) {
+            itemPdc.clear(working, itemPdc.keys().itemId());
+            itemPdc.clear(working, itemPdc.keys().version());
+            itemPdc.clear(working, itemPdc.keys().stats());
+            itemPdc.clear(working, itemPdc.keys().durabilityCurrent());
+            itemPdc.clear(working, itemPdc.keys().durabilityMax());
+            id = expectedVanillaId;
+        }
         CustomItem definition = id == null ? null : registry.get(id).orElse(null);
         if (definition == null) {
             definition = registry.getOrCreateVanilla(working.getType(), wrapperFactory);
