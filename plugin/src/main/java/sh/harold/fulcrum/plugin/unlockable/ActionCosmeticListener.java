@@ -193,16 +193,18 @@ final class ActionCosmeticListener implements Listener {
         if (!event.isSneaking()) {
             return;
         }
-        if (!hasAction(player.getUniqueId(), CRAWL_ACTION_KEY)) {
+        UUID playerId = player.getUniqueId();
+        boolean crawling = crawlManager.isCrawling(playerId);
+        if (!crawling && !hasAction(playerId, CRAWL_ACTION_KEY)) {
             return;
         }
         long now = System.currentTimeMillis();
-        long last = crouchTaps.getOrDefault(player.getUniqueId(), 0L);
-        crouchTaps.put(player.getUniqueId(), now);
+        long last = crouchTaps.getOrDefault(playerId, 0L);
+        crouchTaps.put(playerId, now);
         if (now - last > 350) {
             return;
         }
-        logger.info(() -> "Crawl toggle requested by " + player.getUniqueId());
+        logger.info(() -> "Crawl toggle requested by " + playerId);
         toggleCrawl(player);
     }
 

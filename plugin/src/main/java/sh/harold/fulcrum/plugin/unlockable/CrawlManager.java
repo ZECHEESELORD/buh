@@ -162,8 +162,9 @@ final class CrawlManager {
 
     private void resetPose(Player player) {
         try {
-            player.setSwimming(false);
-            player.setPose(Pose.STANDING);
+            boolean submerged = player.getEyeLocation().getBlock().isLiquid();
+            player.setSwimming(submerged);
+            player.setPose(submerged ? Pose.SWIMMING : Pose.STANDING);
             player.setSneaking(false);
             player.setSprinting(false);
         } catch (Throwable throwable) {
