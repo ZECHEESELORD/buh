@@ -1,8 +1,11 @@
 package sh.harold.fulcrum.plugin.unlockable;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -28,7 +31,9 @@ import org.bukkit.scoreboard.ScoreboardManager;
 import org.bukkit.scoreboard.Team;
 import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,6 +46,9 @@ final class ActionCosmeticListener implements Listener {
     private static final String CRAWL_ACTION_KEY = "crawl";
     private static final String RIDE_ACTION_KEY = "ride";
     private static final String RIDE_NO_COLLIDE_TEAM = "rideNoCollide";
+    private static final String RIDE_SEAT_TAG = "fulcrumRideSeat";
+    private static final int RIDE_SEAT_DURATION_TICKS = 20 * 60 * 60 * 24;
+    private static final int RIDE_SEAT_CHAIN_LENGTH = 2;
 
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
@@ -48,6 +56,8 @@ final class ActionCosmeticListener implements Listener {
     private final JavaPlugin plugin;
     private final CrawlManager crawlManager;
     private final Map<UUID, ArmorStand> seats = new HashMap<>();
+    private final Map<UUID, RideSeatChain> rideSeats = new HashMap<>();
+    private final Map<UUID, UUID> rideCleanupScheduled = new HashMap<>();
     private final Map<UUID, Long> crouchTaps = new HashMap<>();
     private final Map<UUID, Long> rideGrace = new HashMap<>();
     private final Map<UUID, UUID> riderHosts = new HashMap<>();
@@ -113,8 +123,8 @@ final class ActionCosmeticListener implements Listener {
         if (seat != null && event.getVehicle().getUniqueId().equals(seat.getUniqueId())) {
             removeSeat(player.getUniqueId());
         }
-        if (riderHosts.containsKey(player.getUniqueId())) {
-            removeRide(player.getUniqueId());
+        if (riderHosts.containsKey(player.getUniqueId()) || rideSeats.containsKey(player.getUniqueId())) {
+            scheduleRideCleanup(player.getUniqueId(), event.getVehicle().getUniqueId());
         }
     }
 
@@ -128,8 +138,8 @@ final class ActionCosmeticListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (riderHosts.containsKey(player.getUniqueId())) {
-            removeRide(player.getUniqueId());
+        if (riderHosts.containsKey(player.getUniqueId()) || rideSeats.containsKey(player.getUniqueId())) {
+            scheduleRideCleanup(player.getUniqueId(), event.getDismounted().getUniqueId());
         }
     }
 
@@ -211,6 +221,9 @@ final class ActionCosmeticListener implements Listener {
     void clearSeats() {
         seats.values().forEach(ArmorStand::remove);
         seats.clear();
+        rideCleanupScheduled.clear();
+        rideSeats.values().forEach(chain -> chain.seatIds().forEach(this::removeRideSeat));
+        rideSeats.clear();
         crouchTaps.clear();
         rideGrace.clear();
         UUID[] riderIds = riderHosts.keySet().toArray(UUID[]::new);
@@ -311,13 +324,14 @@ final class ActionCosmeticListener implements Listener {
         if (containsPlayer(top, player.getUniqueId())) {
             return;
         }
-        boolean mounted = top.addPassenger(player);
-        if (!mounted) {
+        RideSeatChain seatChain = tryMountRideSeatChain(top, player);
+        if (seatChain == null) {
             return;
         }
         if (top instanceof Player host) {
             registerCollisionlessRide(player, host);
         }
+        rideSeats.put(player.getUniqueId(), seatChain);
         event.setCancelled(true);
         rideGrace.put(player.getUniqueId(), System.currentTimeMillis() + 500L);
     }
@@ -359,12 +373,97 @@ final class ActionCosmeticListener implements Listener {
         if (hostId != null) {
             removeCollisionMember(hostId);
         }
+        RideSeatChain seatChain = rideSeats.remove(riderId);
+        if (seatChain != null) {
+            Player rider = plugin.getServer().getPlayer(riderId);
+            if (rider != null) {
+                Entity vehicle = rider.getVehicle();
+                if (vehicle != null && isRideSeat(vehicle)) {
+                    rider.leaveVehicle();
+                }
+            }
+            seatChain.seatIds().forEach(this::removeRideSeat);
+        }
     }
 
     private void registerCollisionlessRide(Player rider, Player host) {
         riderHosts.put(rider.getUniqueId(), host.getUniqueId());
         addCollisionMember(rider);
         addCollisionMember(host);
+    }
+
+    private RideSeatChain tryMountRideSeatChain(Entity carrier, Player rider) {
+        Location spawnLocation = carrier.getLocation();
+        List<UUID> seatIds = new ArrayList<>(RIDE_SEAT_CHAIN_LENGTH);
+
+        Entity currentVehicle = carrier;
+        for (int i = 0; i < RIDE_SEAT_CHAIN_LENGTH; i++) {
+            AreaEffectCloud seat = spawnRideSeat(spawnLocation);
+            if (!currentVehicle.addPassenger(seat)) {
+                seat.remove();
+                seatIds.forEach(this::removeRideSeat);
+                return null;
+            }
+            seatIds.add(seat.getUniqueId());
+            currentVehicle = seat;
+        }
+
+        if (!currentVehicle.addPassenger(rider)) {
+            seatIds.forEach(this::removeRideSeat);
+            return null;
+        }
+
+        return new RideSeatChain(seatIds);
+    }
+
+    private AreaEffectCloud spawnRideSeat(Location location) {
+        return location.getWorld().spawn(location, AreaEffectCloud.class, cloud -> {
+            cloud.addScoreboardTag(RIDE_SEAT_TAG);
+            cloud.setRadius(0.0f);
+            cloud.setRadiusPerTick(0.0f);
+            cloud.setRadiusOnUse(0.0f);
+            cloud.setDuration(RIDE_SEAT_DURATION_TICKS);
+            cloud.setWaitTime(0);
+            cloud.setReapplicationDelay(Integer.MAX_VALUE);
+            cloud.setDurationOnUse(0);
+            cloud.setGravity(false);
+            cloud.setInvulnerable(true);
+            cloud.setSilent(true);
+            cloud.setPersistent(false);
+            try {
+                cloud.setParticle(Particle.BLOCK_MARKER, Material.AIR.createBlockData());
+            } catch (IllegalArgumentException ignored) {
+            }
+        });
+    }
+
+    private void removeRideSeat(UUID seatId) {
+        Entity seat = plugin.getServer().getEntity(seatId);
+        if (seat != null && !seat.isDead()) {
+            seat.remove();
+        }
+    }
+
+    private boolean isRideSeat(Entity entity) {
+        return entity.getScoreboardTags().contains(RIDE_SEAT_TAG);
+    }
+
+    private void scheduleRideCleanup(UUID riderId, UUID dismountedEntityId) {
+        boolean newlyScheduled = rideCleanupScheduled.put(riderId, dismountedEntityId) == null;
+        if (!newlyScheduled) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            UUID scheduledDismountedId = rideCleanupScheduled.remove(riderId);
+            if (scheduledDismountedId == null) {
+                return;
+            }
+            RideSeatChain current = rideSeats.get(riderId);
+            if (current != null && !scheduledDismountedId.equals(current.topSeatId())) {
+                return;
+            }
+            removeRide(riderId);
+        }, 1L);
     }
 
     private void addCollisionMember(Player player) {
@@ -439,5 +538,15 @@ final class ActionCosmeticListener implements Listener {
             return 0.5;
         }
         return 1.0;
+    }
+
+    private record RideSeatChain(List<UUID> seatIds) {
+        private RideSeatChain {
+            seatIds = List.copyOf(seatIds);
+        }
+
+        private UUID topSeatId() {
+            return seatIds.getLast();
+        }
     }
 }
