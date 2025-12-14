@@ -10,7 +10,6 @@ import org.bukkit.entity.Player;
 
 import java.util.Objects;
 import java.util.UUID;
-import java.util.Optional;
 
 import static io.papermc.paper.command.brigadier.Commands.literal;
 
@@ -42,7 +41,8 @@ public final class CrawlCommand {
             .map(state -> state.equippedCosmetics(CosmeticSection.ACTIONS).contains(UnlockableCatalog.CRAWL_ACTION))
             .orElse(false);
 
-        if (!hasCrawl) {
+        boolean crawling = crawlManager.isCrawling(playerId);
+        if (!hasCrawl && !crawling) {
             player.sendMessage(Component.text("You need the Crawl action equipped to use this.", NamedTextColor.RED));
             return 0;
         }
