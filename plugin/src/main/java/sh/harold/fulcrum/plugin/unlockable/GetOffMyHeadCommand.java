@@ -17,6 +17,8 @@ import static io.papermc.paper.command.brigadier.Commands.literal;
 
 public final class GetOffMyHeadCommand {
 
+    private static final String RIDE_SEAT_TAG = "fulcrumRideSeat";
+
     public LiteralCommandNode<CommandSourceStack> build() {
         return literal("getoffmyhead")
             .executes(this::execute)
@@ -40,16 +42,28 @@ public final class GetOffMyHeadCommand {
     }
 
     private List<Player> ejectPassengers(Entity root) {
+        return ejectPassengers(root, root.getLocation().add(0, 0.5, 0));
+    }
+
+    private List<Player> ejectPassengers(Entity root, org.bukkit.Location teleportDestination) {
         List<Player> removed = new ArrayList<>();
         List<Entity> passengers = List.copyOf(root.getPassengers());
         for (Entity passenger : passengers) {
-            removed.addAll(ejectPassengers(passenger));
+            removed.addAll(ejectPassengers(passenger, teleportDestination));
+            if (isRideSeat(passenger)) {
+                passenger.remove();
+                continue;
+            }
             passenger.leaveVehicle();
-            passenger.teleport(root.getLocation().add(0, 0.5, 0));
+            passenger.teleport(teleportDestination);
             if (passenger instanceof Player player) {
                 removed.add(player);
             }
         }
         return removed;
+    }
+
+    private boolean isRideSeat(Entity entity) {
+        return entity.getScoreboardTags().contains(RIDE_SEAT_TAG);
     }
 }
