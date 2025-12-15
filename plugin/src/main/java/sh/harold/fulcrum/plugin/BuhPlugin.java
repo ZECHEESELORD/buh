@@ -30,6 +30,7 @@ import sh.harold.fulcrum.plugin.fun.FunModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.menu.MenuModule;
+import sh.harold.fulcrum.plugin.jukebox.JukeboxModule;
 import sh.harold.fulcrum.plugin.mob.MobModule;
 import sh.harold.fulcrum.plugin.staff.StaffCommandsModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
@@ -77,6 +78,7 @@ public final class BuhPlugin extends JavaPlugin {
     private MessageModule messageModule;
     private StashModule stashModule;
     private MenuModule menuModule;
+    private JukeboxModule jukeboxModule;
     private PlayerMenuModule playerMenuModule;
     private FeatureVoteModule featureVoteModule;
     private FunModule funModule;
@@ -216,6 +218,7 @@ public final class BuhPlugin extends JavaPlugin {
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
+        jukeboxModule = new JukeboxModule(this);
         unlockableModule = new UnlockableModule(this, dataModule, economyModule);
         statsModule = new StatsModule(this, playerDataModule);
         mobModule = new MobModule(this, statsModule);
@@ -248,6 +251,7 @@ public final class BuhPlugin extends JavaPlugin {
             messageModule,
             stashModule,
             menuModule,
+            jukeboxModule,
             unlockableModule,
             statsModule,
             mobModule,

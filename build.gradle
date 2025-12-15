@@ -57,6 +57,10 @@ subprojects {
             url = "https://repo.papermc.io/repository/maven-public/"
         }
         maven {
+            name = "maxhenkel-repo"
+            url = "https://maven.maxhenkel.de/repository/public/"
+        }
+        maven {
             name = "retrooper-repo"
             url = "https://repo.retrooper.com/repository/maven-releases/"
         }
