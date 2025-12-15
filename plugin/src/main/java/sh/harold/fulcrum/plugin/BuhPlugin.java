@@ -30,6 +30,7 @@ import sh.harold.fulcrum.plugin.fun.FunModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.scoreboard.ScoreboardFeature;
 import sh.harold.fulcrum.plugin.menu.MenuModule;
+import sh.harold.fulcrum.plugin.mob.MobModule;
 import sh.harold.fulcrum.plugin.staff.StaffCommandsModule;
 import sh.harold.fulcrum.plugin.stash.StashModule;
 import sh.harold.fulcrum.plugin.stash.StashService;
@@ -81,6 +82,7 @@ public final class BuhPlugin extends JavaPlugin {
     private FunModule funModule;
     private StaffCommandsModule staffCommandsModule;
     private StatsModule statsModule;
+    private MobModule mobModule;
     private ShutdownModule shutdownModule;
     private OsuLinkModule osuLinkModule;
     private UnlockableModule unlockableModule;
@@ -172,6 +174,10 @@ public final class BuhPlugin extends JavaPlugin {
         return statsModule;
     }
 
+    public Optional<sh.harold.fulcrum.plugin.mob.MobEngine> mobEngine() {
+        return mobModule == null ? Optional.empty() : Optional.ofNullable(mobModule.mobEngine());
+    }
+
     public Optional<FeatureVoteService> featureVoteService() {
         return featureVoteModule == null ? Optional.empty() : Optional.ofNullable(featureVoteModule.voteService());
     }
@@ -212,6 +218,7 @@ public final class BuhPlugin extends JavaPlugin {
         menuModule = new MenuModule(this);
         unlockableModule = new UnlockableModule(this, dataModule, economyModule);
         statsModule = new StatsModule(this, playerDataModule);
+        mobModule = new MobModule(this, statsModule);
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService, unlockableModule, statsModule);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
@@ -243,6 +250,7 @@ public final class BuhPlugin extends JavaPlugin {
             menuModule,
             unlockableModule,
             statsModule,
+            mobModule,
             playerMenuModule,
             featureVoteModule,
             funModule,
