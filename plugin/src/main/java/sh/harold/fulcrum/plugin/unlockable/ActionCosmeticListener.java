@@ -48,7 +48,7 @@ final class ActionCosmeticListener implements Listener {
     private static final String RIDE_NO_COLLIDE_TEAM = "rideNoCollide";
     private static final String RIDE_SEAT_TAG = "fulcrumRideSeat";
     private static final int RIDE_SEAT_DURATION_TICKS = 20 * 60 * 60 * 24;
-    private static final int RIDE_SEAT_CHAIN_LENGTH = 2;
+    private static final int RIDE_SEAT_CHAIN_LENGTH = 1;
 
     private final UnlockableService unlockableService;
     private final CosmeticRegistry cosmeticRegistry;
