@@ -19,6 +19,7 @@ import sh.harold.fulcrum.common.permissions.StaffService;
 import sh.harold.fulcrum.common.permissions.FormattedUsernameService;
 import sh.harold.fulcrum.plugin.chat.ChatChannelService;
 import sh.harold.fulcrum.plugin.chat.ChatModule;
+import sh.harold.fulcrum.plugin.chat.UnsignedChatModule;
 import sh.harold.fulcrum.plugin.config.ModuleConfigService;
 import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.economy.EconomyModule;
@@ -75,6 +76,7 @@ public final class BuhPlugin extends JavaPlugin {
     private EconomyModule economyModule;
     private LuckPermsModule luckPermsModule;
     private ChatModule chatModule;
+    private UnsignedChatModule unsignedChatModule;
     private MessageModule messageModule;
     private StashModule stashModule;
     private MenuModule menuModule;
@@ -215,6 +217,7 @@ public final class BuhPlugin extends JavaPlugin {
             chatCosmeticPrefixService
         );
         chatModule = new ChatModule(this, luckPermsModule, chatChannelService, messageService, playerDataModule, chatCosmeticPrefixService);
+        unsignedChatModule = new UnsignedChatModule(this);
         messageModule = new MessageModule(this, luckPermsModule, chatChannelService, messageService);
         stashModule = new StashModule(this, dataModule);
         menuModule = new MenuModule(this);
@@ -248,6 +251,7 @@ public final class BuhPlugin extends JavaPlugin {
             luckPermsModule,
             osuLinkModule,
             chatModule,
+            unsignedChatModule,
             messageModule,
             stashModule,
             menuModule,
