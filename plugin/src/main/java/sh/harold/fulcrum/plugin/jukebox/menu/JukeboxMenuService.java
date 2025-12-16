@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.logging.Level;
 
 public final class JukeboxMenuService {
 
@@ -75,7 +76,13 @@ public final class JukeboxMenuService {
             .thenApply(this::slotViews)
             .thenCompose(views -> openOnMainThread(player, views))
             .exceptionally(throwable -> {
-                plugin.getLogger().warning("Failed to open jukebox menu for " + ownerUuid);
+                plugin.getLogger().log(Level.WARNING, "Failed to open jukebox menu for " + ownerUuid, throwable);
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) {
+                        return;
+                    }
+                    player.sendMessage(Component.text("Could not open the jukebox menu right now.", NamedTextColor.RED));
+                });
                 return null;
             });
     }
