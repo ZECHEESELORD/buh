@@ -3,7 +3,6 @@ package sh.harold.fulcrum.plugin.mob;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import sh.harold.fulcrum.plugin.mob.pdc.MobPdc;
@@ -129,18 +128,8 @@ public final class MobNameplateService {
 
     private Component healthComponent(LivingEntity entity) {
         double current = Math.max(0.0, entity.getHealth());
-        double max = maxHealth(entity);
         String currentLabel = formatNumber(current);
-        String maxLabel = formatNumber(max);
-        return Component.text("❤ " + currentLabel + "/" + maxLabel, NamedTextColor.RED).decoration(TextDecoration.ITALIC, false);
-    }
-
-    private double maxHealth(LivingEntity entity) {
-        var attribute = entity.getAttribute(Attribute.MAX_HEALTH);
-        if (attribute == null) {
-            return Math.max(0.0, entity.getHealth());
-        }
-        return Math.max(0.0, attribute.getValue());
+        return Component.text(currentLabel + "❤", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false);
     }
 
     private String formatNumber(double value) {
