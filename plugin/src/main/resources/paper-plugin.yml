@@ -5,14 +5,15 @@ api-version: '1.21'
 prefix: buh
 load: POSTWORLD
 dependencies:
-  - name: LuckPerms
-    required: true
-    bootstrap: false
-    load: AFTER
-  - name: voicechat
-    required: false
-    bootstrap: false
-    load: AFTER
+  server:
+    LuckPerms:
+      load: BEFORE
+      required: true
+      joinClasspath: true
+    voicechat:
+      load: BEFORE
+      required: false
+      joinClasspath: true
 libraries:
   - 'com.mysql:mysql-connector-j:8.4.0'
 authors: [ Harold, ZECHEESELORD ]

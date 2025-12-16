@@ -9,6 +9,11 @@ import de.maxhenkel.voicechat.api.opus.OpusEncoder;
 import de.maxhenkel.voicechat.api.opus.OpusEncoderMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginEnableEvent;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.plugin.jukebox.JukeboxConfig;
 import sh.harold.fulcrum.plugin.jukebox.JukeboxTrackFiles;
@@ -32,8 +37,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class JukeboxPlaybackService implements JukeboxPlaybackEngine {
+public final class JukeboxPlaybackService implements JukeboxPlaybackEngine, Listener {
+
+    private static final String VOICECHAT_PLUGIN_NAME = "voicechat";
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -42,6 +50,7 @@ public final class JukeboxPlaybackService implements JukeboxPlaybackEngine {
     private final JukeboxTrackReader trackReader;
     private final ExecutorService ioExecutor;
     private final Map<JukeboxPlaybackKey, JukeboxPlaybackSession> sessions;
+    private final AtomicBoolean voicechatPluginRegistered;
 
     public JukeboxPlaybackService(JavaPlugin plugin, JukeboxConfig config) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -51,17 +60,41 @@ public final class JukeboxPlaybackService implements JukeboxPlaybackEngine {
         this.trackReader = new JukeboxTrackReader();
         this.ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
         this.sessions = new ConcurrentHashMap<>();
-        registerVoicechatPlugin();
+        this.voicechatPluginRegistered = new AtomicBoolean(false);
+
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        tryRegisterVoicechatPlugin();
     }
 
-    private void registerVoicechatPlugin() {
+    @EventHandler
+    public void onPluginEnable(PluginEnableEvent event) {
+        Plugin enabled = event.getPlugin();
+        if (!VOICECHAT_PLUGIN_NAME.equalsIgnoreCase(enabled.getName())) {
+            return;
+        }
+        tryRegisterVoicechatPlugin();
+    }
+
+    private void tryRegisterVoicechatPlugin() {
+        if (voicechatPluginRegistered.get()) {
+            return;
+        }
         BukkitVoicechatService service = plugin.getServer().getServicesManager().load(BukkitVoicechatService.class);
         if (service == null) {
-            logger.warning("jukebox: Simple Voice Chat not found; playback will be unavailable");
+            Plugin voicechat = plugin.getServer().getPluginManager().getPlugin(VOICECHAT_PLUGIN_NAME);
+            if (voicechat == null) {
+                logger.warning("jukebox: Simple Voice Chat not found; playback will be unavailable");
+            } else if (!voicechat.isEnabled()) {
+                logger.info("jukebox: Waiting for Simple Voice Chat to enable");
+            } else {
+                logger.warning("jukebox: Simple Voice Chat service not found; playback will be unavailable");
+            }
             return;
         }
         try {
             service.registerPlugin(new JukeboxVoicechatPlugin(voicechatApi));
+            voicechatPluginRegistered.set(true);
+            logger.info("jukebox: Registered Simple Voice Chat integration");
         } catch (Throwable throwable) {
             logger.log(Level.WARNING, "jukebox: Failed to register Simple Voice Chat plugin", throwable);
         }
@@ -106,6 +139,7 @@ public final class JukeboxPlaybackService implements JukeboxPlaybackEngine {
         stopAll();
         voicechatApi.clear();
         ioExecutor.close();
+        HandlerList.unregisterAll(this);
     }
 
     private TrackLoad loadTrack(String trackId) {
