@@ -19,7 +19,7 @@ public record JukeboxPlayerSlots(
 
     public JukeboxPlayerSlots {
         Objects.requireNonNull(ownerUuid, "ownerUuid");
-        slots = slots == null ? List.of() : List.copyOf(slots);
+        slots = slots == null ? List.of() : java.util.Collections.unmodifiableList(new ArrayList<>(slots));
     }
 
     public static JukeboxPlayerSlots empty(UUID ownerUuid, int slotCount) {
@@ -44,4 +44,3 @@ public record JukeboxPlayerSlots(
         return new JukeboxPlayerSlots(schemaVersion, ownerUuid, adjusted);
     }
 }
-
