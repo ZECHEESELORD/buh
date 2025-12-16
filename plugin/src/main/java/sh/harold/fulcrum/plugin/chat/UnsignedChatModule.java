@@ -17,7 +17,7 @@ public final class UnsignedChatModule implements FulcrumModule {
     private static final ModuleDescriptor DESCRIPTOR = new ModuleDescriptor(
         ModuleId.of("unsigned-chat"),
         Set.of(),
-        ModuleCategory.ADMIN
+        ModuleCategory.UTILITY
     );
 
     private final JavaPlugin plugin;
@@ -38,4 +38,3 @@ public final class UnsignedChatModule implements FulcrumModule {
         return CompletableFuture.completedFuture(null);
     }
 }
-
