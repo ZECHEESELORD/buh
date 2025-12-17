@@ -116,7 +116,7 @@ public final class UnlockableCatalog {
             SIT_ACTION,
             UnlockableType.COSMETIC,
             "Sit Action",
-            "Right-click a block with headroom to plop down.",
+            "Right-click a block with an empty hand and headroom to plop down.",
             List.of(new UnlockableTier(
                 1,
                 "Sit",
