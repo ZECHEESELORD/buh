@@ -23,6 +23,7 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
     private final StatsModule statsModule;
     private MobEngine mobEngine;
     private Listener lifecycleListener;
+    private Listener nameplateCleanupListener;
     private Listener nameTagListener;
     private Listener provocationListener;
     private Listener healthListener;
@@ -45,6 +46,7 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
             Objects.requireNonNull(statsModule.statService(), "StatService not available"),
             Objects.requireNonNull(statsModule.mappingConfig(), "StatMappingConfig not available")
         );
+        mobEngine.nameplateService().cleanupLoadedLabels();
         registerListeners();
         mobEngine.provocationService().start();
         mobEngine.controllerService().start();
@@ -57,6 +59,7 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
         if (mobEngine != null) {
             mobEngine.provocationService().stop();
             mobEngine.controllerService().stop();
+            mobEngine.nameplateService().cleanupLoadedLabels();
         }
         unregisterListeners();
         mobEngine = null;
@@ -76,11 +79,13 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
         unregisterListeners();
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         lifecycleListener = new MobLifecycleListener(mobEngine);
+        nameplateCleanupListener = new MobNameplateCleanupListener(mobEngine);
         provocationListener = new MobProvocationListener(plugin, mobEngine);
         nameTagListener = new MobNameTagListener(plugin, mobEngine);
         healthListener = new MobHealthListener(plugin, mobEngine);
         controllerListener = new MobControllerListener(mobEngine);
         pluginManager.registerEvents(lifecycleListener, plugin);
+        pluginManager.registerEvents(nameplateCleanupListener, plugin);
         pluginManager.registerEvents(provocationListener, plugin);
         pluginManager.registerEvents(nameTagListener, plugin);
         pluginManager.registerEvents(healthListener, plugin);
@@ -91,6 +96,10 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
         if (lifecycleListener != null) {
             HandlerList.unregisterAll(lifecycleListener);
             lifecycleListener = null;
+        }
+        if (nameplateCleanupListener != null) {
+            HandlerList.unregisterAll(nameplateCleanupListener);
+            nameplateCleanupListener = null;
         }
         if (nameTagListener != null) {
             HandlerList.unregisterAll(nameTagListener);
