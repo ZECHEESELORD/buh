@@ -27,6 +27,7 @@ public final class MobNameplateService {
     private static final long UPDATE_COOLDOWN_MILLIS = 150L;
     private static final float ENGINE_LABEL_SCALE = 0.85f;
     private static final float ENGINE_LABEL_OFFSET_Y = -0.22f;
+    private static final float ENGINE_LABEL_VIEW_RANGE = 48.0f;
 
     private final Plugin plugin;
     private final MobPdc mobPdc;
@@ -222,9 +223,11 @@ public final class MobNameplateService {
             display.setDefaultBackground(false);
             display.setShadowed(true);
             display.setSeeThrough(false);
+            display.setGravity(false);
             display.setPersistent(false);
             display.setTextOpacity((byte) 0xFF);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
+            display.setViewRange(ENGINE_LABEL_VIEW_RANGE);
             display.getPersistentDataContainer().set(engineLabelOwnerKey, PersistentDataType.STRING, ownerId.toString());
             applyDefaultTransform(display);
         });
