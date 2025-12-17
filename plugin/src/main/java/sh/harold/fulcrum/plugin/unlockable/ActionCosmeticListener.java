@@ -239,6 +239,9 @@ final class ActionCosmeticListener implements Listener {
         if (player.getVehicle() != null) {
             return;
         }
+        if (!player.getInventory().getItemInMainHand().getType().isAir()) {
+            return;
+        }
         Block clicked = event.getClickedBlock();
         if (clicked == null) {
             return;
