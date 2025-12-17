@@ -8,11 +8,13 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
+import sh.harold.fulcrum.api.menu.CustomMenuBuilder;
 import sh.harold.fulcrum.api.menu.Menu;
 import sh.harold.fulcrum.api.menu.MenuService;
 import sh.harold.fulcrum.api.menu.component.MenuButton;
+import sh.harold.fulcrum.api.menu.component.MenuDisplayItem;
 import sh.harold.fulcrum.api.menu.component.MenuItem;
-import sh.harold.fulcrum.api.menu.impl.DefaultListMenu;
+import sh.harold.fulcrum.api.menu.impl.DefaultCustomMenu;
 import sh.harold.fulcrum.plugin.jukebox.JukeboxConfig;
 import sh.harold.fulcrum.plugin.jukebox.JukeboxTrackFiles;
 import sh.harold.fulcrum.plugin.jukebox.JukeboxTrackMetadata;
@@ -28,8 +30,6 @@ import sh.harold.fulcrum.plugin.jukebox.mint.JukeboxTokenStore;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,8 +40,10 @@ import java.util.logging.Level;
 public final class JukeboxMenuService {
 
     private static final int MENU_ROWS = 6;
-    private static final int CONTENT_END_SLOT = 44;
     private static final long POLL_PERIOD_TICKS = 40L;
+    private static final int INFO_SLOT = 4;
+    private static final int VOICECHAT_STATUS_SLOT = 8;
+    private static final int TRACK_SLOT = 22;
     private static final int CLOSE_SLOT = 49;
     private static final int REFRESH_SLOT = 53;
 
@@ -73,8 +75,8 @@ public final class JukeboxMenuService {
         Objects.requireNonNull(player, "player");
         UUID ownerUuid = player.getUniqueId();
         return mintService.loadSlots(ownerUuid)
-            .thenApply(this::slotViews)
-            .thenCompose(views -> openOnMainThread(player, views))
+            .thenApply(this::slotView)
+            .thenCompose(view -> openOnMainThread(player, view))
             .exceptionally(throwable -> {
                 plugin.getLogger().log(Level.WARNING, "Failed to open jukebox menu for " + ownerUuid, throwable);
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -87,9 +89,9 @@ public final class JukeboxMenuService {
             });
     }
 
-    private CompletionStage<Void> openOnMainThread(Player player, List<SlotView> views) {
+    private CompletionStage<Void> openOnMainThread(Player player, SlotView view) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        plugin.getServer().getScheduler().runTask(plugin, () -> openWithViews(player, views).whenComplete((ignored, throwable) -> {
+        plugin.getServer().getScheduler().runTask(plugin, () -> openWithView(player, view).whenComplete((ignored, throwable) -> {
             if (throwable != null) {
                 future.completeExceptionally(throwable);
             } else {
@@ -99,40 +101,89 @@ public final class JukeboxMenuService {
         return future;
     }
 
-    private CompletionStage<Void> openWithViews(Player player, List<SlotView> views) {
-        List<MenuItem> buttons = slotButtons(views);
+    private CompletionStage<Void> openWithView(Player player, SlotView view) {
+        CustomMenuBuilder builder = menuService.createMenuBuilder()
+            .title(Component.text("Jukebox"))
+            .viewPort(MENU_ROWS)
+            .rows(MENU_ROWS)
+            .autoCloseButton(false)
+            .fillEmpty(Material.BLACK_STAINED_GLASS_PANE);
 
-        MenuButton closeButton = MenuButton.builder(Material.BARRIER)
+        decorate(builder);
+
+        builder.addItem(infoItem(), INFO_SLOT);
+        builder.addItem(voiceChatStatusItem(), VOICECHAT_STATUS_SLOT);
+        builder.addButton(trackButton(view));
+        builder.addButton(closeButton());
+        builder.addButton(refreshButton());
+
+        return builder.buildAsync(player)
+            .thenAccept(menu -> attachPolling(menu, player.getUniqueId()));
+    }
+
+    private void decorate(CustomMenuBuilder builder) {
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_13), 0);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_CAT), 1);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_BLOCKS), 2);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_CHIRP), 3);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_FAR), 5);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_MALL), 6);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_STAL), 7);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_STRAD), 9);
+        builder.addItem(decorativeDisc(Material.MUSIC_DISC_WARD), 10);
+    }
+
+    private MenuItem decorativeDisc(Material material) {
+        return MenuDisplayItem.builder(material)
+            .name(" ")
+            .build();
+    }
+
+    private MenuItem infoItem() {
+        return MenuDisplayItem.builder(Material.BOOK)
+            .name("&eHow It Works")
+            .secondary("Jukebox")
+            .description("Mint a track to receive a one time upload link. Upload your audio; the worker transcodes it into a 48 kHz mono PCM stream. Once ready, click your track to press a disc.")
+            .build();
+    }
+
+    private MenuItem voiceChatStatusItem() {
+        boolean available = plugin.getServer().getPluginManager().getPlugin("voicechat") != null;
+        if (!available) {
+            return MenuDisplayItem.builder(Material.GRAY_DYE)
+                .name("&7Voice Chat")
+                .secondary("Playback")
+                .description("Simple Voice Chat is not installed. Minting still works, but you will not hear tracks in game.")
+                .build();
+        }
+
+        return MenuDisplayItem.builder(Material.LIME_DYE)
+            .name("&aVoice Chat")
+            .secondary("Playback")
+            .description("Simple Voice Chat is installed. Jukeboxes can stream minted tracks to nearby listeners.")
+            .build();
+    }
+
+    private MenuButton closeButton() {
+        return MenuButton.builder(Material.BARRIER)
             .name("&cClose")
             .secondary("Jukebox")
-            .description("Close this menu and get back to the world.")
+            .description("Close this menu and return to the world.")
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(CLOSE_SLOT)
             .onClick(Player::closeInventory)
             .build();
+    }
 
-        MenuButton refreshButton = MenuButton.builder(Material.SUNFLOWER)
+    private MenuButton refreshButton() {
+        return MenuButton.builder(Material.SUNFLOWER)
             .name("&bRefresh")
             .secondary("Jukebox")
             .description("Pull the latest status from the worker.")
             .sound(Sound.UI_BUTTON_CLICK)
             .slot(REFRESH_SLOT)
-            .onClick(viewer -> refreshOpenMenu(viewer))
+            .onClick(this::refreshOpenMenu)
             .build();
-
-        return menuService.createListMenu()
-            .title(Component.text("Jukebox"))
-            .rows(MENU_ROWS)
-            .contentSlots(0, CONTENT_END_SLOT)
-            .fillEmpty(Material.BLACK_STAINED_GLASS_PANE, " ")
-            .addButton(closeButton)
-            .addButton(refreshButton)
-            .addItems(buttons)
-            .buildAsync(player)
-            .thenCompose(menu -> {
-                attachPolling(menu, player.getUniqueId());
-                return CompletableFuture.completedFuture(null);
-            });
     }
 
     private void refreshOpenMenu(Player player) {
@@ -153,114 +204,91 @@ public final class JukeboxMenuService {
             return;
         }
         mintService.loadSlots(ownerUuid)
-            .thenApply(this::slotViews)
-            .thenAccept(views -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+            .thenApply(this::slotView)
+            .thenAccept(view -> plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!menu.isOpen()) {
                     return;
                 }
-                Player viewer = menu.getViewer().orElse(null);
-                if (viewer == null) {
-                    return;
+                if (menu instanceof DefaultCustomMenu customMenu) {
+                    customMenu.setButton(trackButton(view), TRACK_SLOT);
                 }
-                if (!(menu instanceof DefaultListMenu listMenu)) {
-                    return;
-                }
-                listMenu.clearContentItems();
-                listMenu.addContentItems(slotButtons(views));
-                menu.update();
             }));
     }
 
-    private List<SlotView> slotViews(JukeboxPlayerSlots slots) {
-        List<SlotView> views = new ArrayList<>(slots.slots().size());
+    private SlotView slotView(JukeboxPlayerSlots slots) {
         long now = Instant.now().getEpochSecond();
-        for (int index = 0; index < slots.slots().size(); index++) {
-            String trackId = slots.slots().get(index);
-            if (trackId == null || trackId.isBlank()) {
-                views.add(SlotView.empty(index));
-                continue;
-            }
+        String trackId = slots.slots().isEmpty() ? null : slots.slots().getFirst();
+        if (trackId == null || trackId.isBlank()) {
+            return SlotView.empty();
+        }
 
-            JukeboxTrackFiles trackFiles = JukeboxTrackFiles.forTrack(config.tracksDirectory(), trackId);
-            JukeboxTrackMetadata metadata;
+        JukeboxTrackFiles trackFiles = JukeboxTrackFiles.forTrack(config.tracksDirectory(), trackId);
+        JukeboxTrackMetadata metadata;
+        try {
+            metadata = trackReader.read(trackFiles.jsonPath()).orElse(null);
+        } catch (IOException exception) {
+            return SlotView.error(trackId, "Track metadata unreadable.");
+        }
+        if (metadata == null) {
+            return SlotView.error(trackId, "Track metadata missing.");
+        }
+        if (!slots.ownerUuid().equals(metadata.ownerUuid())) {
+            return SlotView.error(trackId, "Track ownership mismatch.");
+        }
+        if (!trackId.equals(metadata.trackId())) {
+            return SlotView.error(trackId, "Track ID mismatch.");
+        }
+
+        if (metadata.status() == JukeboxTrackStatus.READY) {
+            JukeboxTrackValidation validation = JukeboxTrackValidator.validateReady(metadata, config, trackFiles.pcmPath());
+            if (!validation.valid()) {
+                return SlotView.error(trackId, validation.message().isBlank() ? "Track is not playable." : validation.message());
+            }
+        }
+
+        String uploadUrl = "";
+        long expiresAt = 0L;
+        if (metadata.status() == JukeboxTrackStatus.WAITING_UPLOAD) {
             try {
-                metadata = trackReader.read(trackFiles.jsonPath()).orElse(null);
-            } catch (IOException exception) {
-                views.add(SlotView.error(index, trackId, "Track metadata unreadable."));
-                continue;
-            }
-            if (metadata == null) {
-                views.add(SlotView.error(index, trackId, "Track metadata missing."));
-                continue;
-            }
-            if (!slots.ownerUuid().equals(metadata.ownerUuid())) {
-                views.add(SlotView.error(index, trackId, "Track ownership mismatch."));
-                continue;
-            }
-            if (!trackId.equals(metadata.trackId())) {
-                views.add(SlotView.error(index, trackId, "Track ID mismatch."));
-                continue;
-            }
-
-            if (metadata.status() == JukeboxTrackStatus.READY) {
-                JukeboxTrackValidation validation = JukeboxTrackValidator.validateReady(metadata, config, trackFiles.pcmPath());
-                if (!validation.valid()) {
-                    views.add(SlotView.error(index, trackId, validation.message().isBlank() ? "Track is not playable." : validation.message()));
-                    continue;
+                JukeboxMintTokenFile tokenFile = tokenStore.load(trackId).orElse(null);
+                if (tokenFile != null && !tokenFile.isExpired(now) && !tokenFile.isUsed()) {
+                    uploadUrl = config.uploadUrlTemplate()
+                        .replace("{trackId}", trackId)
+                        .replace("{token}", tokenFile.token());
+                    expiresAt = tokenFile.expiresAtEpochSeconds();
                 }
+            } catch (IOException ignored) {
             }
-
-            String uploadUrl = "";
-            long expiresAt = 0L;
-            if (metadata.status() == JukeboxTrackStatus.WAITING_UPLOAD) {
-                try {
-                    JukeboxMintTokenFile tokenFile = tokenStore.load(trackId).orElse(null);
-                    if (tokenFile != null && !tokenFile.isExpired(now) && !tokenFile.isUsed()) {
-                        uploadUrl = config.uploadUrlTemplate()
-                            .replace("{trackId}", trackId)
-                            .replace("{token}", tokenFile.token());
-                        expiresAt = tokenFile.expiresAtEpochSeconds();
-                    }
-                } catch (IOException ignored) {
-                }
-            }
-
-            views.add(new SlotView(index, trackId, metadata, uploadUrl, expiresAt, ""));
         }
-        return views;
+
+        return new SlotView(trackId, metadata, uploadUrl, expiresAt, "");
     }
 
-    private List<MenuItem> slotButtons(List<SlotView> views) {
-        List<MenuItem> items = new ArrayList<>(views.size());
-        for (SlotView view : views) {
-            items.add(slotButton(view));
-        }
-        return items;
-    }
-
-    private MenuItem slotButton(SlotView view) {
+    private MenuButton trackButton(SlotView view) {
         if (view.trackId == null) {
             return MenuButton.builder(Material.MUSIC_DISC_13)
-                .name("&aEmpty Slot #" + (view.slotIndex + 1))
+                .name("&aMint Track")
                 .secondary("Minting")
-                .description("Mint a new track for this slot. You will get an upload link, then the worker will transcode it for voice chat.")
+                .description("Mint a new track to receive an upload link. Everyone can store one track for now.")
                 .sound(Sound.UI_BUTTON_CLICK)
-                .onClick(viewer -> mint(viewer, view.slotIndex))
+                .slot(TRACK_SLOT)
+                .onClick(viewer -> mint(viewer, 0))
                 .build();
         }
 
         if (view.metadata == null) {
             return MenuButton.builder(Material.BARRIER)
-                .name("&cSlot #" + (view.slotIndex + 1) + ": Broken")
+                .name("&cTrack: Broken")
                 .secondary("Minting")
                 .description(view.problem.isBlank() ? "This slot points at a missing track. Clear it and mint again." : view.problem)
                 .sound(Sound.UI_BUTTON_CLICK)
+                .slot(TRACK_SLOT)
                 .requireConfirmation("&cClick again to clear this slot.")
-                .onClick(viewer -> clearSlot(viewer, view.slotIndex))
+                .onClick(viewer -> clearSlot(viewer, 0))
                 .build();
         }
 
-        String title = view.metadata.titleText().orElse("Slot #" + (view.slotIndex + 1));
+        String title = view.metadata.titleText().orElse("Minted Track");
         return switch (view.metadata.status()) {
             case WAITING_UPLOAD -> waitingUploadButton(view, title);
             case PROCESSING -> processingButton(view, title);
@@ -270,7 +298,7 @@ public final class JukeboxMenuService {
         };
     }
 
-    private MenuItem waitingUploadButton(SlotView view, String title) {
+    private MenuButton waitingUploadButton(SlotView view, String title) {
         String uploadHint = view.uploadUrl.isBlank()
             ? "The upload token is missing or expired. Clear the slot and mint again."
             : "Click to print your upload link to chat.";
@@ -281,8 +309,9 @@ public final class JukeboxMenuService {
             .description(uploadHint + " Shift right click cancels the mint.")
             .lore("&7Track ID: &f" + view.trackId)
             .sound(Sound.UI_BUTTON_CLICK)
+            .slot(TRACK_SLOT)
             .onClick(viewer -> printUploadLink(viewer, view))
-            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> cancelMint(viewer, view.slotIndex));
+            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> cancelMint(viewer, 0));
 
         if (view.expiresAtEpochSeconds > 0) {
             builder.lore("Expires at " + Instant.ofEpochSecond(view.expiresAtEpochSeconds) + ".");
@@ -291,19 +320,20 @@ public final class JukeboxMenuService {
         return builder.build();
     }
 
-    private MenuItem processingButton(SlotView view, String title) {
+    private MenuButton processingButton(SlotView view, String title) {
         return MenuButton.builder(Material.CLOCK)
             .name(Component.text(title, NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false))
             .secondary("Processing")
             .description("The worker is transcoding your track. Sit tight; it should be quick, but it does not rush for anyone. Shift right click cancels the mint.")
             .lore("&7Track ID: &f" + view.trackId)
             .sound(Sound.UI_BUTTON_CLICK)
+            .slot(TRACK_SLOT)
             .onClick(viewer -> viewer.sendMessage(Component.text("Still processing.", NamedTextColor.YELLOW)))
-            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> cancelMint(viewer, view.slotIndex))
+            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> cancelMint(viewer, 0))
             .build();
     }
 
-    private MenuItem readyButton(SlotView view, String title) {
+    private MenuButton readyButton(SlotView view, String title) {
         String duration = view.metadata == null ? "" : formatDuration(view.metadata.durationSeconds());
         String durationLine = duration.isBlank() ? null : "&7Duration: &f" + duration;
 
@@ -313,8 +343,9 @@ public final class JukeboxMenuService {
             .description("Click to press a disc. Put it in a jukebox to stream it through voice chat. Shift right click clears the slot.")
             .lore("&7Track ID: &f" + view.trackId)
             .sound(Sound.UI_BUTTON_CLICK)
+            .slot(TRACK_SLOT)
             .onClick(viewer -> giveDisc(viewer, view))
-            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> clearSlot(viewer, view.slotIndex));
+            .onClick(org.bukkit.event.inventory.ClickType.SHIFT_RIGHT, viewer -> clearSlot(viewer, 0));
 
         if (durationLine != null) {
             builder.lore(durationLine);
@@ -323,15 +354,16 @@ public final class JukeboxMenuService {
         return builder.build();
     }
 
-    private MenuItem failedButton(SlotView view, String title, String message) {
+    private MenuButton failedButton(SlotView view, String title, String message) {
         return MenuButton.builder(Material.BARRIER)
             .name(Component.text(title, NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
             .secondary("Minting")
             .description(message)
             .lore("&7Track ID: &f" + view.trackId)
             .sound(Sound.UI_BUTTON_CLICK)
+            .slot(TRACK_SLOT)
             .requireConfirmation("&cClick again to clear this slot.")
-            .onClick(viewer -> clearSlot(viewer, view.slotIndex))
+            .onClick(viewer -> clearSlot(viewer, 0))
             .build();
     }
 
@@ -407,20 +439,19 @@ public final class JukeboxMenuService {
     }
 
     private record SlotView(
-        int slotIndex,
         String trackId,
         JukeboxTrackMetadata metadata,
         String uploadUrl,
         long expiresAtEpochSeconds,
         String problem
     ) {
-        static SlotView empty(int slotIndex) {
-            return new SlotView(slotIndex, null, null, "", 0L, "");
+        static SlotView empty() {
+            return new SlotView(null, null, "", 0L, "");
         }
 
-        static SlotView error(int slotIndex, String trackId, String message) {
-            return new SlotView(slotIndex, trackId, null, "", 0L, message == null ? "" : message);
+        static SlotView error(String trackId, String message) {
+            return new SlotView(trackId, null, "", 0L, message == null ? "" : message);
         }
     }
-
 }
+

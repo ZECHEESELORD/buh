@@ -42,7 +42,7 @@ public record JukeboxConfig(
     );
     private static final FeatureConfigOption<Integer> SLOT_COUNT_OPTION = FeatureConfigOptions.intOption(
         "mint.slot-count",
-        10
+        1
     );
     private static final FeatureConfigOption<Long> TOKEN_TTL_SECONDS_OPTION = FeatureConfigOptions.longOption(
         "mint.token-ttl-seconds",
@@ -90,12 +90,14 @@ public record JukeboxConfig(
         Path tracksDirectory = resolvePath(pluginDataDirectory, configuration.value(TRACKS_PATH_OPTION));
         Path tokenDirectory = resolvePath(pluginDataDirectory, configuration.value(TOKENS_PATH_OPTION));
         Path slotsDirectory = resolvePath(pluginDataDirectory, configuration.value(SLOTS_PATH_OPTION));
+        int configuredSlotCount = Math.max(1, configuration.value(SLOT_COUNT_OPTION));
+        int slotCount = Math.min(configuredSlotCount, 1);
         return new JukeboxConfig(
             configuration.value(UPLOAD_URL_TEMPLATE_OPTION),
             tracksDirectory,
             tokenDirectory,
             slotsDirectory,
-            Math.max(1, configuration.value(SLOT_COUNT_OPTION)),
+            slotCount,
             Duration.ofSeconds(Math.max(1L, configuration.value(TOKEN_TTL_SECONDS_OPTION))),
             Math.max(1, configuration.value(AUDIBLE_RADIUS_OPTION)),
             Duration.ofMillis(Math.max(0L, configuration.value(FADE_IN_MILLIS_OPTION))),
