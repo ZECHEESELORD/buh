@@ -31,7 +31,7 @@ public final class MobEngine {
         this.statService = Objects.requireNonNull(statService, "statService");
         this.difficultyRater = new MobDifficultyRater(Objects.requireNonNull(mappingConfig, "mappingConfig"));
         this.lifecycleService = new MobLifecycleService(mobPdc, registry, this.statService);
-        this.nameplateService = new MobNameplateService(mobPdc, registry, difficultyRater);
+        this.nameplateService = new MobNameplateService(plugin, mobPdc, registry, difficultyRater);
         this.provocationService = new MobProvocationService(plugin, lifecycleService, nameplateService);
         this.controllerService = new MobControllerService(plugin, mobPdc, registry);
     }
