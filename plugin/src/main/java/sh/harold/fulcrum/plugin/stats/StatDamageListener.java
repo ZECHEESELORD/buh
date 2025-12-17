@@ -8,6 +8,7 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Firework;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -81,7 +82,9 @@ public final class StatDamageListener implements Listener {
         double baseDamage = event.getDamage();
         boolean critical = false;
         AbstractArrow arrow = arrowFromEvent(event);
+        boolean fireworkDamage = isFireworkRocketDamage(event);
         boolean useStatDamage = attacker != null
+            && !fireworkDamage
             && (event instanceof EntityDamageByEntityEvent
                 || event.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK
                 || event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK
@@ -518,6 +521,11 @@ public final class StatDamageListener implements Listener {
             return arrow;
         }
         return null;
+    }
+
+    private boolean isFireworkRocketDamage(EntityDamageEvent event) {
+        return event instanceof EntityDamageByEntityEvent byEntity
+            && byEntity.getDamager() instanceof Firework;
     }
 
     private double drawForce(AbstractArrow arrow) {
