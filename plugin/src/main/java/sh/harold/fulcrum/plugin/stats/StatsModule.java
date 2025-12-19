@@ -17,6 +17,7 @@ import sh.harold.fulcrum.stats.binding.StatBindingManager;
 import sh.harold.fulcrum.stats.core.StatRegistry;
 import sh.harold.fulcrum.stats.service.StatService;
 import sh.harold.fulcrum.plugin.item.stat.StatSourceContextRegistry;
+import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -38,6 +39,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
     private StatEntityListener statEntityListener;
     private StatDamageListener statDamageListener;
     private MovementSpeedListener movementSpeedListener;
+    private volatile ItemResolver itemResolver;
 
     public StatsModule(JavaPlugin plugin, PlayerDataModule playerDataModule) {
         this.plugin = plugin;
@@ -100,6 +102,13 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         return mappingConfig;
     }
 
+    public void attachItemResolver(ItemResolver itemResolver) {
+        this.itemResolver = itemResolver;
+        if (statDamageListener != null) {
+            statDamageListener.setItemResolver(itemResolver);
+        }
+    }
+
     public PlayerSettingsService playerSettingsService() {
         return playerSettingsService;
     }
@@ -132,6 +141,7 @@ public final class StatsModule implements FulcrumModule, ConfigurableModule {
         bowDrawListener = new BowDrawListener(bowDrawTracker);
         statEntityListener = new StatEntityListener(statService);
         statDamageListener = new StatDamageListener(plugin, statService, mappingConfig, damageMarkerRenderer, bowDrawTracker);
+        statDamageListener.setItemResolver(itemResolver);
         movementSpeedListener = new MovementSpeedListener(plugin, statService);
         pluginManager.registerEvents(bowDrawListener, plugin);
         pluginManager.registerEvents(statEntityListener, plugin);
