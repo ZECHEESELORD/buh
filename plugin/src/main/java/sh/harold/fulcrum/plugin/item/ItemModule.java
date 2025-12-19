@@ -51,6 +51,7 @@ public final class ItemModule implements FulcrumModule {
             .flatMap(DataApi::itemLedger)
             .orElse(null);
         engine = new ItemEngine(plugin, statsModule, providers, itemLedgerRepository);
+        statsModule.attachItemResolver(engine.resolver());
         registerSampleAbilities();
         MenuService menuService = plugin.getServer().getServicesManager().load(MenuService.class);
         if (menuService == null) {
@@ -67,6 +68,7 @@ public final class ItemModule implements FulcrumModule {
         if (engine != null) {
             engine.disable();
         }
+        statsModule.attachItemResolver(null);
         return CompletableFuture.completedFuture(null);
     }
 

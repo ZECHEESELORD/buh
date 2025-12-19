@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.damage.DamageType;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -36,6 +37,10 @@ import sh.harold.fulcrum.stats.core.StatSourceId;
 import sh.harold.fulcrum.stats.service.EntityKey;
 import sh.harold.fulcrum.stats.service.StatService;
 import sh.harold.fulcrum.plugin.item.runtime.ItemPdc;
+import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
+import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
+import sh.harold.fulcrum.plugin.item.runtime.StatContribution;
+import sh.harold.fulcrum.plugin.item.runtime.VanillaStatResolver;
 import java.util.concurrent.ThreadLocalRandom;
 
 import java.util.Collection;
@@ -53,6 +58,8 @@ public final class StatDamageListener implements Listener {
     private final DamageMarkerRenderer damageMarkerRenderer;
     private final ItemPdc itemPdc;
     private final BowDrawTracker bowDrawTracker;
+    private final VanillaStatResolver vanillaStatResolver = new VanillaStatResolver();
+    private volatile ItemResolver itemResolver;
 
     public StatDamageListener(Plugin plugin, StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer, BowDrawTracker bowDrawTracker) {
         Objects.requireNonNull(plugin, "plugin");
@@ -61,6 +68,10 @@ public final class StatDamageListener implements Listener {
         this.damageMarkerRenderer = damageMarkerRenderer;
         this.itemPdc = new ItemPdc(plugin);
         this.bowDrawTracker = bowDrawTracker;
+    }
+
+    public void setItemResolver(ItemResolver itemResolver) {
+        this.itemResolver = itemResolver;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -73,7 +84,9 @@ public final class StatDamageListener implements Listener {
         }
 
         LivingEntity attacker = resolveAttacker(event);
-        MaceSmash maceSmash = attacker == null ? MaceSmash.inactive() : computeMaceSmash(event, attacker);
+        DamageType damageType = event.getDamageSource() == null ? null : event.getDamageSource().getDamageType();
+        SpearCharge spearCharge = attacker == null ? SpearCharge.inactive() : computeSpearCharge(event, attacker, defender, damageType);
+        MaceSmash maceSmash = attacker == null ? MaceSmash.inactive() : computeMaceSmash(event, attacker, damageType);
         ConditionContext attackContext = buildAttackContext(attacker, defender, event.getCause());
         ConditionContext defenseContext = buildDefenseContext(defender, event.getCause());
 
@@ -106,10 +119,43 @@ public final class StatDamageListener implements Listener {
                         critical = critical || arrow.isCritical();
                     }
                 } else {
-                    double nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
-                    double enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
-                    double basePortion = nonEnchantDamage + maceSmash.bonusDamage();
-                    baseDamage = scaleForAttackCooldown(basePortion, enchantDamage, attackStrength(attacker));
+                    double nonEnchantDamage;
+                    double enchantDamage;
+                    double basePortion;
+                    double strength;
+
+                    if (spearCharge.active()) {
+                        strength = 1.0;
+                        if (spearCharge.hand() == EquipmentSlot.OFF_HAND) {
+                            double spearNonEnchantFlat = spearAttackDamageFromNonEnchants(spearCharge.spearStack(), attackContext);
+                            double spearEnchantFlat = spearAttackDamageFromEnchants(spearCharge.spearStack(), attackContext);
+                            nonEnchantDamage = computeAttackDamageWithExtraFlat(
+                                attackerContainer,
+                                attackContext,
+                                sourceId -> !isEnchantSource(sourceId) && !isMainHandSource(sourceId),
+                                spearNonEnchantFlat
+                            );
+                            attackDamage = computeAttackDamageWithExtraFlat(
+                                attackerContainer,
+                                attackContext,
+                                sourceId -> !isMainHandSource(sourceId),
+                                spearNonEnchantFlat + spearEnchantFlat
+                            );
+                            enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
+                            basePortion = nonEnchantDamage + spearCharge.bonusDamage();
+                        } else {
+                            nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
+                            enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
+                            basePortion = nonEnchantDamage + spearCharge.bonusDamage();
+                        }
+                    } else {
+                        nonEnchantDamage = attackDamageExcludingEnchants(attackerContainer, attackContext);
+                        enchantDamage = Math.max(0.0, attackDamage - nonEnchantDamage);
+                        basePortion = nonEnchantDamage + maceSmash.bonusDamage();
+                        strength = attackStrength(attacker);
+                    }
+
+                    baseDamage = scaleForAttackCooldown(basePortion, enchantDamage, strength);
                     double critMultiplier = attackerContainer.getStat(StatIds.CRIT_DAMAGE);
                     if (attacker instanceof Player player && isCritical(player)) {
                         baseDamage *= critMultiplier;
@@ -118,7 +164,7 @@ public final class StatDamageListener implements Listener {
                 }
             }
         }
-        CriticalStrikeResult criticalStrike = rollCriticalStrike(event, attacker, baseDamage);
+        CriticalStrikeResult criticalStrike = rollCriticalStrike(event, attacker, damageType, baseDamage);
         baseDamage = criticalStrike.damage();
         critical = critical || criticalStrike.triggered();
 
@@ -238,7 +284,10 @@ public final class StatDamageListener implements Listener {
             && !player.hasPotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS);
     }
 
-    private MaceSmash computeMaceSmash(EntityDamageEvent event, LivingEntity attacker) {
+    private MaceSmash computeMaceSmash(EntityDamageEvent event, LivingEntity attacker, DamageType damageType) {
+        if (!isDamageType(damageType, "mace_smash")) {
+            return MaceSmash.inactive();
+        }
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
             return MaceSmash.inactive();
         }
@@ -397,7 +446,10 @@ public final class StatDamageListener implements Listener {
         return enchantment == null ? 0 : item.getEnchantmentLevel(enchantment);
     }
 
-    private CriticalStrikeResult rollCriticalStrike(EntityDamageEvent event, LivingEntity attacker, double baseDamage) {
+    private CriticalStrikeResult rollCriticalStrike(EntityDamageEvent event, LivingEntity attacker, DamageType damageType, double baseDamage) {
+        if (isDamageType(damageType, "spear")) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
             return new CriticalStrikeResult(false, baseDamage);
         }
@@ -408,7 +460,7 @@ public final class StatDamageListener implements Listener {
             return new CriticalStrikeResult(false, baseDamage);
         }
         ItemStack weapon = attacker.getEquipment().getItem(EquipmentSlot.HAND);
-        if (weapon == null || weapon.getType().isAir()) {
+        if (weapon == null || isAir(weapon.getType())) {
             return new CriticalStrikeResult(false, baseDamage);
         }
         Material type = weapon.getType();
@@ -457,6 +509,14 @@ public final class StatDamageListener implements Listener {
         return computeAttackDamage(container, context, sourceId -> !isEnchantSource(sourceId));
     }
 
+    private double attackDamageExcludingMainHand(StatContainer container, ConditionContext context) {
+        return computeAttackDamage(container, context, sourceId -> !isMainHandSource(sourceId));
+    }
+
+    private double attackDamageExcludingEnchantsAndMainHand(StatContainer container, ConditionContext context) {
+        return computeAttackDamage(container, context, sourceId -> !isEnchantSource(sourceId) && !isMainHandSource(sourceId));
+    }
+
     private double computeAttackDamage(StatContainer container, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
         StatSnapshot snapshot = container.debugView().stream()
             .filter(entry -> StatIds.ATTACK_DAMAGE.equals(entry.statId()))
@@ -468,8 +528,26 @@ public final class StatDamageListener implements Listener {
         return computeDamageFromSnapshot(snapshot, context, sourceFilter);
     }
 
+    private double computeAttackDamageWithExtraFlat(StatContainer container, ConditionContext context, Predicate<StatSourceId> sourceFilter, double extraFlat) {
+        if (Double.compare(extraFlat, 0.0) == 0) {
+            return computeAttackDamage(container, context, sourceFilter);
+        }
+        StatSnapshot snapshot = container.debugView().stream()
+            .filter(entry -> StatIds.ATTACK_DAMAGE.equals(entry.statId()))
+            .findFirst()
+            .orElse(null);
+        if (snapshot == null) {
+            return container.getStat(StatIds.ATTACK_DAMAGE, context) + extraFlat;
+        }
+        return computeDamageFromSnapshot(snapshot, context, sourceFilter, extraFlat);
+    }
+
     private double computeDamageFromSnapshot(StatSnapshot snapshot, ConditionContext context, Predicate<StatSourceId> sourceFilter) {
-        double flatSum = snapshot.baseValue() + sumModifiers(snapshot, ModifierOp.FLAT, context, sourceFilter);
+        return computeDamageFromSnapshot(snapshot, context, sourceFilter, 0.0);
+    }
+
+    private double computeDamageFromSnapshot(StatSnapshot snapshot, ConditionContext context, Predicate<StatSourceId> sourceFilter, double extraFlat) {
+        double flatSum = snapshot.baseValue() + sumModifiers(snapshot, ModifierOp.FLAT, context, sourceFilter) + extraFlat;
         double percentAddFactor = 1.0 + sumModifiers(snapshot, ModifierOp.PERCENT_ADD, context, sourceFilter);
         double percentMultFactor = productModifiers(snapshot, ModifierOp.PERCENT_MULT, context, sourceFilter);
         return Math.max(0.0, flatSum * percentAddFactor * percentMultFactor);
@@ -513,6 +591,10 @@ public final class StatDamageListener implements Listener {
         return product;
     }
 
+    private boolean isMainHandSource(StatSourceId sourceId) {
+        return sourceId != null && sourceId.value() != null && sourceId.value().startsWith("item:main_hand");
+    }
+
     private AbstractArrow arrowFromEvent(EntityDamageEvent event) {
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
             return null;
@@ -544,6 +626,227 @@ public final class StatDamageListener implements Listener {
         double maxBonus = Math.max(0.0, baseDamage / 2.0 + 2.0);
         double bonus = ThreadLocalRandom.current().nextDouble(0.0, maxBonus);
         return baseDamage + bonus;
+    }
+
+    private SpearCharge computeSpearCharge(EntityDamageEvent event, LivingEntity attacker, LivingEntity defender, DamageType damageType) {
+        if (!isDamageType(damageType, "spear")) {
+            return SpearCharge.inactive();
+        }
+        if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
+            return SpearCharge.inactive();
+        }
+        if (!(byEntity.getDamager() instanceof LivingEntity directAttacker) || directAttacker != attacker) {
+            return SpearCharge.inactive();
+        }
+        if (!attacker.isHandRaised() || !attacker.hasActiveItem()) {
+            return SpearCharge.inactive();
+        }
+        ItemStack active = attacker.getActiveItem();
+        if (active == null || isAir(active.getType())) {
+            return SpearCharge.inactive();
+        }
+        Material material = active.getType();
+        if (!isSpear(material)) {
+            return SpearCharge.inactive();
+        }
+        double multiplier = spearChargeMultiplier(material);
+        if (Double.compare(multiplier, 0.0) <= 0) {
+            return SpearCharge.inactive();
+        }
+        double relativeSpeed = relativeSpeedAlongLook(attacker, defender);
+        double bonusDamage = Math.floor(Math.max(0.0, relativeSpeed) * multiplier);
+        return new SpearCharge(true, attacker.getActiveItemHand(), active.clone(), bonusDamage);
+    }
+
+    private boolean isDamageType(DamageType damageType, String minecraftKey) {
+        if (damageType == null || minecraftKey == null || minecraftKey.isBlank()) {
+            return false;
+        }
+        NamespacedKey key = damageType.getKey();
+        return key != null && key.equals(NamespacedKey.minecraft(minecraftKey));
+    }
+
+    private boolean isAir(Material material) {
+        if (material == null) {
+            return true;
+        }
+        return switch (material) {
+            case AIR, CAVE_AIR, VOID_AIR -> true;
+            default -> false;
+        };
+    }
+
+    private boolean isSpear(Material material) {
+        if (material == null) {
+            return false;
+        }
+        String name = material.name();
+        return name.equals("SPEAR") || name.endsWith("_SPEAR");
+    }
+
+    private double spearChargeMultiplier(Material material) {
+        if (material == null) {
+            return 0.0;
+        }
+        return switch (material) {
+            case WOODEN_SPEAR, GOLDEN_SPEAR -> 0.7;
+            case STONE_SPEAR, COPPER_SPEAR -> 0.82;
+            case IRON_SPEAR -> 0.95;
+            case DIAMOND_SPEAR -> 1.075;
+            case NETHERITE_SPEAR -> 1.2;
+            default -> 0.0;
+        };
+    }
+
+    private double relativeSpeedAlongLook(LivingEntity attacker, LivingEntity defender) {
+        if (attacker == null || defender == null) {
+            return 0.0;
+        }
+        Vector look = attacker.getLocation().getDirection();
+        if (look == null) {
+            return 0.0;
+        }
+        look.setY(0.0);
+        if (look.lengthSquared() == 0.0) {
+            return 0.0;
+        }
+        Vector direction = look.normalize();
+        Vector attackerMotion = motion(attacker);
+        attackerMotion.setY(0.0);
+        attackerMotion.multiply(20.0);
+        Vector defenderMotion = motion(defender);
+        defenderMotion.setY(0.0);
+        defenderMotion.multiply(20.0);
+        double attackerSpeed = direction.dot(attackerMotion);
+        double defenderSpeed = direction.dot(defenderMotion);
+        return Math.max(0.0, attackerSpeed - defenderSpeed);
+    }
+
+    private Vector motion(LivingEntity entity) {
+        if (entity == null) {
+            return new Vector();
+        }
+        if (!(entity instanceof Player) && entity.isInsideVehicle() && entity.getVehicle() != null) {
+            Entity root = entity;
+            while (root.getVehicle() != null) {
+                root = root.getVehicle();
+            }
+            Vector velocity = root.getVelocity();
+            return velocity == null ? new Vector() : velocity.clone();
+        }
+        Vector velocity = entity.getVelocity();
+        return velocity == null ? new Vector() : velocity.clone();
+    }
+
+    private double spearAttackDamageFromNonEnchants(ItemStack stack, ConditionContext context) {
+        if (stack == null || isAir(stack.getType())) {
+            return 0.0;
+        }
+        ItemResolver resolver = itemResolver;
+        if (resolver != null) {
+            ItemInstance instance = resolver.resolve(stack).orElse(null);
+            if (instance != null) {
+                double total = 0.0;
+                for (Map.Entry<String, Map<sh.harold.fulcrum.stats.core.StatId, StatContribution>> entry : instance.statSources().entrySet()) {
+                    if (entry.getKey().startsWith("enchant:")) {
+                        continue;
+                    }
+                    StatContribution contribution = entry.getValue().get(StatIds.ATTACK_DAMAGE);
+                    if (contribution == null) {
+                        continue;
+                    }
+                    if (contribution.condition() == null || contribution.condition().test(context)) {
+                        total += contribution.value();
+                    }
+                }
+                return total;
+            }
+        }
+        return baseAttackDamageForEnchantScaling(stack);
+    }
+
+    private double spearAttackDamageFromEnchants(ItemStack stack, ConditionContext context) {
+        if (stack == null || isAir(stack.getType())) {
+            return 0.0;
+        }
+        ItemResolver resolver = itemResolver;
+        if (resolver != null) {
+            ItemInstance instance = resolver.resolve(stack).orElse(null);
+            if (instance != null) {
+                double total = 0.0;
+                for (Map.Entry<String, Map<sh.harold.fulcrum.stats.core.StatId, StatContribution>> entry : instance.statSources().entrySet()) {
+                    if (!entry.getKey().startsWith("enchant:")) {
+                        continue;
+                    }
+                    StatContribution contribution = entry.getValue().get(StatIds.ATTACK_DAMAGE);
+                    if (contribution == null) {
+                        continue;
+                    }
+                    if (contribution.condition() == null || contribution.condition().test(context)) {
+                        total += contribution.value();
+                    }
+                }
+                return total;
+            }
+        }
+        return fallbackSpearEnchantDamage(stack, context);
+    }
+
+    private double fallbackSpearEnchantDamage(ItemStack stack, ConditionContext context) {
+        double baseAttackDamage = baseAttackDamageForEnchantScaling(stack);
+        if (Double.compare(baseAttackDamage, 0.0) <= 0) {
+            return 0.0;
+        }
+        int sharpnessLevel = enchantLevel(stack, "sharpness");
+        int smiteLevel = enchantLevel(stack, "smite");
+        int baneLevel = enchantLevel(stack, "bane_of_arthropods");
+        double bonus = 0.0;
+        if (sharpnessLevel > 0) {
+            bonus += baseAttackDamage * sharpnessCurveValue(sharpnessLevel);
+        }
+        if (smiteLevel > 0 && context != null && context.hasTag("target:undead")) {
+            bonus += baseAttackDamage * 0.05 * smiteLevel;
+        }
+        if (baneLevel > 0 && context != null && context.hasTag("target:arthropod")) {
+            bonus += baseAttackDamage * 0.05 * baneLevel;
+        }
+        return bonus;
+    }
+
+    private double baseAttackDamageForEnchantScaling(ItemStack stack) {
+        if (stack == null || isAir(stack.getType())) {
+            return 0.0;
+        }
+        ItemResolver resolver = itemResolver;
+        if (resolver != null) {
+            ItemInstance instance = resolver.resolve(stack).orElse(null);
+            if (instance != null) {
+                Map<sh.harold.fulcrum.stats.core.StatId, StatContribution> base = instance.statSources().get("base");
+                if (base != null) {
+                    StatContribution contribution = base.get(StatIds.ATTACK_DAMAGE);
+                    if (contribution != null) {
+                        return contribution.value();
+                    }
+                }
+            }
+        }
+        try {
+            return vanillaStatResolver.statsFor(stack.getType()).getOrDefault(StatIds.ATTACK_DAMAGE, 0.0);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    private double sharpnessCurveValue(int level) {
+        if (level <= 0) {
+            return 0.0;
+        }
+        if (level <= 4) {
+            return level * 0.05;
+        }
+        double bonus = 0.20; // level 4 value
+        double extra = ((level - 1.0) * (level - 4.0)) / 2.0; // sum of (level-3) from 5..level
+        return bonus + 0.05 * extra;
     }
 
     private double computeTridentDamage(Trident trident, LivingEntity defender, double attackDamage, double fallbackDamage) {
@@ -609,6 +912,12 @@ public final class StatDamageListener implements Listener {
     );
 
     private record CriticalStrikeResult(boolean triggered, double damage) {
+    }
+
+    private record SpearCharge(boolean active, EquipmentSlot hand, ItemStack spearStack, double bonusDamage) {
+        static SpearCharge inactive() {
+            return new SpearCharge(false, EquipmentSlot.HAND, null, 0.0);
+        }
     }
 
     private record MaceSmash(boolean active, double bonusDamage, double fallDistance, int breachLevel, int windBurstLevel) {
