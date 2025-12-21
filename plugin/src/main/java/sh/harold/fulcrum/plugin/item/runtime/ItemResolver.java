@@ -107,6 +107,7 @@ public final class ItemResolver {
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:density"));
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:breach"));
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:wind_burst"));
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("lunge"))).ifPresent(enchant -> ids.put(enchant, "fulcrum:lunge"));
         return Map.copyOf(ids);
     }
 

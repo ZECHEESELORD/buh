@@ -310,6 +310,7 @@ public final class ItemEngine {
         register("fulcrum:loyalty", "Loyalty", "Trident returns after throwing.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:channeling", "Channeling", "Summons lightning on hit in storms.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:riptide", "Riptide", "Launches with trident in water or rain.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
+        register("fulcrum:lunge", "Lunge", "After a spear lunge hit, you surge forward; higher levels push farther.", 3, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:impaling", "Impaling", "More damage to aquatic mobs.", 5, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:multishot", "Multishot", "Fires three arrows at once.", 1, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());
         register("fulcrum:piercing", "Piercing", "Arrows pass through targets.", 4, null, 0, EnchantDefinition.LevelCurve.linear(), false, java.util.Set.of());

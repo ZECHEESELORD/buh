@@ -142,6 +142,7 @@ public final class EnchantService {
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchant -> enchants.put("fulcrum:density", enchant));
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchant -> enchants.put("fulcrum:breach", enchant));
         Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchant -> enchants.put("fulcrum:wind_burst", enchant));
+        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("lunge"))).ifPresent(enchant -> enchants.put("fulcrum:lunge", enchant));
         return Map.copyOf(enchants);
     }
 
