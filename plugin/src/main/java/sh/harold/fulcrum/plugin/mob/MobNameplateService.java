@@ -27,8 +27,8 @@ public final class MobNameplateService {
 
     private static final long UPDATE_COOLDOWN_MILLIS = 150L;
     private static final float LABEL_SCALE = 0.85f;
-    private static final float NAME_LABEL_OFFSET_Y = 0.08f;
-    private static final float HEALTH_LABEL_OFFSET_Y = -0.12f;
+    private static final float NAME_LABEL_OFFSET_Y = 0.12f;
+    private static final float HEALTH_LABEL_OFFSET_Y = -0.08f;
     private static final float LABEL_VIEW_RANGE = 48.0f;
 
     private static final LabelSlot NAME_LABEL = new LabelSlot("name", NAME_LABEL_OFFSET_Y);
