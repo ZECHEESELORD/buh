@@ -157,9 +157,6 @@ public final class EnchantService {
         enchants.add(Enchantment.FEATHER_FALLING);
         enchants.add(Enchantment.POWER);
         enchants.add(Enchantment.PUNCH);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchants::add);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchants::add);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchants::add);
         return Set.copyOf(enchants);
     }
 }
