@@ -16,12 +16,14 @@ import org.bukkit.plugin.Plugin;
 import sh.harold.fulcrum.plugin.mob.pdc.MobPdc;
 import sh.harold.fulcrum.stats.core.StatId;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MobNameplateService {
 
@@ -49,6 +51,8 @@ public final class MobNameplateService {
     private final Map<UUID, Component> pendingHealthText = new ConcurrentHashMap<>();
     private final Set<UUID> pendingNameSpawn = ConcurrentHashMap.newKeySet();
     private final Set<UUID> pendingHealthSpawn = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingRemovalIds = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean removalTaskScheduled = new AtomicBoolean(false);
 
     public MobNameplateService(Plugin plugin, MobPdc mobPdc, MobRegistry registry, MobDifficultyRater difficultyRater) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -375,11 +379,31 @@ public final class MobNameplateService {
         if (entity == null) {
             return;
         }
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (entity.isValid()) {
-                entity.remove();
+        UUID id = entity.getUniqueId();
+        pendingRemovalIds.add(id);
+        scheduleRemovalFlush();
+    }
+
+    private void scheduleRemovalFlush() {
+        if (!removalTaskScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, this::flushPendingRemovals, 1L);
+    }
+
+    private void flushPendingRemovals() {
+        Set<UUID> snapshot = new HashSet<>(pendingRemovalIds);
+        pendingRemovalIds.removeAll(snapshot);
+        for (UUID entityId : snapshot) {
+            Entity resolved = Bukkit.getEntity(entityId);
+            if (resolved != null && resolved.isValid()) {
+                resolved.remove();
             }
-        }, 1L);
+        }
+        removalTaskScheduled.set(false);
+        if (!pendingRemovalIds.isEmpty()) {
+            scheduleRemovalFlush();
+        }
     }
 
     private boolean isOwnedLabel(TextDisplay display, UUID ownerId, LabelSlot slot) {
