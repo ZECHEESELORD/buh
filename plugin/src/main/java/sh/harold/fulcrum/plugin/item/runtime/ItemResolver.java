@@ -139,9 +139,6 @@ public final class ItemResolver {
         enchants.add(Enchantment.FEATHER_FALLING);
         enchants.add(Enchantment.POWER);
         enchants.add(Enchantment.PUNCH);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("density"))).ifPresent(enchants::add);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("breach"))).ifPresent(enchants::add);
-        Optional.ofNullable(Enchantment.getByKey(NamespacedKey.minecraft("wind_burst"))).ifPresent(enchants::add);
         return Set.copyOf(enchants);
     }
 
@@ -223,6 +220,7 @@ public final class ItemResolver {
         } else {
             tagged = itemPdc.clearEnchants(tagged);
         }
+        tagged = syncVanillaEnchants(tagged, enchants);
         tagged = storeTrim(tagged);
         final CustomItem finalDefinition = definition;
         if (shouldTagInstance(definition)) {
@@ -238,6 +236,46 @@ public final class ItemResolver {
         tagged = mirrorAttributes(tagged, definition, stats);
         tagged = sh.harold.fulcrum.plugin.item.runtime.ItemSanitizer.normalize(tagged);
         return Optional.of(new ItemInstance(definition, tagged, stats, enchants, enchantRegistry, DurabilityState.from(durabilityData)));
+    }
+
+    private ItemStack syncVanillaEnchants(ItemStack stack, Map<String, Integer> enchants) {
+        if (stack == null || enchants == null || enchants.isEmpty()) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            return stack;
+        }
+        boolean metaChanged = false;
+        boolean isBook = meta instanceof EnchantmentStorageMeta;
+        for (Map.Entry<String, Integer> entry : enchants.entrySet()) {
+            String enchantId = entry.getKey();
+            int level = entry.getValue() == null ? 0 : entry.getValue();
+            if (enchantId == null || enchantId.isBlank() || level <= 0) {
+                continue;
+            }
+            Enchantment vanilla = ENCHANTS_BY_ID.get(enchantId);
+            if (vanilla == null || OVERRIDDEN_ENCHANTS.contains(vanilla)) {
+                continue;
+            }
+            if (isBook && meta instanceof EnchantmentStorageMeta storage) {
+                int stored = storage.getStoredEnchantLevel(vanilla);
+                if (stored >= level) {
+                    continue;
+                }
+                metaChanged |= storage.addStoredEnchant(vanilla, level, true);
+            } else {
+                int existing = meta.getEnchantLevel(vanilla);
+                if (existing >= level) {
+                    continue;
+                }
+                metaChanged |= meta.addEnchant(vanilla, level, true);
+            }
+        }
+        if (metaChanged) {
+            stack.setItemMeta(meta);
+        }
+        return stack;
     }
 
     public ItemStack applyId(ItemStack stack, String id) {
