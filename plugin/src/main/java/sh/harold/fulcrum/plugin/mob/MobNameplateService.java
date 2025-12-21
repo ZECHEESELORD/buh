@@ -361,14 +361,25 @@ public final class MobNameplateService {
         if (labelId != null) {
             Entity resolved = Bukkit.getEntity(labelId);
             if (resolved != null) {
-                resolved.remove();
+                scheduleRemoval(resolved);
             }
         }
         for (Entity passenger : owner.getPassengers()) {
             if (passenger instanceof TextDisplay display && isOwnedLabel(display, ownerId, slot)) {
-                display.remove();
+                scheduleRemoval(display);
             }
         }
+    }
+
+    private void scheduleRemoval(Entity entity) {
+        if (entity == null) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (entity.isValid()) {
+                entity.remove();
+            }
+        }, 1L);
     }
 
     private boolean isOwnedLabel(TextDisplay display, UUID ownerId, LabelSlot slot) {
