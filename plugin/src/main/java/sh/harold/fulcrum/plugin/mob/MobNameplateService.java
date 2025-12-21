@@ -25,24 +25,33 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class MobNameplateService {
 
     private static final long UPDATE_COOLDOWN_MILLIS = 150L;
-    private static final float ENGINE_LABEL_SCALE = 0.85f;
-    private static final float ENGINE_LABEL_OFFSET_Y = -0.22f;
-    private static final float ENGINE_LABEL_VIEW_RANGE = 48.0f;
+    private static final float LABEL_SCALE = 0.85f;
+    private static final float NAME_LABEL_OFFSET_Y = -0.12f;
+    private static final float HEALTH_LABEL_OFFSET_Y = -0.32f;
+    private static final float LABEL_VIEW_RANGE = 48.0f;
+
+    private static final LabelSlot NAME_LABEL = new LabelSlot("name", NAME_LABEL_OFFSET_Y);
+    private static final LabelSlot HEALTH_LABEL = new LabelSlot("health", HEALTH_LABEL_OFFSET_Y);
+
+    private record LabelSlot(String type, float offsetY) {}
 
     private final Plugin plugin;
     private final MobPdc mobPdc;
     private final MobRegistry registry;
     private final MobDifficultyRater difficultyRater;
-    private final NamespacedKey engineLabelOwnerKey;
+    private final NamespacedKey labelOwnerKey;
+    private final NamespacedKey labelTypeKey;
     private final Map<UUID, Long> recentUpdates = new ConcurrentHashMap<>();
-    private final Map<UUID, UUID> engineLabelsByOwner = new ConcurrentHashMap<>();
+    private final Map<UUID, UUID> nameLabelsByOwner = new ConcurrentHashMap<>();
+    private final Map<UUID, UUID> healthLabelsByOwner = new ConcurrentHashMap<>();
 
     public MobNameplateService(Plugin plugin, MobPdc mobPdc, MobRegistry registry, MobDifficultyRater difficultyRater) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.mobPdc = Objects.requireNonNull(mobPdc, "mobPdc");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.difficultyRater = Objects.requireNonNull(difficultyRater, "difficultyRater");
-        this.engineLabelOwnerKey = new NamespacedKey(plugin, "mob-engine-label-owner");
+        this.labelOwnerKey = new NamespacedKey(plugin, "mob-engine-label-owner");
+        this.labelTypeKey = new NamespacedKey(plugin, "mob-engine-label-type");
     }
 
     public void refresh(LivingEntity entity, boolean forceVisible) {
@@ -69,22 +78,26 @@ public final class MobNameplateService {
             .orElse(MobTier.VANILLA);
 
         String baseName = mobPdc.readNameBase(entity).orElse(null);
-        boolean isNameTaggedVanilla = tier == MobTier.VANILLA && baseName != null && !baseName.isBlank();
-        if (isNameTaggedVanilla) {
-            ensureBaseName(entity, baseName);
-            if (forceVisible) {
-                TextDisplay labelEntity = ensureEngineLabel(entity);
-                labelEntity.text(buildEngineLine(entity, definition, tier, true));
-            } else {
-                removeEngineLabel(entity);
-            }
-            mobPdc.writeNameMode(entity, MobNameMode.BASE);
+        boolean renamed = baseName != null && !baseName.isBlank();
+
+        if (!forceVisible) {
+            restoreBaseName(entity);
             return;
         }
 
-        removeEngineLabel(entity);
-        entity.customName(buildEngineLine(entity, definition, tier, false));
-        entity.setCustomNameVisible(forceVisible);
+        if (renamed) {
+            Component nameLine = buildNameLine(entity, definition, tier, baseName);
+            entity.customName(nameLine);
+            entity.setCustomNameVisible(true);
+            removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
+        } else {
+            suppressVanillaName(entity);
+            TextDisplay nameLabel = ensureLabel(entity, NAME_LABEL, nameLabelsByOwner);
+            nameLabel.text(buildNameLine(entity, definition, tier, null));
+        }
+
+        TextDisplay healthLabel = ensureLabel(entity, HEALTH_LABEL, healthLabelsByOwner);
+        healthLabel.text(buildHealthLine(entity));
         mobPdc.writeNameMode(entity, MobNameMode.ENGINE);
     }
 
@@ -92,13 +105,14 @@ public final class MobNameplateService {
         if (entity == null || entity.isDead() || !entity.isValid()) {
             return;
         }
-        removeEngineLabel(entity);
+        removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
+        removeLabel(entity, healthLabelsByOwner, HEALTH_LABEL);
         String stored = mobPdc.readNameBase(entity).orElse(null);
         if (stored == null || stored.isBlank()) {
-            entity.customName(null);
-            entity.setCustomNameVisible(false);
+            suppressVanillaName(entity);
         } else {
-            ensureBaseName(entity, stored);
+            entity.customName(buildBaseLine(stored));
+            entity.setCustomNameVisible(true);
         }
         mobPdc.writeNameMode(entity, MobNameMode.BASE);
         recentUpdates.remove(entity.getUniqueId());
@@ -107,7 +121,8 @@ public final class MobNameplateService {
     public void forget(LivingEntity entity) {
         if (entity != null) {
             recentUpdates.remove(entity.getUniqueId());
-            removeEngineLabel(entity);
+            removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
+            removeLabel(entity, healthLabelsByOwner, HEALTH_LABEL);
         }
     }
 
@@ -124,25 +139,32 @@ public final class MobNameplateService {
             return false;
         }
         PersistentDataContainer container = display.getPersistentDataContainer();
-        String ownerRaw = container.get(engineLabelOwnerKey, PersistentDataType.STRING);
+        String ownerRaw = container.get(labelOwnerKey, PersistentDataType.STRING);
         if (ownerRaw == null || ownerRaw.isBlank()) {
             return false;
         }
+        String labelType = container.get(labelTypeKey, PersistentDataType.STRING);
         try {
             UUID ownerId = UUID.fromString(ownerRaw);
-            engineLabelsByOwner.remove(ownerId, display.getUniqueId());
+            if (NAME_LABEL.type().equals(labelType)) {
+                nameLabelsByOwner.remove(ownerId, display.getUniqueId());
+            } else if (HEALTH_LABEL.type().equals(labelType)) {
+                healthLabelsByOwner.remove(ownerId, display.getUniqueId());
+            } else {
+                nameLabelsByOwner.remove(ownerId, display.getUniqueId());
+                healthLabelsByOwner.remove(ownerId, display.getUniqueId());
+            }
         } catch (IllegalArgumentException ignored) {
         }
         display.remove();
         return true;
     }
 
-    private Component buildEngineLine(LivingEntity entity, MobDefinition definition, MobTier tier, boolean nameBaseIsSeparateLine) {
+    private Component buildNameLine(LivingEntity entity, MobDefinition definition, MobTier tier, String customName) {
         Map<StatId, Double> bases = mobPdc.readStatBases(entity).orElse(Map.of());
         int level = difficultyRater.level(bases);
 
-        Component name = resolveName(entity, definition, tier, nameBaseIsSeparateLine);
-        Component health = healthComponent(entity);
+        Component name = resolveName(entity, definition, customName);
 
         Component root = Component.empty();
         Component tierMarker = tierMarker(tier);
@@ -150,26 +172,36 @@ public final class MobNameplateService {
             root = root.append(tierMarker).append(Component.space());
         }
 
-        Component levelLabel = Component.text("Lv " + level, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
+        Component levelLabel = Component.text("Lvl" + level, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
         return root
             .append(levelLabel)
             .append(Component.space())
             .append(name)
-            .append(Component.space())
-            .append(health)
             .decoration(TextDecoration.ITALIC, false);
     }
 
-    private Component resolveName(LivingEntity entity, MobDefinition definition, MobTier tier, boolean nameBaseIsSeparateLine) {
-        if (tier != MobTier.VANILLA && definition != null && !definition.displayName().equals(Component.empty())) {
-            return definition.displayName().decoration(TextDecoration.ITALIC, false);
+    private Component buildHealthLine(LivingEntity entity) {
+        return healthComponent(entity);
+    }
+
+    private Component resolveName(LivingEntity entity, MobDefinition definition, String customName) {
+        Component baseName = resolveBaseName(entity, definition);
+        if (customName == null || customName.isBlank()) {
+            return baseName;
         }
-        if (!nameBaseIsSeparateLine) {
-            String stored = mobPdc.readNameBase(entity).orElse(null);
-            if (stored != null && !stored.isBlank()) {
-                return Component.text(stored, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false);
-            }
-        }
+        Component customLabel = Component.text("\"" + customName + "\"", NamedTextColor.WHITE)
+            .decoration(TextDecoration.ITALIC, false);
+        Component parenthesized = Component.text("(", NamedTextColor.GRAY)
+            .append(baseName)
+            .append(Component.text(")", NamedTextColor.GRAY))
+            .decoration(TextDecoration.ITALIC, false);
+        return customLabel
+            .append(Component.space())
+            .append(parenthesized)
+            .decoration(TextDecoration.ITALIC, false);
+    }
+
+    private Component resolveBaseName(LivingEntity entity, MobDefinition definition) {
         if (definition != null && !definition.displayName().equals(Component.empty())) {
             return definition.displayName().decoration(TextDecoration.ITALIC, false);
         }
@@ -191,58 +223,53 @@ public final class MobNameplateService {
         return Component.text(currentLabel + "❤", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false);
     }
 
-    private void ensureBaseName(LivingEntity entity, String baseName) {
-        MobNameMode mode = mobPdc.readNameMode(entity).orElse(MobNameMode.BASE);
-        Component current = entity.customName();
-        if (mode == MobNameMode.ENGINE || current == null || current.equals(Component.empty())) {
-            entity.customName(Component.text(baseName, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
-        }
-        entity.setCustomNameVisible(true);
+    private Component buildBaseLine(String baseName) {
+        return Component.text(baseName, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false);
     }
 
-    private TextDisplay ensureEngineLabel(LivingEntity owner) {
+    private void suppressVanillaName(LivingEntity entity) {
+        entity.customName(null);
+        entity.setCustomNameVisible(false);
+    }
+
+    private TextDisplay ensureLabel(LivingEntity owner, LabelSlot slot, Map<UUID, UUID> labelMap) {
         UUID ownerId = owner.getUniqueId();
-        UUID existingId = engineLabelsByOwner.get(ownerId);
+        UUID existingId = labelMap.get(ownerId);
         if (existingId != null) {
             Entity resolved = Bukkit.getEntity(existingId);
             if (resolved instanceof TextDisplay display && display.isValid()) {
+                applyLabelDefaults(display, slot);
                 return display;
             }
-            engineLabelsByOwner.remove(ownerId);
+            labelMap.remove(ownerId);
         }
 
         for (Entity passenger : owner.getPassengers()) {
-            if (passenger instanceof TextDisplay display && isOwnedEngineLabel(display, ownerId)) {
-                engineLabelsByOwner.put(ownerId, display.getUniqueId());
+            if (passenger instanceof TextDisplay display && isOwnedLabel(display, ownerId, slot)) {
+                applyLabelDefaults(display, slot);
+                labelMap.put(ownerId, display.getUniqueId());
                 return display;
             }
         }
 
         TextDisplay created = owner.getWorld().spawn(owner.getLocation(), TextDisplay.class, display -> {
-            display.setBillboard(Display.Billboard.CENTER);
-            display.setDefaultBackground(false);
-            display.setShadowed(true);
-            display.setSeeThrough(false);
-            display.setGravity(false);
-            display.setPersistent(false);
-            display.setTextOpacity((byte) 0xFF);
-            display.setAlignment(TextDisplay.TextAlignment.CENTER);
-            display.setViewRange(ENGINE_LABEL_VIEW_RANGE);
-            display.getPersistentDataContainer().set(engineLabelOwnerKey, PersistentDataType.STRING, ownerId.toString());
-            applyDefaultTransform(display);
+            applyLabelDefaults(display, slot);
+            PersistentDataContainer container = display.getPersistentDataContainer();
+            container.set(labelOwnerKey, PersistentDataType.STRING, ownerId.toString());
+            container.set(labelTypeKey, PersistentDataType.STRING, slot.type());
         });
 
         owner.addPassenger(created);
-        engineLabelsByOwner.put(ownerId, created.getUniqueId());
+        labelMap.put(ownerId, created.getUniqueId());
         return created;
     }
 
-    private void removeEngineLabel(LivingEntity owner) {
+    private void removeLabel(LivingEntity owner, Map<UUID, UUID> labelMap, LabelSlot slot) {
         if (owner == null) {
             return;
         }
         UUID ownerId = owner.getUniqueId();
-        UUID labelId = engineLabelsByOwner.remove(ownerId);
+        UUID labelId = labelMap.remove(ownerId);
         if (labelId != null) {
             Entity resolved = Bukkit.getEntity(labelId);
             if (resolved != null) {
@@ -250,24 +277,39 @@ public final class MobNameplateService {
             }
         }
         for (Entity passenger : owner.getPassengers()) {
-            if (passenger instanceof TextDisplay display && isOwnedEngineLabel(display, ownerId)) {
+            if (passenger instanceof TextDisplay display && isOwnedLabel(display, ownerId, slot)) {
                 display.remove();
             }
         }
     }
 
-    private boolean isOwnedEngineLabel(TextDisplay display, UUID ownerId) {
-        String stored = display.getPersistentDataContainer().get(engineLabelOwnerKey, PersistentDataType.STRING);
-        return ownerId.toString().equals(stored);
+    private boolean isOwnedLabel(TextDisplay display, UUID ownerId, LabelSlot slot) {
+        PersistentDataContainer container = display.getPersistentDataContainer();
+        String storedOwner = container.get(labelOwnerKey, PersistentDataType.STRING);
+        String storedType = container.get(labelTypeKey, PersistentDataType.STRING);
+        return ownerId.toString().equals(storedOwner) && slot.type().equals(storedType);
     }
 
-    private void applyDefaultTransform(TextDisplay display) {
+    private void applyLabelDefaults(TextDisplay display, LabelSlot slot) {
+        display.setBillboard(Display.Billboard.CENTER);
+        display.setDefaultBackground(false);
+        display.setShadowed(true);
+        display.setSeeThrough(false);
+        display.setGravity(false);
+        display.setPersistent(false);
+        display.setTextOpacity((byte) 0xFF);
+        display.setAlignment(TextDisplay.TextAlignment.CENTER);
+        display.setViewRange(LABEL_VIEW_RANGE);
+        applyDefaultTransform(display, slot.offsetY());
+    }
+
+    private void applyDefaultTransform(TextDisplay display, float offsetY) {
         org.bukkit.util.Transformation current = display.getTransformation();
         if (current == null) {
             return;
         }
-        org.joml.Vector3f translation = new org.joml.Vector3f(0.0f, ENGINE_LABEL_OFFSET_Y, 0.0f);
-        org.joml.Vector3f scale = new org.joml.Vector3f(ENGINE_LABEL_SCALE, ENGINE_LABEL_SCALE, ENGINE_LABEL_SCALE);
+        org.joml.Vector3f translation = new org.joml.Vector3f(0.0f, offsetY, 0.0f);
+        org.joml.Vector3f scale = new org.joml.Vector3f(LABEL_SCALE, LABEL_SCALE, LABEL_SCALE);
         display.setTransformation(new org.bukkit.util.Transformation(translation, current.getLeftRotation(), scale, current.getRightRotation()));
     }
 

@@ -145,7 +145,10 @@ public final class MobModule implements FulcrumModule, ConfigurableModule {
                     mobEngine.provocationService().markProvoked(living);
                     continue;
                 }
-                if (mobEngine.mobPdc().readNameMode(living).orElse(MobNameMode.BASE) == MobNameMode.ENGINE) {
+                boolean hasBaseName = mobEngine.mobPdc().readNameBase(living)
+                    .filter(name -> !name.isBlank())
+                    .isPresent();
+                if (hasBaseName || mobEngine.mobPdc().readNameMode(living).orElse(MobNameMode.BASE) == MobNameMode.ENGINE) {
                     mobEngine.nameplateService().restoreBaseName(living);
                 }
             }
