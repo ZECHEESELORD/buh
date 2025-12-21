@@ -27,8 +27,8 @@ public final class MobNameplateService {
 
     private static final long UPDATE_COOLDOWN_MILLIS = 150L;
     private static final float LABEL_SCALE = 0.85f;
-    private static final float NAME_LABEL_OFFSET_Y = -0.12f;
-    private static final float HEALTH_LABEL_OFFSET_Y = -0.32f;
+    private static final float NAME_LABEL_OFFSET_Y = 0.08f;
+    private static final float HEALTH_LABEL_OFFSET_Y = -0.12f;
     private static final float LABEL_VIEW_RANGE = 48.0f;
 
     private static final LabelSlot NAME_LABEL = new LabelSlot("name", NAME_LABEL_OFFSET_Y);
@@ -90,6 +90,7 @@ public final class MobNameplateService {
             return;
         }
 
+        Component healthLine = buildHealthLine(entity);
         if (renamed) {
             Component nameLine = buildNameLine(entity, definition, tier, baseName);
             entity.customName(nameLine);
@@ -104,6 +105,8 @@ public final class MobNameplateService {
                 pendingNameText,
                 pendingNameSpawn,
                 buildNameLine(entity, definition, tier, null)
+                    .append(Component.space())
+                    .append(healthLine)
             );
         }
 
@@ -113,7 +116,7 @@ public final class MobNameplateService {
             healthLabelsByOwner,
             pendingHealthText,
             pendingHealthSpawn,
-            buildHealthLine(entity)
+            renamed ? healthLine : null
         );
         mobPdc.writeNameMode(entity, MobNameMode.ENGINE);
     }
@@ -197,7 +200,7 @@ public final class MobNameplateService {
             root = root.append(tierMarker).append(Component.space());
         }
 
-        Component levelLabel = Component.text("Lvl" + level, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
+        Component levelLabel = Component.text("Lv." + level, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false);
         return root
             .append(levelLabel)
             .append(Component.space())
