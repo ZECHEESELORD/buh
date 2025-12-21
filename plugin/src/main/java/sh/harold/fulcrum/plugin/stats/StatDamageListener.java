@@ -375,12 +375,11 @@ public final class StatDamageListener implements Listener {
         }
         int densityLevel = enchantLevel(heldItem, "density");
         int breachLevel = enchantLevel(heldItem, "breach");
-        int windBurstLevel = enchantLevel(heldItem, "wind_burst");
         double damageBonus = maceDamageBonus(fallDistance, densityLevel);
         if (Double.compare(damageBonus, 0.0) <= 0) {
             return MaceSmash.inactive();
         }
-        return new MaceSmash(true, damageBonus, fallDistance, breachLevel, windBurstLevel);
+        return new MaceSmash(true, damageBonus, fallDistance, breachLevel);
     }
 
     private double maceDamageBonus(double fallDistance, int densityLevel) {
@@ -400,43 +399,6 @@ public final class StatDamageListener implements Listener {
         attacker.setFallDistance(0.0f);
         applyMaceShockwave(attacker, defender, maceSmash.fallDistance());
         playMaceSound(attacker, defender, maceSmash.fallDistance());
-        if (maceSmash.windBurstLevel() > 0) {
-            applyWindBurst(attacker, maceSmash.windBurstLevel());
-        }
-    }
-
-    private void applyWindBurst(LivingEntity attacker, int level) {
-        if (attacker == null) {
-            return;
-        }
-        double radius = 3.5;
-        double basePower = switch (level) {
-            case 1 -> 1.2;
-            case 2 -> 1.75;
-            case 3 -> 2.2;
-            default -> 1.5 + 0.35 * level;
-        };
-        Vector upward = new Vector(0.0, Math.max(0.6, 0.6 + 0.2 * level), 0.0);
-        attacker.setVelocity(attacker.getVelocity().add(upward));
-        attacker.getWorld().playSound(attacker.getLocation(), "minecraft:wind_charge.burst", org.bukkit.SoundCategory.PLAYERS, 1.0f, 1.0f);
-        Collection<LivingEntity> nearby = attacker.getWorld().getNearbyLivingEntities(attacker.getLocation(), radius, entity ->
-            shouldAffectWithShockwave(attacker, attacker, entity, radius)
-        );
-        for (LivingEntity living : nearby) {
-            Vector offset = living.getLocation().toVector().subtract(attacker.getLocation().toVector());
-            if (offset.lengthSquared() == 0.0) {
-                continue;
-            }
-            double distance = offset.length();
-            AttributeInstance resistance = living.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
-            double resistanceScale = resistance == null ? 0.0 : resistance.getValue();
-            double knockbackPower = (radius - distance) / radius * basePower * (1.0 - resistanceScale);
-            if (Double.compare(knockbackPower, 0.0) <= 0) {
-                continue;
-            }
-            Vector impulse = offset.normalize().multiply(knockbackPower).setY(0.25 + 0.1 * level);
-            living.setVelocity(living.getVelocity().add(impulse));
-        }
     }
 
     private void applyMaceShockwave(LivingEntity attacker, LivingEntity target, double fallDistance) {
@@ -1053,9 +1015,9 @@ public final class StatDamageListener implements Listener {
         }
     }
 
-    private record MaceSmash(boolean active, double bonusDamage, double fallDistance, int breachLevel, int windBurstLevel) {
+    private record MaceSmash(boolean active, double bonusDamage, double fallDistance, int breachLevel) {
         static MaceSmash inactive() {
-            return new MaceSmash(false, 0.0, 0.0, 0, 0);
+            return new MaceSmash(false, 0.0, 0.0, 0);
         }
     }
 }
