@@ -46,7 +46,10 @@ final class MobLifecycleListener implements Listener {
             return;
         }
 
-        if (engine.mobPdc().readNameMode(living).orElse(MobNameMode.BASE) == MobNameMode.ENGINE) {
+        boolean hasBaseName = engine.mobPdc().readNameBase(living)
+            .filter(name -> !name.isBlank())
+            .isPresent();
+        if (hasBaseName || engine.mobPdc().readNameMode(living).orElse(MobNameMode.BASE) == MobNameMode.ENGINE) {
             engine.nameplateService().restoreBaseName(living);
         }
     }

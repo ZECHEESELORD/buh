@@ -86,6 +86,8 @@ final class MobNameTagListener implements Listener {
             engine.mobPdc().writeNameBase(living, plain);
             if (engine.shouldShowNameplate(living)) {
                 engine.nameplateService().refresh(living, true, true);
+            } else {
+                engine.nameplateService().restoreBaseName(living);
             }
         });
     }
