@@ -118,6 +118,8 @@ public final class StatDamageListener implements Listener {
                         baseDamage = applyArrowCritical(arrow, rangedBase);
                         critical = critical || arrow.isCritical();
                     }
+                } else if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
+                    baseDamage = computeSweepDamage(attacker, attackDamage);
                 } else {
                     double nonEnchantDamage;
                     double enchantDamage;
@@ -271,6 +273,14 @@ public final class StatDamageListener implements Listener {
 
     private void applyFinalDamage(EntityDamageEvent event, double finalDamage) {
         event.setDamage(finalDamage);
+    }
+
+    private double computeSweepDamage(LivingEntity attacker, double attackDamage) {
+        ItemStack weapon = attacker.getEquipment() == null ? null : attacker.getEquipment().getItem(EquipmentSlot.HAND);
+        int level = enchantLevel(weapon, "sweeping_edge");
+        double ratio = level <= 0 ? 0.0 : (double) level / (level + 1.0);
+        double sweepDamage = 1.0 + attackDamage * ratio;
+        return Math.max(0.0, Math.round(sweepDamage)); // Vanilla: round(1 + AD * (L / (L + 1)))
     }
 
     private boolean isCritical(Player player) {
@@ -447,6 +457,9 @@ public final class StatDamageListener implements Listener {
     }
 
     private CriticalStrikeResult rollCriticalStrike(EntityDamageEvent event, LivingEntity attacker, DamageType damageType, double baseDamage) {
+        if (event != null && event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
+            return new CriticalStrikeResult(false, baseDamage);
+        }
         if (isDamageType(damageType, "spear")) {
             return new CriticalStrikeResult(false, baseDamage);
         }
