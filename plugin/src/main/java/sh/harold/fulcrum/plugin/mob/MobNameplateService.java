@@ -19,6 +19,7 @@ import sh.harold.fulcrum.stats.core.StatId;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -44,6 +45,10 @@ public final class MobNameplateService {
     private final Map<UUID, Long> recentUpdates = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> nameLabelsByOwner = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> healthLabelsByOwner = new ConcurrentHashMap<>();
+    private final Map<UUID, Component> pendingNameText = new ConcurrentHashMap<>();
+    private final Map<UUID, Component> pendingHealthText = new ConcurrentHashMap<>();
+    private final Set<UUID> pendingNameSpawn = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingHealthSpawn = ConcurrentHashMap.newKeySet();
 
     public MobNameplateService(Plugin plugin, MobPdc mobPdc, MobRegistry registry, MobDifficultyRater difficultyRater) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -89,15 +94,27 @@ public final class MobNameplateService {
             Component nameLine = buildNameLine(entity, definition, tier, baseName);
             entity.customName(nameLine);
             entity.setCustomNameVisible(true);
-            removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
+            updateLabel(entity, NAME_LABEL, nameLabelsByOwner, pendingNameText, pendingNameSpawn, null);
         } else {
             suppressVanillaName(entity);
-            TextDisplay nameLabel = ensureLabel(entity, NAME_LABEL, nameLabelsByOwner);
-            nameLabel.text(buildNameLine(entity, definition, tier, null));
+            updateLabel(
+                entity,
+                NAME_LABEL,
+                nameLabelsByOwner,
+                pendingNameText,
+                pendingNameSpawn,
+                buildNameLine(entity, definition, tier, null)
+            );
         }
 
-        TextDisplay healthLabel = ensureLabel(entity, HEALTH_LABEL, healthLabelsByOwner);
-        healthLabel.text(buildHealthLine(entity));
+        updateLabel(
+            entity,
+            HEALTH_LABEL,
+            healthLabelsByOwner,
+            pendingHealthText,
+            pendingHealthSpawn,
+            buildHealthLine(entity)
+        );
         mobPdc.writeNameMode(entity, MobNameMode.ENGINE);
     }
 
@@ -107,6 +124,10 @@ public final class MobNameplateService {
         }
         removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
         removeLabel(entity, healthLabelsByOwner, HEALTH_LABEL);
+        pendingNameText.remove(entity.getUniqueId());
+        pendingHealthText.remove(entity.getUniqueId());
+        pendingNameSpawn.remove(entity.getUniqueId());
+        pendingHealthSpawn.remove(entity.getUniqueId());
         String stored = mobPdc.readNameBase(entity).orElse(null);
         if (stored == null || stored.isBlank()) {
             suppressVanillaName(entity);
@@ -123,6 +144,10 @@ public final class MobNameplateService {
             recentUpdates.remove(entity.getUniqueId());
             removeLabel(entity, nameLabelsByOwner, NAME_LABEL);
             removeLabel(entity, healthLabelsByOwner, HEALTH_LABEL);
+            pendingNameText.remove(entity.getUniqueId());
+            pendingHealthText.remove(entity.getUniqueId());
+            pendingNameSpawn.remove(entity.getUniqueId());
+            pendingHealthSpawn.remove(entity.getUniqueId());
         }
     }
 
@@ -232,7 +257,62 @@ public final class MobNameplateService {
         entity.setCustomNameVisible(false);
     }
 
-    private TextDisplay ensureLabel(LivingEntity owner, LabelSlot slot, Map<UUID, UUID> labelMap) {
+    private void updateLabel(
+        LivingEntity owner,
+        LabelSlot slot,
+        Map<UUID, UUID> labelMap,
+        Map<UUID, Component> pendingText,
+        Set<UUID> pendingSpawn,
+        Component text
+    ) {
+        UUID ownerId = owner.getUniqueId();
+        if (text == null) {
+            pendingText.remove(ownerId);
+            pendingSpawn.remove(ownerId);
+            removeLabel(owner, labelMap, slot);
+            return;
+        }
+        TextDisplay display = findLabel(owner, slot, labelMap);
+        if (display != null) {
+            display.text(text);
+            pendingText.put(ownerId, text);
+            return;
+        }
+        pendingText.put(ownerId, text);
+        scheduleLabelSpawn(owner, slot, labelMap, pendingText, pendingSpawn);
+    }
+
+    private void scheduleLabelSpawn(
+        LivingEntity owner,
+        LabelSlot slot,
+        Map<UUID, UUID> labelMap,
+        Map<UUID, Component> pendingText,
+        Set<UUID> pendingSpawn
+    ) {
+        UUID ownerId = owner.getUniqueId();
+        if (!pendingSpawn.add(ownerId)) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            pendingSpawn.remove(ownerId);
+            if (owner.isDead() || !owner.isValid()) {
+                return;
+            }
+            Component text = pendingText.get(ownerId);
+            if (text == null) {
+                return;
+            }
+            TextDisplay display = findLabel(owner, slot, labelMap);
+            if (display == null) {
+                display = spawnLabel(owner, slot, labelMap);
+            }
+            if (display != null) {
+                display.text(text);
+            }
+        }, 1L);
+    }
+
+    private TextDisplay findLabel(LivingEntity owner, LabelSlot slot, Map<UUID, UUID> labelMap) {
         UUID ownerId = owner.getUniqueId();
         UUID existingId = labelMap.get(ownerId);
         if (existingId != null) {
@@ -252,6 +332,11 @@ public final class MobNameplateService {
             }
         }
 
+        return null;
+    }
+
+    private TextDisplay spawnLabel(LivingEntity owner, LabelSlot slot, Map<UUID, UUID> labelMap) {
+        UUID ownerId = owner.getUniqueId();
         TextDisplay created = owner.getWorld().spawn(owner.getLocation(), TextDisplay.class, display -> {
             applyLabelDefaults(display, slot);
             PersistentDataContainer container = display.getPersistentDataContainer();
