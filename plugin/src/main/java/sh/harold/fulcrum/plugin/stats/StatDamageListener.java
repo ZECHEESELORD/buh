@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.stats;
 
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
@@ -19,6 +20,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
@@ -41,6 +44,8 @@ import sh.harold.fulcrum.plugin.item.runtime.ItemInstance;
 import sh.harold.fulcrum.plugin.item.runtime.ItemResolver;
 import sh.harold.fulcrum.plugin.item.runtime.StatContribution;
 import sh.harold.fulcrum.plugin.item.runtime.VanillaStatResolver;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 import java.util.Collection;
@@ -59,6 +64,7 @@ public final class StatDamageListener implements Listener {
     private final ItemPdc itemPdc;
     private final BowDrawTracker bowDrawTracker;
     private final VanillaStatResolver vanillaStatResolver = new VanillaStatResolver();
+    private final Map<UUID, KnownSpeedSample> knownSpeeds = new ConcurrentHashMap<>();
     private volatile ItemResolver itemResolver;
 
     public StatDamageListener(Plugin plugin, StatService statService, StatMappingConfig config, DamageMarkerRenderer damageMarkerRenderer, BowDrawTracker bowDrawTracker) {
@@ -72,6 +78,58 @@ public final class StatDamageListener implements Listener {
 
     public void setItemResolver(ItemResolver itemResolver) {
         this.itemResolver = itemResolver;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (event == null) {
+            return;
+        }
+        Player player = event.getPlayer();
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        if (playerId == null) {
+            return;
+        }
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (from == null || to == null) {
+            return;
+        }
+        if (!Objects.equals(from.getWorld(), to.getWorld())) {
+            knownSpeeds.remove(playerId);
+            return;
+        }
+        double dx = to.getX() - from.getX();
+        double dy = to.getY() - from.getY();
+        double dz = to.getZ() - from.getZ();
+        if (Double.compare(dx, 0.0) == 0 && Double.compare(dy, 0.0) == 0 && Double.compare(dz, 0.0) == 0) {
+            return;
+        }
+        Vector perTickSpeed = new Vector(dx, dy, dz);
+        if (perTickSpeed.lengthSquared() > MAX_KNOWN_SPEED_PER_TICK_SQUARED) {
+            knownSpeeds.remove(playerId);
+            return;
+        }
+        knownSpeeds.put(playerId, new KnownSpeedSample(perTickSpeed, System.nanoTime()));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (event == null) {
+            return;
+        }
+        Player player = event.getPlayer();
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        if (playerId == null) {
+            return;
+        }
+        knownSpeeds.remove(playerId);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -651,24 +709,58 @@ public final class StatDamageListener implements Listener {
         if (!(byEntity.getDamager() instanceof LivingEntity directAttacker) || directAttacker != attacker) {
             return SpearCharge.inactive();
         }
-        if (!attacker.isHandRaised() || !attacker.hasActiveItem()) {
+        SpearUse spearUse = resolveSpearUse(attacker);
+        if (spearUse == null || spearUse.stack() == null || isAir(spearUse.stack().getType())) {
             return SpearCharge.inactive();
         }
-        ItemStack active = attacker.getActiveItem();
-        if (active == null || isAir(active.getType())) {
-            return SpearCharge.inactive();
-        }
-        Material material = active.getType();
-        if (!isSpear(material)) {
-            return SpearCharge.inactive();
-        }
-        double multiplier = spearChargeMultiplier(material);
+        double multiplier = spearChargeMultiplier(spearUse.stack().getType());
         if (Double.compare(multiplier, 0.0) <= 0) {
             return SpearCharge.inactive();
         }
         double relativeSpeed = relativeSpeedAlongLook(attacker, defender);
         double bonusDamage = Math.floor(Math.max(0.0, relativeSpeed) * multiplier);
-        return new SpearCharge(true, attacker.getActiveItemHand(), active.clone(), bonusDamage);
+        return new SpearCharge(true, spearUse.hand(), spearUse.stack().clone(), bonusDamage);
+    }
+
+    private SpearUse resolveSpearUse(LivingEntity attacker) {
+        if (attacker == null) {
+            return null;
+        }
+        ItemStack active = attacker.hasActiveItem() ? attacker.getActiveItem() : null;
+        boolean activeIsSpear = active != null && !isAir(active.getType()) && isSpear(active.getType());
+
+        ItemStack mainHand = attacker.getEquipment() == null ? null : attacker.getEquipment().getItem(EquipmentSlot.HAND);
+        ItemStack offHand = attacker.getEquipment() == null ? null : attacker.getEquipment().getItem(EquipmentSlot.OFF_HAND);
+        boolean mainIsSpear = mainHand != null && !isAir(mainHand.getType()) && isSpear(mainHand.getType());
+        boolean offIsSpear = offHand != null && !isAir(offHand.getType()) && isSpear(offHand.getType());
+
+        if (activeIsSpear) {
+            if (mainIsSpear && !offIsSpear) {
+                return new SpearUse(EquipmentSlot.HAND, mainHand);
+            }
+            if (offIsSpear && !mainIsSpear) {
+                return new SpearUse(EquipmentSlot.OFF_HAND, offHand);
+            }
+            EquipmentSlot activeHand = attacker.getActiveItemHand();
+            if (activeHand == EquipmentSlot.OFF_HAND && offIsSpear) {
+                return new SpearUse(EquipmentSlot.OFF_HAND, offHand);
+            }
+            if (activeHand == EquipmentSlot.HAND && mainIsSpear) {
+                return new SpearUse(EquipmentSlot.HAND, mainHand);
+            }
+            return new SpearUse(activeHand == null ? EquipmentSlot.HAND : activeHand, active);
+        }
+
+        if (mainIsSpear && !offIsSpear) {
+            return new SpearUse(EquipmentSlot.HAND, mainHand);
+        }
+        if (offIsSpear && !mainIsSpear) {
+            return new SpearUse(EquipmentSlot.OFF_HAND, offHand);
+        }
+        if (mainIsSpear && offIsSpear) {
+            return new SpearUse(EquipmentSlot.HAND, mainHand);
+        }
+        return null;
     }
 
     private boolean isDamageType(DamageType damageType, String minecraftKey) {
@@ -716,19 +808,13 @@ public final class StatDamageListener implements Listener {
             return 0.0;
         }
         Vector look = attacker.getLocation().getDirection();
-        if (look == null) {
-            return 0.0;
-        }
-        look.setY(0.0);
-        if (look.lengthSquared() == 0.0) {
+        if (look == null || look.lengthSquared() == 0.0) {
             return 0.0;
         }
         Vector direction = look.normalize();
         Vector attackerMotion = motion(attacker);
-        attackerMotion.setY(0.0);
         attackerMotion.multiply(20.0);
         Vector defenderMotion = motion(defender);
-        defenderMotion.setY(0.0);
         defenderMotion.multiply(20.0);
         double attackerSpeed = direction.dot(attackerMotion);
         double defenderSpeed = direction.dot(defenderMotion);
@@ -739,7 +825,13 @@ public final class StatDamageListener implements Listener {
         if (entity == null) {
             return new Vector();
         }
-        if (!(entity instanceof Player) && entity.isInsideVehicle() && entity.getVehicle() != null) {
+        if (entity instanceof Player player) {
+            Vector known = knownSpeed(player);
+            if (known != null) {
+                return known;
+            }
+        }
+        if (entity.isInsideVehicle() && entity.getVehicle() != null) {
             Entity root = entity;
             while (root.getVehicle() != null) {
                 root = root.getVehicle();
@@ -749,6 +841,26 @@ public final class StatDamageListener implements Listener {
         }
         Vector velocity = entity.getVelocity();
         return velocity == null ? new Vector() : velocity.clone();
+    }
+
+    private Vector knownSpeed(Player player) {
+        if (player == null) {
+            return null;
+        }
+        UUID playerId = player.getUniqueId();
+        if (playerId == null) {
+            return null;
+        }
+        KnownSpeedSample sample = knownSpeeds.get(playerId);
+        if (sample == null) {
+            return null;
+        }
+        long ageNanos = System.nanoTime() - sample.updatedAtNanos();
+        if (ageNanos > KNOWN_SPEED_STALE_NANOS) {
+            return null;
+        }
+        Vector perTick = sample.perTickSpeed();
+        return perTick == null ? null : perTick.clone();
     }
 
     private double spearAttackDamageFromNonEnchants(ItemStack stack, ConditionContext context) {
@@ -901,6 +1013,8 @@ public final class StatDamageListener implements Listener {
     private static final double TRIDENT_THROWN_BASE_DAMAGE = 8.0;
     private static final double TRIDENT_THROWN_SCALE = TRIDENT_THROWN_BASE_DAMAGE / TRIDENT_MELEE_BASE_DAMAGE;
     private static final double IMPALING_PER_LEVEL = 2.5;
+    private static final long KNOWN_SPEED_STALE_NANOS = 250_000_000L;
+    private static final double MAX_KNOWN_SPEED_PER_TICK_SQUARED = 16.0;
 
     private static final EnumSet<org.bukkit.entity.EntityType> ARTHROPODS = EnumSet.of(
         org.bukkit.entity.EntityType.SPIDER,
@@ -925,6 +1039,12 @@ public final class StatDamageListener implements Listener {
     );
 
     private record CriticalStrikeResult(boolean triggered, double damage) {
+    }
+
+    private record KnownSpeedSample(Vector perTickSpeed, long updatedAtNanos) {
+    }
+
+    private record SpearUse(EquipmentSlot hand, ItemStack stack) {
     }
 
     private record SpearCharge(boolean active, EquipmentSlot hand, ItemStack spearStack, double bonusDamage) {
