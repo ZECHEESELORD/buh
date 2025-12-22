@@ -13,6 +13,7 @@ import sh.harold.fulcrum.plugin.data.DataModule;
 import sh.harold.fulcrum.plugin.menu.MenuModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
+import sh.harold.fulcrum.plugin.playerdata.PlayerLevelingService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
 import sh.harold.fulcrum.plugin.stash.StashModule;
@@ -90,6 +91,8 @@ public final class PlayerMenuModule implements FulcrumModule {
             .orElseThrow(() -> new IllegalStateException("UsernameDisplayService not available"));
         PlayerDirectoryService playerDirectoryService = playerDataModule.playerDirectoryService()
             .orElseThrow(() -> new IllegalStateException("PlayerDirectoryService not available"));
+        PlayerLevelingService levelingService = playerDataModule.playerLevelingService()
+            .orElseThrow(() -> new IllegalStateException("PlayerLevelingService not available"));
         UnlockableService unlockableService = java.util.Objects.requireNonNull(
             unlockableModule.unlockableService(),
             "UnlockableService not available"
@@ -113,6 +116,7 @@ public final class PlayerMenuModule implements FulcrumModule {
             usernameDisplayService,
             playerDirectoryService,
             scoreboardService,
+            levelingService,
             unlockableService,
             cosmeticRegistry,
             unlockableRegistry,
