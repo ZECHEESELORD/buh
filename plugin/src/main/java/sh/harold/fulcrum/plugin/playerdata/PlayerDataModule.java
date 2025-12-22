@@ -23,6 +23,7 @@ public final class PlayerDataModule implements FulcrumModule {
     private PlayerDirectoryService directoryService;
     private PlayerSessionListener sessionListener;
     private UsernameDisplayService usernameDisplayService;
+    private PlayerLevelingService levelingService;
 
     public PlayerDataModule(JavaPlugin plugin, DataModule dataModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -42,6 +43,7 @@ public final class PlayerDataModule implements FulcrumModule {
         PlayerSessionListener listener = new PlayerSessionListener(plugin.getLogger(), dataApi, biomeAggregator, directoryService);
         sessionListener = listener;
         settingsService = new PlayerSettingsService(dataApi);
+        levelingService = new PlayerLevelingService(dataApi);
         usernameDisplayService = new UsernameDisplayService(plugin, dataApi, settingsService);
         PvpSettingsListener pvpSettingsListener = new PvpSettingsListener(settingsService, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();
@@ -86,5 +88,9 @@ public final class PlayerDataModule implements FulcrumModule {
 
     public java.util.Optional<UsernameDisplayService> usernameDisplayService() {
         return java.util.Optional.ofNullable(usernameDisplayService);
+    }
+
+    public java.util.Optional<PlayerLevelingService> playerLevelingService() {
+        return java.util.Optional.ofNullable(levelingService);
     }
 }

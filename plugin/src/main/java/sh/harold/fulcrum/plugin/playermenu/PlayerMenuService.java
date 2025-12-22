@@ -34,8 +34,10 @@ import sh.harold.fulcrum.common.data.DataApi;
 import sh.harold.fulcrum.common.data.Document;
 import sh.harold.fulcrum.common.data.DocumentCollection;
 import sh.harold.fulcrum.common.data.ledger.LedgerRepository;
+import sh.harold.fulcrum.plugin.playerdata.LevelProgress;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryEntry;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDirectoryService;
+import sh.harold.fulcrum.plugin.playerdata.PlayerLevelingService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettings;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.playerdata.UsernameDisplayService;
@@ -103,6 +105,7 @@ public final class PlayerMenuService {
     private final PlayerDirectoryService playerDirectoryService;
     private final ScoreboardService scoreboardService;
     private final UsernameDisplayService usernameDisplayService;
+    private final PlayerLevelingService levelingService;
     private final UnlockableService unlockableService;
     private final UnlockableRegistry unlockableRegistry;
     private final StatService statService;
@@ -114,6 +117,7 @@ public final class PlayerMenuService {
     private final NamespacedKey displayMaterialKey;
     private final BankMenuView bankMenuView;
     private final StatBreakdownView statBreakdownView;
+    private final LevelMenuView levelMenuView;
 
     public PlayerMenuService(
         JavaPlugin plugin,
@@ -124,6 +128,7 @@ public final class PlayerMenuService {
         UsernameDisplayService usernameDisplayService,
         PlayerDirectoryService playerDirectoryService,
         ScoreboardService scoreboardService,
+        PlayerLevelingService levelingService,
         UnlockableService unlockableService,
         CosmeticRegistry cosmeticRegistry,
         UnlockableRegistry unlockableRegistry,
@@ -141,6 +146,7 @@ public final class PlayerMenuService {
         this.usernameDisplayService = Objects.requireNonNull(usernameDisplayService, "usernameDisplayService");
         this.playerDirectoryService = Objects.requireNonNull(playerDirectoryService, "playerDirectoryService");
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
+        this.levelingService = Objects.requireNonNull(levelingService, "levelingService");
         this.unlockableService = Objects.requireNonNull(unlockableService, "unlockableService");
         this.unlockableRegistry = Objects.requireNonNull(unlockableRegistry, "unlockableRegistry");
         this.statService = Objects.requireNonNull(statService, "statService");
@@ -178,6 +184,12 @@ public final class PlayerMenuService {
             contextRegistry,
             this::openMenu
         );
+        this.levelMenuView = new LevelMenuView(
+            plugin,
+            menuService,
+            levelingService,
+            this::openProfileMenuClick
+        );
         registerSpoofingAdapter();
     }
 
@@ -203,13 +215,20 @@ public final class PlayerMenuService {
 
     public CompletionStage<Void> openMenu(Player player) {
         Objects.requireNonNull(player, "player");
+        UUID playerId = player.getUniqueId();
+        return loadProgress(playerId, "player menu")
+            .thenCompose(progress -> openMenu(player, progress));
+    }
+
+    private CompletionStage<Void> openMenu(Player player, LevelProgress progress) {
         MenuButton headline = MenuButton.builder(Material.PLAYER_HEAD)
             .name("&aYour Stats")
             .secondary("View stat breakdowns")
-            .lore(statSummaryLore(player).toArray(String[]::new))
+            .description("Open your stat overview and level progress.")
+            .lore(statSummaryLore(player, progress).toArray(String[]::new))
             .slot(MENU_HEADLINE_SLOT)
             .sound(Sound.UI_BUTTON_CLICK)
-            .onClick(statBreakdownView::open)
+            .onClick(this::openProfileMenuClick)
             .build();
         ItemStack headlineStack = headline.getDisplayItem();
         ItemMeta headlineMeta = headlineStack.getItemMeta();
@@ -301,6 +320,83 @@ public final class PlayerMenuService {
             openFuture.completeExceptionally(throwable);
         }
         return openFuture;
+    }
+
+    private CompletionStage<Void> openProfileMenu(Player player) {
+        Objects.requireNonNull(player, "player");
+        UUID playerId = player.getUniqueId();
+        return loadProgress(playerId, "profile menu")
+            .thenCompose(progress -> openProfileMenu(player, progress));
+    }
+
+    private void openProfileMenuClick(Player player) {
+        openProfileMenu(player)
+            .exceptionally(throwable -> {
+                player.sendMessage("§cFailed to open your profile menu; try again soon.");
+                return null;
+            });
+    }
+
+    private CompletionStage<Void> openProfileMenu(Player player, LevelProgress progress) {
+        MenuButton statsButton = MenuButton.builder(Material.IRON_SWORD)
+            .name("&aStats")
+            .secondary("Core Gameplay")
+            .description("Inspect your stat breakdown and the sources behind it.")
+            .slot(11)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(statBreakdownView::open)
+            .build();
+        MenuButton levelsButton = MenuButton.builder(Material.EXPERIENCE_BOTTLE)
+            .name("&bLevels")
+            .secondary("Progression")
+            .description("Track your level and see XP progress at a glance.")
+            .lore("")
+            .lore(progressLine(progress))
+            .slot(15)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(levelMenuView::open)
+            .build();
+        MenuButton backButton = MenuButton.builder(Material.ARROW)
+            .name("&7Back")
+            .secondary("Player Menu")
+            .description("Return to the main player menu.")
+            .slot(MenuButton.getBackSlot(3))
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(viewer -> openMenu(viewer))
+            .build();
+
+        CompletableFuture<Void> openFuture = new CompletableFuture<>();
+        try {
+            menuService.createMenuBuilder()
+                .title("Player Profile")
+                .rows(3)
+                .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
+                .addButton(MenuButton.createPositionedClose(3))
+                .addButton(backButton)
+                .addButton(statsButton)
+                .addButton(levelsButton)
+                .buildAsync(player)
+                .whenComplete((menu, throwable) -> {
+                    if (throwable != null) {
+                        logger.log(Level.SEVERE, "Failed to open profile menu for " + player.getUniqueId(), throwable);
+                        openFuture.completeExceptionally(throwable);
+                        return;
+                    }
+                    openFuture.complete(null);
+                });
+        } catch (Throwable throwable) {
+            logger.log(Level.SEVERE, "Failed to open profile menu for " + player.getUniqueId(), throwable);
+            openFuture.completeExceptionally(throwable);
+        }
+        return openFuture;
+    }
+
+    private CompletionStage<LevelProgress> loadProgress(UUID playerId, String context) {
+        return levelingService.loadProgress(playerId)
+            .exceptionally(throwable -> {
+                logger.log(Level.WARNING, "Failed to load level progress for " + playerId + " while opening " + context, throwable);
+                return levelingService.curve().progressFor(0L);
+            });
     }
 
     private void openPlayerDirectory(Player player) {
@@ -1084,7 +1180,7 @@ public final class PlayerMenuService {
         return -1;
     }
 
-    private List<String> statSummaryLore(Player player) {
+    private List<String> statSummaryLore(Player player, LevelProgress progress) {
         var container = statService.getContainer(EntityKey.fromUuid(player.getUniqueId()));
         List<String> lines = new ArrayList<>();
         lines.add("");
@@ -1096,7 +1192,16 @@ public final class PlayerMenuService {
         lines.add("&8and more...");
         lines.add("");
         lines.add("&8Also accessible via /stats");
+        lines.add("");
+        lines.add(progressLine(progress));
         return lines;
+    }
+
+    static String progressLine(LevelProgress progress) {
+        long current = progress.xpIntoLevel();
+        long next = progress.xpForNextLevel();
+        int percent = (int) Math.floor(progress.progressRatio() * 100.0);
+        return "&7Progress: &a" + current + "&7/&a" + next + " &8(" + percent + "%)";
     }
 
     private String statLine(StatId id, String label, double rawValue) {
