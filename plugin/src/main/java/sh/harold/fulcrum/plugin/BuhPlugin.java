@@ -228,7 +228,7 @@ public final class BuhPlugin extends JavaPlugin {
         playerMenuModule = new PlayerMenuModule(this, dataModule, stashModule, menuModule, playerDataModule, scoreboardService, unlockableModule, statsModule);
         featureVoteModule = new FeatureVoteModule(this, dataModule);
         funModule = new FunModule(this, luckPermsModule);
-        staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule);
+        staffCommandsModule = new StaffCommandsModule(this, luckPermsModule, dataModule, playerDataModule);
         itemModule = new sh.harold.fulcrum.plugin.item.ItemModule(this, statsModule, dataModule);
         playerHeadModule = new sh.harold.fulcrum.plugin.playerhead.PlayerHeadModule(this, itemModule);
         itemMigrationModule = new sh.harold.fulcrum.plugin.item.migration.ItemMigrationModule(this, itemModule);

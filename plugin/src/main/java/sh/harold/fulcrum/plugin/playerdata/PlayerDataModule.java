@@ -44,7 +44,8 @@ public final class PlayerDataModule implements FulcrumModule {
         sessionListener = listener;
         settingsService = new PlayerSettingsService(dataApi);
         levelingService = new PlayerLevelingService(dataApi);
-        usernameDisplayService = new UsernameDisplayService(plugin, dataApi, settingsService);
+        usernameDisplayService = new UsernameDisplayService(plugin, dataApi, settingsService, levelingService);
+        levelingService.addListener(usernameDisplayService::handleLevelUpdate);
         PvpSettingsListener pvpSettingsListener = new PvpSettingsListener(settingsService, plugin.getLogger());
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         pluginManager.registerEvents(biomeAggregator, plugin);

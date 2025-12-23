@@ -2,7 +2,7 @@ Player Core Document:
 Each player sits inside the `players` collection. The `meta` chunk tracks first and last joins plus the latest username; `statistics` carries playtime seconds; `inventory` holds the menu item and the stash payload.
 
 Leveling:
-Progression XP lives at `progression.xp` as a long. Levels are derived from XP on demand using the server curve; missing values default to zero.
+Progression XP lives at `progression.xp` as a long and prestige lives at `progression.prestige` as an int. Levels derive from XP on demand using the server curve; missing values default to zero. Each prestige tops out at Level 200, then XP resets to zero when prestige increments.
 
 Biome Tracker:
 We now record the first moment a player steps into each biome, vanilla or datapack. The path shape is `travel.biomes.<biome key>` with the value as the ISO 8601 instant from `Instant#toString()`. Keys come straight from `Biome#getKey().asString()`, so custom identifiers land untouched.

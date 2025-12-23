@@ -19,7 +19,7 @@ import java.util.logging.Level;
 
 final class LevelMenuView {
 
-    private static final int ROWS = 3;
+    private static final int ROWS = 6;
     private static final int PROGRESS_SLOT = 13;
 
     private final Plugin plugin;
@@ -52,7 +52,7 @@ final class LevelMenuView {
             .secondary("Progression")
             .description("Keep earning XP; each level opens new momentum.")
             .lore("")
-            .lore(PlayerMenuService.progressLine(progress))
+            .lore(PlayerMenuService.progressBlock(progress).toArray(String[]::new))
             .slot(PROGRESS_SLOT)
             .build();
 
@@ -94,7 +94,7 @@ final class LevelMenuView {
         return levelingService.loadProgress(playerId)
             .exceptionally(throwable -> {
                 plugin.getLogger().log(Level.WARNING, "Failed to load level progress for " + playerId, throwable);
-                return levelingService.curve().progressFor(0L);
+                return levelingService.progressFor(0L);
             });
     }
 }

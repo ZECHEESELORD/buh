@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,21 +57,29 @@ public final class UsernameDisplayService implements Listener {
     private final Plugin plugin;
     private final Logger logger;
     private final PlayerSettingsService settingsService;
+    private final PlayerLevelingService levelingService;
     private final LinkedAccountService linkedAccountService;
     private final UsernameBaseNameResolver baseNameResolver;
     private final TabNameDecorator tabNameDecorator;
     private final NametagDecorator nametagDecorator;
     private final ChatNameDecorator chatNameDecorator;
     private final Map<UUID, String> vanillaNames = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> levelCache = new ConcurrentHashMap<>();
     private final Map<UUID, Long> recentHealthRefresh = new ConcurrentHashMap<>();
     private final AtomicInteger nextCarrierEntityId = new AtomicInteger(Integer.MAX_VALUE);
     private final Map<UUID, ViewerNametagState> viewerNametagStates = new ConcurrentHashMap<>();
     private final boolean debug = false;
 
-    public UsernameDisplayService(Plugin plugin, DataApi dataApi, PlayerSettingsService settingsService) {
+    public UsernameDisplayService(
+        Plugin plugin,
+        DataApi dataApi,
+        PlayerSettingsService settingsService,
+        PlayerLevelingService levelingService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = plugin.getLogger();
         this.settingsService = Objects.requireNonNull(settingsService, "settingsService");
+        this.levelingService = Objects.requireNonNull(levelingService, "levelingService");
         this.linkedAccountService = new LinkedAccountService(Objects.requireNonNull(dataApi, "dataApi"), logger);
         this.baseNameResolver = new UsernameBaseNameResolver(settingsService, linkedAccountService);
         this.tabNameDecorator = new TabNameDecorator(settingsService);
@@ -85,10 +94,13 @@ public final class UsernameDisplayService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onJoin(PlayerJoinEvent event) {
         track(event.getPlayer());
-        settingsService.loadSettings(event.getPlayer().getUniqueId())
+        UUID playerId = event.getPlayer().getUniqueId();
+        CompletableFuture<?> settingsStage = settingsService.loadSettings(playerId).toCompletableFuture();
+        CompletableFuture<Integer> levelStage = loadLevel(playerId);
+        CompletableFuture.allOf(settingsStage, levelStage)
             .thenRun(() -> refreshView(event.getPlayer()))
             .exceptionally(throwable -> {
-                logger.log(Level.WARNING, "Failed to warm username view for " + event.getPlayer().getUniqueId(), throwable);
+                logger.log(Level.WARNING, "Failed to warm username view for " + playerId, throwable);
                 return null;
             });
     }
@@ -99,6 +111,7 @@ public final class UsernameDisplayService implements Listener {
         settingsService.evictCachedSettings(playerId);
         linkedAccountService.evict(playerId);
         vanillaNames.remove(playerId);
+        levelCache.remove(playerId);
         recentHealthRefresh.remove(playerId);
         viewerNametagStates.remove(playerId);
     }
@@ -118,12 +131,21 @@ public final class UsernameDisplayService implements Listener {
         UUID playerId = player.getUniqueId();
         vanillaNames.put(playerId, player.getName());
         linkedAccountService.refresh(playerId);
+        loadLevel(playerId);
     }
 
     public Component displayComponent(UUID viewerId, Player target, TextColor color) {
         TextColor resolvedColor = color == null ? NamedTextColor.WHITE : color;
         UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(viewerId, target.getUniqueId(), target.getName());
         return chatNameDecorator.decorateForChat(target.getUniqueId(), baseName.component(), resolvedColor);
+    }
+
+    public void handleLevelUpdate(UUID playerId, LevelProgress progress) {
+        if (playerId == null || progress == null) {
+            return;
+        }
+        levelCache.put(playerId, progress.level());
+        plugin.getServer().getScheduler().runTask(plugin, () -> refreshTarget(playerId));
     }
 
     public void refreshView(Player viewer) {
@@ -172,7 +194,8 @@ public final class UsernameDisplayService implements Listener {
             .filter(target -> target.equals(viewer) || viewer.canSee(target))
             .map(target -> {
                 UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, target.getUniqueId(), target.getName());
-                Component decorated = tabNameDecorator.decorateForTab(target.getUniqueId(), target, baseName.component());
+                int level = cachedLevel(target.getUniqueId());
+                Component decorated = tabNameDecorator.decorateForTab(target.getUniqueId(), target, baseName.component(), level);
                 WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(target.getUniqueId());
                 info.setDisplayName(decorated);
                 return info;
@@ -186,6 +209,76 @@ public final class UsernameDisplayService implements Listener {
             entries
         );
         PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
+    }
+
+    private void refreshTarget(UUID targetId) {
+        if (targetId == null) {
+            return;
+        }
+        Player target = plugin.getServer().getPlayer(targetId);
+        if (target == null || !target.isOnline()) {
+            return;
+        }
+        int level = cachedLevel(targetId);
+        for (Player viewer : plugin.getServer().getOnlinePlayers()) {
+            if (!viewer.equals(target) && !viewer.canSee(target)) {
+                continue;
+            }
+            UsernameView preference = settingsService.cachedUsernameView(viewer.getUniqueId());
+            UsernameBaseNameResolver.BaseName baseName = baseNameResolver.resolve(preference, targetId, target.getName());
+            Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component(), level);
+            WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(targetId);
+            info.setDisplayName(decorated);
+            var packet = new WrapperPlayServerPlayerInfoUpdate(
+                EnumSet.of(WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME),
+                List.of(info)
+            );
+            PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
+            refreshNametagForTarget(viewer, preference, targetId);
+        }
+    }
+
+    private void refreshNametagForTarget(Player viewer, UsernameView preference, UUID targetId) {
+        if (viewer == null || !viewer.isOnline()) {
+            return;
+        }
+        ViewerNametagState state = viewerNametagStates.get(viewer.getUniqueId());
+        if (state == null) {
+            return;
+        }
+        for (Map.Entry<Integer, TrackedPlayer> entry : state.trackedPlayers.entrySet()) {
+            TrackedPlayer tracked = entry.getValue();
+            if (tracked == null || !targetId.equals(tracked.playerId())) {
+                continue;
+            }
+            applyViewerNametag(viewer, state, entry.getKey(), tracked, preference);
+        }
+    }
+
+    private int cachedLevel(UUID playerId) {
+        if (playerId == null) {
+            return 0;
+        }
+        Integer cached = levelCache.get(playerId);
+        if (cached != null) {
+            return cached;
+        }
+        loadLevel(playerId);
+        return 0;
+    }
+
+    private CompletableFuture<Integer> loadLevel(UUID playerId) {
+        if (playerId == null) {
+            return CompletableFuture.completedFuture(0);
+        }
+        return levelingService.loadProgress(playerId)
+            .exceptionally(throwable -> levelingService.progressFor(0L))
+            .thenApply(LevelProgress::level)
+            .thenApply(level -> {
+                levelCache.put(playerId, level);
+                return level;
+            })
+            .toCompletableFuture();
     }
 
     private void refreshNametagView(Player viewer, UsernameView preference) {
@@ -253,7 +346,8 @@ public final class UsernameDisplayService implements Listener {
             return;
         }
 
-        Component decorated = nametagDecorator.decorateForNametag(targetId, baseName.component());
+        int level = cachedLevel(targetId);
+        Component decorated = nametagDecorator.decorateForNametag(targetId, baseName.component(), level);
         ensureCarrier(viewer, state, targetEntityId, vanillaName, position, decorated);
     }
 
@@ -567,7 +661,8 @@ public final class UsernameDisplayService implements Listener {
                     continue;
                 }
 
-                Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component());
+                int level = cachedLevel(targetId);
+                Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component(), level);
                 data.setDisplayName(decorated);
                 mutated = true;
             }
@@ -613,7 +708,8 @@ public final class UsernameDisplayService implements Listener {
                     continue;
                 }
 
-                Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component());
+                int level = cachedLevel(targetId);
+                Component decorated = tabNameDecorator.decorateForTab(targetId, target, baseName.component(), level);
                 data.setDisplayName(decorated);
                 mutated = true;
             }
