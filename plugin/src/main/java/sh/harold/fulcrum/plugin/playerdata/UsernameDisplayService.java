@@ -26,6 +26,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
@@ -124,6 +125,12 @@ public final class UsernameDisplayService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onRegain(EntityRegainHealthEvent event) {
         refreshHealthIfPeaceful(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent event) {
+        Player target = event.getEntity();
+        clearNametagForTarget(target == null ? null : target.getUniqueId());
     }
 
     public void track(Player player) {
@@ -602,6 +609,27 @@ public final class UsernameDisplayService implements Listener {
         }
         recentHealthRefresh.put(playerId, now);
         plugin.getServer().getScheduler().runTask(plugin, () -> plugin.getServer().getOnlinePlayers().forEach(this::refreshView));
+    }
+
+    private void clearNametagForTarget(UUID targetId) {
+        if (targetId == null) {
+            return;
+        }
+        for (Player viewer : plugin.getServer().getOnlinePlayers()) {
+            ViewerNametagState state = viewerNametagStates.get(viewer.getUniqueId());
+            if (state == null) {
+                continue;
+            }
+            for (Map.Entry<Integer, TrackedPlayer> entry : state.trackedPlayers.entrySet()) {
+                TrackedPlayer tracked = entry.getValue();
+                if (tracked == null || !targetId.equals(tracked.playerId())) {
+                    continue;
+                }
+                int entityId = entry.getKey();
+                destroyCarrier(viewer, state, entityId, true);
+                state.passengerLists.remove(entityId);
+            }
+        }
     }
 
     private void debug(Supplier<String> message) {
