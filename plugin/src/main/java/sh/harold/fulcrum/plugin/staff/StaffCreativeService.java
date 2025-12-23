@@ -8,7 +8,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockDamageEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.plugin.permissions.StaffGuard;
 
@@ -102,6 +106,50 @@ public final class StaffCreativeService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onQuit(PlayerQuitEvent event) {
         disable(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockDamage(BlockDamageEvent event) {
+        Player player = event.getPlayer();
+        if (!player.getScoreboardTags().contains(CREATIVE_TAG)) {
+            return;
+        }
+        event.setInstaBreak(true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+        if (!player.getScoreboardTags().contains(CREATIVE_TAG)) {
+            return;
+        }
+        ItemStack placed = event.getItemInHand();
+        if (placed == null || placed.getType().isAir()) {
+            return;
+        }
+        EquipmentSlot hand = event.getHand() == null ? EquipmentSlot.HAND : event.getHand();
+        ItemStack snapshot = placed.clone();
+        int heldSlot = hand == EquipmentSlot.HAND ? player.getInventory().getHeldItemSlot() : -1;
+        plugin.getServer().getScheduler().runTask(plugin, () -> restoreItem(player, hand, heldSlot, snapshot));
+    }
+
+    private void restoreItem(Player player, EquipmentSlot hand, int heldSlot, ItemStack snapshot) {
+        if (!player.isOnline()) {
+            return;
+        }
+        if (!player.getScoreboardTags().contains(CREATIVE_TAG)) {
+            return;
+        }
+        if (hand == EquipmentSlot.HAND) {
+            if (player.getInventory().getHeldItemSlot() != heldSlot) {
+                return;
+            }
+            player.getInventory().setItemInMainHand(snapshot);
+            return;
+        }
+        if (hand == EquipmentSlot.OFF_HAND) {
+            player.getInventory().setItemInOffHand(snapshot);
+        }
     }
 
     private record Session(GameMode previousMode, boolean allowedFlight, boolean wasFlying, boolean invulnerable, BossBar bar) {
