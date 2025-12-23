@@ -236,7 +236,7 @@ public final class StatDamageListener implements Listener {
         double finalDamage = applyArmor(baseDamage, armor);
         double clampedDamage = Math.max(0.0, finalDamage);
         applyFinalDamage(event, clampedDamage);
-        if (maceSmash.active()) {
+        if (maceSmash.active() && !hasWindBurst(attacker)) {
             applyMaceAfterEffects(attacker, defender, maceSmash);
         }
         if (attacker instanceof Player playerAttacker && damageMarkerRenderer != null && clampedDamage > 0.0) {
@@ -399,6 +399,17 @@ public final class StatDamageListener implements Listener {
         attacker.setFallDistance(0.0f);
         applyMaceShockwave(attacker, defender, maceSmash.fallDistance());
         playMaceSound(attacker, defender, maceSmash.fallDistance());
+    }
+
+    private boolean hasWindBurst(LivingEntity attacker) {
+        if (attacker == null || attacker.getEquipment() == null) {
+            return false;
+        }
+        ItemStack heldItem = attacker.getEquipment().getItem(EquipmentSlot.HAND);
+        if (heldItem == null || heldItem.getType() != Material.MACE) {
+            return false;
+        }
+        return enchantLevel(heldItem, "wind_burst") > 0;
     }
 
     private void applyMaceShockwave(LivingEntity attacker, LivingEntity target, double fallDistance) {
