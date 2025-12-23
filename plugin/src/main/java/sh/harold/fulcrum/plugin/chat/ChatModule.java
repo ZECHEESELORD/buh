@@ -72,7 +72,9 @@ public final class ChatModule implements FulcrumModule {
         if (luckPerms == null) {
             plugin.getLogger().warning("LuckPerms not available; chat will use fallback formatting.");
         }
-        ChatFormatService chatFormatService = luckPerms == null ? null : new ChatFormatService(luckPerms);
+        var levelingService = playerDataModule.playerLevelingService()
+            .orElseThrow(() -> new IllegalStateException("PlayerLevelingService not available"));
+        ChatFormatService chatFormatService = luckPerms == null ? null : new ChatFormatService(luckPerms, levelingService);
         UsernameDisplayService usernameDisplayService = playerDataModule.usernameDisplayService().orElse(null);
         PlayerDirectoryService playerDirectoryService = playerDataModule.playerDirectoryService()
             .orElseThrow(() -> new IllegalStateException("PlayerDirectoryService not available"));

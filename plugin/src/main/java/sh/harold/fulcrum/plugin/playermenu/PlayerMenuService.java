@@ -89,6 +89,7 @@ public final class PlayerMenuService {
     private static final Duration PVP_TOGGLE_COOLDOWN = Duration.ofMinutes(30);
     private static final String PVP_COOLDOWN_GROUP = "player-settings:pvp-toggle";
     private static final Material BASE_MENU_ITEM = Material.PUFFERFISH;
+    private static final int PROGRESS_BAR_LENGTH = 20;
     private static final int[] SNAKE_PATH = {
         4, 5, 14, 23, 22, 21, 12, 3
     };
@@ -222,10 +223,10 @@ public final class PlayerMenuService {
 
     private CompletionStage<Void> openMenu(Player player, LevelProgress progress) {
         MenuButton headline = MenuButton.builder(Material.PLAYER_HEAD)
-            .name("&aYour Stats")
-            .secondary("View stat breakdowns")
-            .description("Open your stat overview and level progress.")
+            .name("&aYour Information")
+            .secondary("Profile Hub")
             .lore(statSummaryLore(player, progress).toArray(String[]::new))
+            .description("Levels and stats live together here.")
             .slot(MENU_HEADLINE_SLOT)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(this::openProfileMenuClick)
@@ -342,7 +343,9 @@ public final class PlayerMenuService {
             .name("&aStats")
             .secondary("Core Gameplay")
             .description("Inspect your stat breakdown and the sources behind it.")
-            .slot(11)
+            .lore("")
+            .lore(statPreviewLines(player).toArray(String[]::new))
+            .slot(20)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(statBreakdownView::open)
             .build();
@@ -351,8 +354,8 @@ public final class PlayerMenuService {
             .secondary("Progression")
             .description("Track your level and see XP progress at a glance.")
             .lore("")
-            .lore(progressLine(progress))
-            .slot(15)
+            .lore(progressBlock(progress).toArray(String[]::new))
+            .slot(24)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(levelMenuView::open)
             .build();
@@ -360,7 +363,7 @@ public final class PlayerMenuService {
             .name("&7Back")
             .secondary("Player Menu")
             .description("Return to the main player menu.")
-            .slot(MenuButton.getBackSlot(3))
+            .slot(MenuButton.getBackSlot(6))
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> openMenu(viewer))
             .build();
@@ -369,9 +372,9 @@ public final class PlayerMenuService {
         try {
             menuService.createMenuBuilder()
                 .title("Player Profile")
-                .rows(3)
+                .rows(6)
                 .fillEmpty(Material.BLACK_STAINED_GLASS_PANE)
-                .addButton(MenuButton.createPositionedClose(3))
+                .addButton(MenuButton.createPositionedClose(6))
                 .addButton(backButton)
                 .addButton(statsButton)
                 .addButton(levelsButton)
@@ -395,7 +398,7 @@ public final class PlayerMenuService {
         return levelingService.loadProgress(playerId)
             .exceptionally(throwable -> {
                 logger.log(Level.WARNING, "Failed to load level progress for " + playerId + " while opening " + context, throwable);
-                return levelingService.curve().progressFor(0L);
+                return levelingService.progressFor(0L);
             });
     }
 
@@ -1181,9 +1184,17 @@ public final class PlayerMenuService {
     }
 
     private List<String> statSummaryLore(Player player, LevelProgress progress) {
+        List<String> lines = new ArrayList<>();
+        lines.add(" ");
+        lines.addAll(progressBlock(progress));
+        lines.add("");
+        lines.addAll(statPreviewLines(player));
+        return lines;
+    }
+
+    private List<String> statPreviewLines(Player player) {
         var container = statService.getContainer(EntityKey.fromUuid(player.getUniqueId()));
         List<String> lines = new ArrayList<>();
-        lines.add("");
         lines.add(statLine(StatIds.MOVEMENT_SPEED, "Movement Speed", container.getStat(StatIds.MOVEMENT_SPEED)));
         lines.add(statLine(StatIds.ATTACK_DAMAGE, "Attack Damage", container.getStat(StatIds.ATTACK_DAMAGE)));
         lines.add(statLine(StatIds.ARMOR, "Defense", container.getStat(StatIds.ARMOR)));
@@ -1192,16 +1203,24 @@ public final class PlayerMenuService {
         lines.add("&8and more...");
         lines.add("");
         lines.add("&8Also accessible via /stats");
-        lines.add("");
-        lines.add(progressLine(progress));
         return lines;
     }
 
-    static String progressLine(LevelProgress progress) {
+    static List<String> progressBlock(LevelProgress progress) {
+        List<String> lines = new ArrayList<>();
+        lines.add("&7Your SMP Level: &3" + progress.level());
+        lines.add(progressBarLine(progress));
+        lines.add("&8(Progress to Level " + (progress.level() + 1) + ")");
+        return lines;
+    }
+
+    private static String progressBarLine(LevelProgress progress) {
         long current = progress.xpIntoLevel();
-        long next = progress.xpForNextLevel();
-        int percent = (int) Math.floor(progress.progressRatio() * 100.0);
-        return "&7Progress: &a" + current + "&7/&a" + next + " &8(" + percent + "%)";
+        long next = Math.max(1L, progress.xpForNextLevel());
+        int filled = (int) Math.floor(Math.min(1.0, progress.progressRatio()) * PROGRESS_BAR_LENGTH);
+        int empty = Math.max(0, PROGRESS_BAR_LENGTH - filled);
+        String bar = "&3" + "-".repeat(filled) + "&7" + "-".repeat(empty);
+        return bar + " &7" + current + "/" + next + "XP";
     }
 
     private String statLine(StatId id, String label, double rawValue) {

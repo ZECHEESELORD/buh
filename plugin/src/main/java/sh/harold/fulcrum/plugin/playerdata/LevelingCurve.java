@@ -28,8 +28,8 @@ public record LevelingCurve(
     }
 
     public static LevelingCurve addictive() {
-        // Quick early levels with gentle milestone relief to keep momentum.
-        return new LevelingCurve(120L, 18.0, 12.0, 1.6, 0.9, 5);
+        // Quick early levels with steady growth and no milestone discounts.
+        return new LevelingCurve(120L, 18.0, 12.0, 1.6, 1.0, 0);
     }
 
     public long xpForNextLevel(int level) {
@@ -39,21 +39,29 @@ public record LevelingCurve(
         if (milestoneInterval > 0 && safeLevel % milestoneInterval == 0) {
             raw *= milestoneDiscount;
         }
-        return Math.max(1L, Math.round(raw));
+        return Math.max(1L, (long) Math.ceil(raw));
     }
 
     public LevelProgress progressFor(long xp) {
+        return progressFor(xp, Integer.MAX_VALUE);
+    }
+
+    public LevelProgress progressFor(long xp, int maxLevel) {
         long clamped = Math.max(0L, xp);
-        int level = 1;
+        int cap = Math.max(0, maxLevel);
+        int level = 0;
         long levelStartXp = 0L;
-        long xpForNext = xpForNextLevel(level);
         long remaining = clamped;
-        while (remaining >= xpForNext && level < Integer.MAX_VALUE) {
+        while (level < cap) {
+            long xpForNext = xpForNextLevel(level);
+            if (remaining < xpForNext) {
+                break;
+            }
             remaining -= xpForNext;
             levelStartXp += xpForNext;
             level++;
-            xpForNext = xpForNextLevel(level);
         }
+        long xpForNext = level >= cap ? 0L : xpForNextLevel(level);
         return new LevelProgress(level, clamped, levelStartXp, remaining, xpForNext);
     }
 }
