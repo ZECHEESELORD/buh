@@ -17,6 +17,8 @@ public final class UnlockableCatalog {
     public static final UnlockableId MENU_SKIN_CLOCK = UnlockableId.of("menu-skin-clock");
     public static final UnlockableId MENU_SKIN_CHORUS = UnlockableId.of("menu-skin-chorus");
     public static final UnlockableId MENU_SKIN_FISH = UnlockableId.of("menu-skin-fish");
+    public static final UnlockableId MENU_SKIN_COD = UnlockableId.of("menu-skin-cod");
+    public static final UnlockableId MENU_SKIN_SALMON = UnlockableId.of("menu-skin-salmon");
     public static final UnlockableId MENU_SKIN_PUFFER = UnlockableId.of("menu-skin-puffer");
     public static final UnlockableId MENU_SKIN_DANDELION = UnlockableId.of("menu-skin-dandelion");
     public static final UnlockableId MENU_SKIN_POPPY = UnlockableId.of("menu-skin-poppy");
@@ -72,6 +74,8 @@ public final class UnlockableCatalog {
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_CLOCK, "Clock Menu Skin", "Wrap the menu in ticking gold.", Material.CLOCK);
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_CHORUS, "Chorus Menu Skin", "Let your menu hum with void-touched vines.", Material.CHORUS_PLANT);
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_FISH, "Fishy Menu Skin", "It smells like the docks and clicks like a catch.", Material.TROPICAL_FISH);
+        registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_COD, "Cod Menu Skin", "A clean cod snap for your menu slot.", Material.COD);
+        registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_SALMON, "Salmon Menu Skin", "Salmon sheen for a menu that swims upstream.", Material.SALMON);
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_PUFFER, "Pufferfish Menu Skin", "The client is lied to via packets; behold the true menu.", Material.PUFFERFISH);
 
         registerMenuSkin(registry, cosmeticRegistry, MENU_SKIN_DANDELION, "Dandelion Menu Skin", "Sunny petals tucked into your menu slot.", Material.DANDELION);
