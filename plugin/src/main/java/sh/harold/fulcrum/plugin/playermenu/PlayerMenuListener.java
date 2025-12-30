@@ -65,13 +65,14 @@ final class PlayerMenuListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (event.getPlayer().getScoreboardTags().contains(StaffCreativeService.CREATIVE_TAG)) {
-            event.getPlayer().performCommand("item");
+        Player player = event.getPlayer();
+        if (player.getScoreboardTags().contains(StaffCreativeService.CREATIVE_TAG) && !player.isSneaking()) {
+            player.performCommand("item");
             return;
         }
-        menuService.openMenu(event.getPlayer())
+        menuService.openMenu(player)
             .exceptionally(throwable -> {
-                event.getPlayer().sendMessage("§cFailed to open the player menu; try again soon.");
+                player.sendMessage("§cFailed to open the player menu; try again soon.");
                 return null;
             });
     }
