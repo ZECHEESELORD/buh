@@ -42,6 +42,7 @@ public final class PlayerMenuModule implements FulcrumModule {
     private final ScoreboardService scoreboardService;
     private final UnlockableModule unlockableModule;
     private final StatsModule statsModule;
+    private final sh.harold.fulcrum.plugin.item.ItemModule itemModule;
     private PlayerMenuService playerMenuService;
 
     public PlayerMenuModule(
@@ -52,7 +53,8 @@ public final class PlayerMenuModule implements FulcrumModule {
         PlayerDataModule playerDataModule,
         ScoreboardService scoreboardService,
         UnlockableModule unlockableModule,
-        StatsModule statsModule
+        StatsModule statsModule,
+        sh.harold.fulcrum.plugin.item.ItemModule itemModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.dataModule = Objects.requireNonNull(dataModule, "dataModule");
@@ -62,6 +64,7 @@ public final class PlayerMenuModule implements FulcrumModule {
         this.scoreboardService = Objects.requireNonNull(scoreboardService, "scoreboardService");
         this.unlockableModule = Objects.requireNonNull(unlockableModule, "unlockableModule");
         this.statsModule = Objects.requireNonNull(statsModule, "statsModule");
+        this.itemModule = itemModule;
     }
 
     @Override
@@ -105,6 +108,9 @@ public final class PlayerMenuModule implements FulcrumModule {
         var statService = Objects.requireNonNull(statsModule.statService(), "StatService not available");
         var statRegistry = Objects.requireNonNull(statsModule.statRegistry(), "StatRegistry not available");
         var sourceContextRegistry = Objects.requireNonNull(statsModule.statSourceContextRegistry(), "StatSourceContextRegistry not available");
+        sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry enchantRegistry = itemModule == null || itemModule.engine() == null
+            ? null
+            : itemModule.engine().enchantRegistry();
 
         PluginManager pluginManager = plugin.getServer().getPluginManager();
         playerMenuService = new PlayerMenuService(
@@ -120,6 +126,7 @@ public final class PlayerMenuModule implements FulcrumModule {
             unlockableService,
             cosmeticRegistry,
             unlockableRegistry,
+            enchantRegistry,
             statService,
             statRegistry,
             sourceContextRegistry

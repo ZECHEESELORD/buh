@@ -119,6 +119,7 @@ public final class PlayerMenuService {
     private final BankMenuView bankMenuView;
     private final StatBreakdownView statBreakdownView;
     private final LevelMenuView levelMenuView;
+    private final CompendiumMenuView compendiumMenuView;
 
     public PlayerMenuService(
         JavaPlugin plugin,
@@ -133,6 +134,7 @@ public final class PlayerMenuService {
         UnlockableService unlockableService,
         CosmeticRegistry cosmeticRegistry,
         UnlockableRegistry unlockableRegistry,
+        sh.harold.fulcrum.plugin.item.enchant.EnchantRegistry enchantRegistry,
         StatService statService,
         StatRegistry statRegistry,
         sh.harold.fulcrum.plugin.item.stat.StatSourceContextRegistry contextRegistry
@@ -176,6 +178,11 @@ public final class PlayerMenuService {
             cosmeticRegistry,
             playerDirectoryService,
             this::refreshMenuItem
+        );
+        this.compendiumMenuView = new CompendiumMenuView(
+            plugin,
+            menuService,
+            enchantRegistry
         );
         this.statBreakdownView = new StatBreakdownView(
             plugin,
@@ -272,16 +279,24 @@ public final class PlayerMenuService {
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> perkMenuView.openHub(viewer, this::openMenu))
             .build();
+        MenuButton compendiumButton = MenuButton.builder(Material.KNOWLEDGE_BOOK)
+            .name("&bCompendium")
+            .secondary("Knowledge")
+            .description("Browse collected knowledge and revisit every enchantment.")
+            .slot(22)
+            .sound(Sound.UI_BUTTON_CLICK)
+            .onClick(viewer -> compendiumMenuView.openHub(viewer, this::openMenu))
+            .build();
         MenuButton cosmeticsButton = MenuButton.builder(Material.FIREWORK_STAR)
             .name("&6Cosmetics")
             .secondary("Style")
             .description("Browse trails, prefixes, statuses, and player menu skins.")
-            .slot(22)
+            .slot(23)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> cosmeticMenuView.openHub(viewer, this::openMenu))
             .build();
         List<MenuDisplayItem> comingSoon = new ArrayList<>();
-        for (int slot = 23; slot <= 25; slot++) {
+        for (int slot = 24; slot <= 26; slot++) {
             MenuDisplayItem placeholder = MenuDisplayItem.builder(Material.GRAY_STAINED_GLASS_PANE)
                 .name("&7???")
                 .secondary("Coming Soon")
@@ -302,6 +317,7 @@ public final class PlayerMenuService {
                 .addButton(directoryButton)
                 .addButton(bankButton)
                 .addButton(perksButton)
+                .addButton(compendiumButton)
                 .addButton(cosmeticsButton)
                 .addButton(headline);
 
