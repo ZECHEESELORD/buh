@@ -34,6 +34,7 @@ public final class UnlockableModule implements FulcrumModule {
     private ActionCosmeticListener actionCosmeticListener;
     private CrawlManager crawlManager;
     private CosmeticPriceDropRefund cosmeticPriceDropRefund;
+    private StatusLineService statusLineService;
 
     public UnlockableModule(JavaPlugin plugin, DataModule dataModule, EconomyModule economyModule) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -70,6 +71,9 @@ public final class UnlockableModule implements FulcrumModule {
         pluginManager.registerEvents(new UnlockableSessionListener(unlockableService, plugin.getLogger()), plugin);
         actionCosmeticListener = new ActionCosmeticListener(unlockableService, cosmeticRegistry, plugin, plugin.getLogger(), crawlManager);
         pluginManager.registerEvents(actionCosmeticListener, plugin);
+        statusLineService = new StatusLineService(plugin, unlockableService, cosmeticRegistry, plugin.getLogger());
+        pluginManager.registerEvents(statusLineService, plugin);
+        statusLineService.start();
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, this::registerCommands);
         economyModule.economyService().ifPresent(economyService -> {
             //TODO: REMOVE after cosmetic price-drop refunds finish.
@@ -89,6 +93,9 @@ public final class UnlockableModule implements FulcrumModule {
         }
         if (cooldownRegistry != null) {
             cooldownRegistry.close();
+        }
+        if (statusLineService != null) {
+            statusLineService.shutdown();
         }
         return FulcrumModule.super.disable();
     }

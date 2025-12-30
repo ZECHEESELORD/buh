@@ -40,6 +40,9 @@ public final class UnlockableCatalog {
     public static final UnlockableId MENU_SKIN_TORCHFLOWER = UnlockableId.of("menu-skin-torchflower");
     public static final UnlockableId MENU_SKIN_PINK_PETALS = UnlockableId.of("menu-skin-pink-petals");
     public static final UnlockableId CHAT_PREFIX_OSU_RANK = UnlockableId.of("chat-prefix-osu-rank");
+    public static final UnlockableId STATUS_DO_NOT_DISTURB = UnlockableId.of("status-do-not-disturb");
+    public static final UnlockableId STATUS_LOOKING_TO_PVP = UnlockableId.of("status-looking-to-pvp");
+    public static final UnlockableId STATUS_AFK = UnlockableId.of("status-afk");
 
     private UnlockableCatalog() {
     }
@@ -169,6 +172,34 @@ public final class UnlockableCatalog {
         );
         registry.register(ride);
         cosmeticRegistry.register(new ActionCosmetic(ride, "ride"));
+
+        registerStatusLine(
+            registry,
+            cosmeticRegistry,
+            STATUS_DO_NOT_DISTURB,
+            "Do Not Disturb",
+            "Set a quiet warning above your head; visitors get the hint.",
+            "&eStatus: &cDo Not Disturb",
+            Material.BARRIER
+        );
+        registerStatusLine(
+            registry,
+            cosmeticRegistry,
+            STATUS_LOOKING_TO_PVP,
+            "Looking to PVP",
+            "Signal a duel without typing; the courtyard reads the cue.",
+            "&eStatus: &cLooking to PVP",
+            Material.IRON_SWORD
+        );
+        registerStatusLine(
+            registry,
+            cosmeticRegistry,
+            STATUS_AFK,
+            "AFK",
+            "Let everyone know you stepped away; the silence is intentional.",
+            "&eStatus: &dAFK",
+            Material.CLOCK
+        );
     }
 
     private static void registerMenuSkin(
@@ -190,5 +221,27 @@ public final class UnlockableCatalog {
         );
         registry.register(definition);
         cosmeticRegistry.register(new MenuSkinCosmetic(definition, id.value()));
+    }
+
+    private static void registerStatusLine(
+        UnlockableRegistry registry,
+        CosmeticRegistry cosmeticRegistry,
+        UnlockableId id,
+        String name,
+        String description,
+        String status,
+        Material displayMaterial
+    ) {
+        UnlockableDefinition definition = new UnlockableDefinition(
+            id,
+            UnlockableType.COSMETIC,
+            name,
+            description,
+            List.of(new UnlockableTier(1, name, description, 25L, Map.of())),
+            displayMaterial,
+            false
+        );
+        registry.register(definition);
+        cosmeticRegistry.register(new StatusCosmetic(definition, status));
     }
 }
