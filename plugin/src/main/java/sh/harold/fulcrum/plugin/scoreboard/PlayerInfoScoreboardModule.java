@@ -17,7 +17,8 @@ public final class PlayerInfoScoreboardModule implements ScoreboardModule {
     @Override
     public List<String> renderLines(Player player) {
         String nameLine = "&fName: &b" + player.getName();
+        String levelLine = "&fLevel: &d" + player.getLevel();
         String pingLine = "&fPing: &a" + player.getPing() + "ms";
-        return List.of(nameLine, pingLine);
+        return List.of(nameLine, levelLine, pingLine);
     }
 }
