@@ -48,7 +48,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private FeatureConfigService configService;
     private ScoreboardConfig config;
     private BukkitTask refreshTask;
-    private final FeatureVoteResultScoreboardModule voteResultModule = new FeatureVoteResultScoreboardModule();
+    private final PlayerInfoScoreboardModule playerInfoModule = new PlayerInfoScoreboardModule();
     private PlayerSettingsService playerSettingsService;
     private ShardBalanceScoreboardModule shardBalanceModule;
 
@@ -159,8 +159,8 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         ScoreboardBuilder builder = new ScoreboardBuilder(SCOREBOARD_ID)
             .title(config.title())
             .headerSupplier(this::headerLine)
-            .module(shardBalanceModule)
-            .module(voteResultModule);
+            .module(playerInfoModule)
+            .module(shardBalanceModule);
 
         if (config.footer() != null && !config.footer().isBlank()) {
             builder.footerSupplier(config::footer);
