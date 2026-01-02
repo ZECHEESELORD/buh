@@ -182,7 +182,8 @@ public final class PlayerMenuService {
         this.compendiumMenuView = new CompendiumMenuView(
             plugin,
             menuService,
-            enchantRegistry
+            enchantRegistry,
+            players
         );
         this.statBreakdownView = new StatBreakdownView(
             plugin,
@@ -282,7 +283,7 @@ public final class PlayerMenuService {
         MenuButton compendiumButton = MenuButton.builder(Material.KNOWLEDGE_BOOK)
             .name("&bCompendium")
             .secondary("Knowledge")
-            .description("Browse collected knowledge and revisit every enchantment.")
+            .description("Browse collected knowledge, from biomes to enchantments.")
             .slot(22)
             .sound(Sound.UI_BUTTON_CLICK)
             .onClick(viewer -> compendiumMenuView.openHub(viewer, this::openMenu))
