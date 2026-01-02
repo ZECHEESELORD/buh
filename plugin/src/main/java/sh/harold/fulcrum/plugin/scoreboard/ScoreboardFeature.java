@@ -18,6 +18,7 @@ import sh.harold.fulcrum.common.loader.ModuleId;
 import sh.harold.fulcrum.plugin.config.FeatureConfigService;
 import sh.harold.fulcrum.plugin.economy.EconomyModule;
 import sh.harold.fulcrum.plugin.playerdata.PlayerDataModule;
+import sh.harold.fulcrum.plugin.playerdata.PlayerLevelingService;
 import sh.harold.fulcrum.plugin.playerdata.PlayerSettingsService;
 import sh.harold.fulcrum.plugin.shutdown.ShutdownModule;
 import sh.harold.fulcrum.plugin.version.VersionService;
@@ -48,7 +49,7 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     private FeatureConfigService configService;
     private ScoreboardConfig config;
     private BukkitTask refreshTask;
-    private final PlayerInfoScoreboardModule playerInfoModule = new PlayerInfoScoreboardModule();
+    private PlayerInfoScoreboardModule playerInfoModule;
     private PlayerSettingsService playerSettingsService;
     private ShardBalanceScoreboardModule shardBalanceModule;
 
@@ -84,6 +85,9 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
 
         playerSettingsService = playerDataModule.playerSettingsService()
             .orElseThrow(() -> new IllegalStateException("PlayerSettingsService not available for scoreboard"));
+        PlayerLevelingService levelingService = playerDataModule.playerLevelingService()
+            .orElseThrow(() -> new IllegalStateException("PlayerLevelingService not available for scoreboard"));
+        playerInfoModule = new PlayerInfoScoreboardModule(levelingService, plugin.getLogger());
         shardBalanceModule = new ShardBalanceScoreboardModule(
             economyModule.economyService()
                 .orElseThrow(() -> new IllegalStateException("EconomyService not available for scoreboard")),
@@ -117,6 +121,9 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
         plugin.getServer().getOnlinePlayers()
             .forEach(player -> {
                 scoreboardService.hideScoreboard(player.getUniqueId());
+                if (playerInfoModule != null) {
+                    playerInfoModule.clear(player.getUniqueId());
+                }
                 if (shardBalanceModule != null) {
                     shardBalanceModule.clear(player.getUniqueId());
                 }
@@ -152,6 +159,9 @@ public final class ScoreboardFeature implements FulcrumModule, ConfigurableModul
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         scoreboardService.hideScoreboard(event.getPlayer().getUniqueId());
+        if (playerInfoModule != null) {
+            playerInfoModule.clear(event.getPlayer().getUniqueId());
+        }
         shardBalanceModule.clear(event.getPlayer().getUniqueId());
     }
 
