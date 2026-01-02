@@ -30,7 +30,10 @@ public class MenuInventoryHolder implements InventoryHolder {
      * @return true if the inventory is a menu, false otherwise
      */
     public static boolean isMenu(Inventory inventory) {
-        return inventory != null && inventory.getHolder() instanceof MenuInventoryHolder;
+        if (inventory == null) {
+            return false;
+        }
+        return getHolderSafely(inventory) instanceof MenuInventoryHolder;
     }
 
     /**
@@ -40,8 +43,9 @@ public class MenuInventoryHolder implements InventoryHolder {
      * @return the menu if this is a menu inventory, null otherwise
      */
     public static Menu getMenu(Inventory inventory) {
-        if (isMenu(inventory)) {
-            return ((MenuInventoryHolder) inventory.getHolder()).getMenu();
+        InventoryHolder holder = getHolderSafely(inventory);
+        if (holder instanceof MenuInventoryHolder menuHolder) {
+            return menuHolder.getMenu();
         }
         return null;
     }
@@ -58,5 +62,13 @@ public class MenuInventoryHolder implements InventoryHolder {
      */
     public Menu getMenu() {
         return menu;
+    }
+
+    private static InventoryHolder getHolderSafely(Inventory inventory) {
+        try {
+            return inventory.getHolder(false);
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
     }
 }
