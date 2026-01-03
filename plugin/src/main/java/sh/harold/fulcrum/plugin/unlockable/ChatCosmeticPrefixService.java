@@ -1,6 +1,7 @@
 package sh.harold.fulcrum.plugin.unlockable;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -102,7 +103,11 @@ public final class ChatCosmeticPrefixService {
         if (right.equals(Component.empty())) {
             return left;
         }
-        return left.append(Component.space()).append(right);
+        return Component.text()
+            .append(left)
+            .append(Component.space())
+            .append(right)
+            .build();
     }
 
     private CompletionStage<Component> resolveFromState(
@@ -145,14 +150,15 @@ public final class ChatCosmeticPrefixService {
 
     private CompletionStage<Component> resolveCosmetic(UUID playerId, Cosmetic cosmetic, PlayerDirectoryService directoryService) {
         if (cosmetic instanceof ChatPrefixCosmetic prefixCosmetic) {
-            return CompletableFuture.completedFuture(LuckPermsTextFormat.deserializePrefix(prefixCosmetic.prefix()));
+            Component prefix = LuckPermsTextFormat.deserializePrefix(prefixCosmetic.prefix());
+            return CompletableFuture.completedFuture(applyCosmeticTooltip(prefix, prefixCosmetic));
         }
         if (cosmetic instanceof OsuRankChatPrefixCosmetic) {
             if (directoryService == null) {
                 return CompletableFuture.completedFuture(Component.empty());
             }
             return directoryService.loadEntry(playerId)
-                .thenApply(this::renderOsuRank)
+                .thenApply(entry -> applyCosmeticTooltip(renderOsuRank(entry), cosmetic))
                 .exceptionally(throwable -> {
                     logger.log(Level.WARNING, "Failed to resolve osu! rank chat prefix for " + playerId, throwable);
                     return Component.empty();
@@ -163,14 +169,17 @@ public final class ChatCosmeticPrefixService {
 
     private Component resolveCosmeticCached(UUID playerId, Cosmetic cosmetic, PlayerDirectoryService directoryService) {
         if (cosmetic instanceof ChatPrefixCosmetic prefixCosmetic) {
-            return LuckPermsTextFormat.deserializePrefix(prefixCosmetic.prefix());
+            return applyCosmeticTooltip(LuckPermsTextFormat.deserializePrefix(prefixCosmetic.prefix()), prefixCosmetic);
         }
         if (cosmetic instanceof OsuRankChatPrefixCosmetic) {
             if (directoryService == null) {
                 return Component.empty();
             }
             try {
-                return renderOsuRank(directoryService.loadEntry(playerId).toCompletableFuture().getNow(null));
+                return applyCosmeticTooltip(
+                    renderOsuRank(directoryService.loadEntry(playerId).toCompletableFuture().getNow(null)),
+                    cosmetic
+                );
             } catch (RuntimeException runtimeException) {
                 logger.log(Level.WARNING, "Failed to resolve osu! rank chat prefix for " + playerId, runtimeException);
                 return Component.empty();
@@ -185,6 +194,27 @@ public final class ChatCosmeticPrefixService {
         }
         int rank = entry.osuRank();
         return renderOsuRankBadge(rank);
+    }
+
+    private Component applyCosmeticTooltip(Component prefix, Cosmetic cosmetic) {
+        Component safePrefix = prefix == null ? Component.empty() : prefix;
+        if (safePrefix.equals(Component.empty()) || cosmetic == null) {
+            return safePrefix;
+        }
+        UnlockableDefinition definition = cosmetic.definition();
+        if (definition == null) {
+            return safePrefix;
+        }
+        return safePrefix.hoverEvent(HoverEvent.showText(cosmeticTooltip(definition)));
+    }
+
+    private Component cosmeticTooltip(UnlockableDefinition definition) {
+        Component newline = Component.newline();
+        return Component.text()
+            .append(Component.text(definition.name(), NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false))
+            .append(newline)
+            .append(Component.text(definition.description(), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            .build();
     }
 
     private enum OsuRankTier {

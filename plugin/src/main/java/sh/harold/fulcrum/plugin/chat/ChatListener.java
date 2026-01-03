@@ -136,14 +136,19 @@ final class ChatListener implements Listener {
             nameComponent = nameComponent.hoverEvent(HoverEvent.showText(tooltip));
         }
         if (!prefixPart.equals(Component.empty())) {
-            return prefixPart.append(Component.space())
+            return Component.text()
+                .append(prefixPart)
+                .append(Component.space())
                 .append(nameComponent)
                 .append(Component.text(": ", NamedTextColor.GRAY))
-                .append(coloredMessage);
+                .append(coloredMessage)
+                .build();
         }
-        return nameComponent
+        return Component.text()
+            .append(nameComponent)
             .append(Component.text(": ", NamedTextColor.GRAY))
-            .append(coloredMessage);
+            .append(coloredMessage)
+            .build();
     }
 
     private Component resolveCosmeticPrefix(java.util.UUID playerId) {
