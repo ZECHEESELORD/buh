@@ -2,8 +2,10 @@ package sh.harold.fulcrum.plugin.chat;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.User;
@@ -16,6 +18,7 @@ import sh.harold.fulcrum.plugin.playerdata.LevelTier;
 import sh.harold.fulcrum.plugin.playerdata.PlayerLevelingService;
 
 import java.util.Objects;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 public final class ChatFormatService {
@@ -62,11 +65,55 @@ public final class ChatFormatService {
     }
 
     private Component buildLevelPrefix(LevelProgress progress) {
-        int level = progress == null ? 0 : progress.level();
+        LevelProgress safeProgress = progress == null ? new LevelProgress(0, 0L, 0L, 0L, 0L) : progress;
+        int level = safeProgress.level();
         TextColor levelColor = LevelTier.colorFor(level);
-        return Component.text("[", NamedTextColor.DARK_GRAY)
+        Component prefix = Component.text("[", NamedTextColor.DARK_GRAY)
             .append(Component.text(level, levelColor))
             .append(Component.text("]", NamedTextColor.DARK_GRAY));
+        Component tooltip = buildLevelTooltip(safeProgress, levelColor);
+        return prefix.hoverEvent(HoverEvent.showText(tooltip));
+    }
+
+    private Component buildLevelTooltip(LevelProgress progress, TextColor levelColor) {
+        Component newline = Component.newline();
+        var builder = Component.text();
+        builder.append(Component.text("Level ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            .append(Component.text(progress.level(), levelColor).decoration(TextDecoration.ITALIC, false))
+            .append(newline);
+        builder.append(labelledValue("Total XP",
+            Component.text(formatNumber(progress.totalXp()), NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false)));
+        long xpForNext = progress.xpForNextLevel();
+        if (xpForNext <= 0L) {
+            builder.append(newline)
+                .append(labelledValue("Status",
+                    Component.text("Max level", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
+            return builder.build();
+        }
+        builder.append(newline)
+            .append(labelledValue("Level XP",
+                Component.text(
+                    formatNumber(progress.xpIntoLevel()) + "/" + formatNumber(xpForNext),
+                    NamedTextColor.AQUA
+                ).decoration(TextDecoration.ITALIC, false)))
+            .append(newline)
+            .append(labelledValue("To next",
+                Component.text(formatNumber(progress.xpToNextLevel()), NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)))
+            .append(newline)
+            .append(labelledValue("Next level at",
+                Component.text(formatNumber(progress.totalXpForNextLevel()), NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false)));
+        return builder.build();
+    }
+
+    private Component labelledValue(String label, Component value) {
+        return Component.text()
+            .append(Component.text(label + ": ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            .append(value)
+            .build();
+    }
+
+    private String formatNumber(long value) {
+        return String.format(Locale.US, "%,d", value);
     }
 
     private Component wrapRankPrefix(Component prefix) {
@@ -105,7 +152,11 @@ public final class ChatFormatService {
         if (secondEmpty) {
             return first;
         }
-        return first.append(Component.space()).append(second);
+        return Component.text()
+            .append(first)
+            .append(Component.space())
+            .append(second)
+            .build();
     }
 
     public record Format(Component prefix, Component name, TextColor chatColor) {}

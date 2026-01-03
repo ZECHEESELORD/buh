@@ -126,6 +126,10 @@ public final class MessageService {
         if (prefix.equals(Component.empty())) {
             return name;
         }
-        return prefix.append(Component.space()).append(name);
+        return Component.text()
+            .append(prefix)
+            .append(Component.space())
+            .append(name)
+            .build();
     }
 }

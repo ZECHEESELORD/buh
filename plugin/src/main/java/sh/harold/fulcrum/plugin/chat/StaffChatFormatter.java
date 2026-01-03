@@ -96,14 +96,19 @@ public final class StaffChatFormatter {
         }
         Component nameComponent = resolveDisplayName(sender, viewer, nameColor);
         if (!prefixPart.equals(Component.empty())) {
-            return prefixPart.append(Component.space())
+            return Component.text()
+                .append(prefixPart)
+                .append(Component.space())
                 .append(nameComponent)
                 .append(Component.text(": ", NamedTextColor.GRAY))
-                .append(coloredMessage);
+                .append(coloredMessage)
+                .build();
         }
-        return nameComponent
+        return Component.text()
+            .append(nameComponent)
             .append(Component.text(": ", NamedTextColor.GRAY))
-            .append(coloredMessage);
+            .append(coloredMessage)
+            .build();
     }
 
     private Component resolveDisplayName(Player sender, Audience viewer, TextColor nameColor) {
